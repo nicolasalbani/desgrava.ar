@@ -1,65 +1,110 @@
-import Image from "next/image";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Calculator, FileText, Bot, Shield, ArrowRight } from "lucide-react";
 
-export default function Home() {
+const features = [
+  {
+    icon: FileText,
+    title: "Carga de facturas",
+    description:
+      "Subi tus facturas en PDF o cargalas manualmente. El OCR extrae los datos automaticamente.",
+  },
+  {
+    icon: Bot,
+    title: "Automatizacion SiRADIG",
+    description:
+      "Conecta tu clave fiscal y desgrava.ar carga tus deducciones en SiRADIG por vos.",
+  },
+  {
+    icon: Calculator,
+    title: "Simulador de ahorro",
+    description:
+      "Calcula cuanto podes ahorrar en ganancias segun tus deducciones. Gratis y sin registro.",
+  },
+  {
+    icon: Shield,
+    title: "Seguridad",
+    description:
+      "Tu clave fiscal se encripta con AES-256. Nunca se almacena en texto plano.",
+  },
+];
+
+export default function LandingPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 font-bold text-xl">
+            <Calculator className="h-6 w-6" />
+            desgrava.ar
+          </Link>
+          <nav className="flex items-center gap-4">
+            <Link
+              href="/simulador"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Simulador
+            </Link>
+            <Button asChild>
+              <Link href="/login">Iniciar sesion</Link>
+            </Button>
+          </nav>
+        </div>
+      </header>
+
+      <main className="flex-1">
+        <section className="container py-24 md:py-32 space-y-8 text-center">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
+            Automatiza tus deducciones
+            <br />
+            <span className="text-muted-foreground">en SiRADIG</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            Deja de perder plata. Carga tus facturas, calcula tu ahorro y
+            automatiza la carga en SiRADIG con un click.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button size="lg" asChild>
+              <Link href="/simulador">
+                Simular ahorro gratis
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" asChild>
+              <Link href="/login">Empezar a desgravar</Link>
+            </Button>
+          </div>
+        </section>
+
+        <section className="container py-16 border-t">
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+            {features.map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <div key={feature.title} className="space-y-3">
+                  <Icon className="h-10 w-10 text-primary" />
+                  <h3 className="font-semibold text-lg">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {feature.description}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t py-8">
+        <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Calculator className="h-4 w-4" />
+            desgrava.ar
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {new Date().getFullYear()} desgrava.ar. No afiliado a ARCA/AFIP.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </footer>
     </div>
   );
 }
