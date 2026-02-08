@@ -38,6 +38,10 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await processDocument(buffer, file.type);
 
+    console.log(`[OCR] File: ${file.name} | Method: ${result.method}`);
+    console.log(`[OCR] Extracted text:\n${result.text}`);
+    console.log(`[OCR] Fields:`, result.fields);
+
     return NextResponse.json({
       filename: file.name,
       method: result.method,
