@@ -88,6 +88,8 @@ model Invoice {
   providerCuit      String
   providerName      String?
   invoiceType       InvoiceType
+  invoiceNumber     String? // "XXXXX-YYYYYYYY" (punto de venta + comp. nro)
+  invoiceDate       DateTime? // Date printed on the invoice
   amount            Decimal           @db.Decimal(12, 2)
   fiscalYear        Int
   fiscalMonth       Int // 1-12
@@ -146,20 +148,22 @@ model UserPreference {
 // ─── Enums ─────────────────────────────────────────────────────
 
 enum DeductionCategory {
-  ALQUILER_VIVIENDA
   CUOTAS_MEDICO_ASISTENCIALES
-  GASTOS_MEDICOS
   PRIMAS_SEGURO_MUERTE
+  PRIMAS_AHORRO_SEGUROS_MIXTOS
+  APORTES_RETIRO_PRIVADO
   DONACIONES
-  SERVICIO_DOMESTICO
   INTERESES_HIPOTECARIOS
-  HONORARIOS_ASISTENCIA_SANITARIA
-  GASTOS_EDUCATIVOS
   GASTOS_SEPELIO
-  INDUMENTARIA_EQUIPAMIENTO
-  VEHICULO
-  VIANDAS_TRANSPORTE
-  HERRAMIENTAS_EDUCATIVAS
+  GASTOS_MEDICOS
+  GASTOS_INDUMENTARIA_TRABAJO
+  ALQUILER_VIVIENDA
+  SERVICIO_DOMESTICO
+  APORTE_SGR
+  VEHICULOS_CORREDORES
+  INTERESES_CORREDORES
+  GASTOS_EDUCATIVOS
+  OTRAS_DEDUCCIONES
 }
 
 enum InvoiceType {

@@ -55,8 +55,10 @@ export async function processDocument(
   if (mimeType === "application/pdf") {
     try {
       const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) })
-        .promise;
+      const doc = await pdfjsLib.getDocument({
+        data: new Uint8Array(buffer),
+        standardFontDataUrl: "node_modules/pdfjs-dist/standard_fonts/",
+      }).promise;
 
       const pageTexts: string[] = [];
       for (let i = 1; i <= doc.numPages; i++) {

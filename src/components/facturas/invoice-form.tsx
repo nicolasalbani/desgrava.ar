@@ -32,6 +32,16 @@ import {
 import { formatCuit, validateCuit } from "@/lib/validators/cuit";
 import { toast } from "sonner";
 
+function formatArgNumber(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("es-AR");
+}
+
+function unformatArgNumber(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 const formSchema = z.object({
   deductionCategory: z.string().min(1, "Selecciona una categoria"),
   providerCuit: z
@@ -47,8 +57,13 @@ const formSchema = z.object({
     ),
   providerName: z.string().optional(),
   invoiceType: z.string().min(1, "Selecciona un tipo"),
+  invoiceNumber: z.string().optional(),
+  invoiceDate: z.string().optional(),
   amount: z.string().min(1, "El monto es requerido").refine(
-    (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
+    (val) => {
+      const num = parseFloat(unformatArgNumber(val));
+      return !isNaN(num) && num > 0;
+    },
     { message: "El monto debe ser mayor a 0" }
   ),
   fiscalYear: z.string(),
@@ -72,6 +87,8 @@ export function InvoiceForm({
     providerCuit: string;
     providerName: string;
     invoiceType: string;
+    invoiceNumber: string;
+    invoiceDate: string;
     amount: number;
     fiscalYear: number;
     fiscalMonth: number;
@@ -89,7 +106,9 @@ export function InvoiceForm({
       providerCuit: defaultValues?.providerCuit ?? "",
       providerName: defaultValues?.providerName ?? "",
       invoiceType: defaultValues?.invoiceType ?? "",
-      amount: defaultValues?.amount?.toString() ?? "",
+      invoiceNumber: defaultValues?.invoiceNumber ?? "",
+      invoiceDate: defaultValues?.invoiceDate ?? "",
+      amount: defaultValues?.amount != null ? String(Math.round(defaultValues.amount)) : "",
       fiscalYear: String(defaultValues?.fiscalYear ?? currentYear),
       fiscalMonth: String(defaultValues?.fiscalMonth ?? currentMonth),
       description: defaultValues?.description ?? "",
@@ -107,7 +126,9 @@ export function InvoiceForm({
           providerCuit: data.providerCuit.replace(/-/g, ""),
           providerName: data.providerName,
           invoiceType: data.invoiceType,
-          amount: parseFloat(data.amount),
+          invoiceNumber: data.invoiceNumber || undefined,
+          invoiceDate: data.invoiceDate || undefined,
+          amount: parseFloat(unformatArgNumber(data.amount)),
           fiscalYear: parseInt(data.fiscalYear),
           fiscalMonth: parseInt(data.fiscalMonth),
           description: data.description,
@@ -147,7 +168,7 @@ export function InvoiceForm({
                 form.setValue("deductionCategory", v, { shouldValidate: true })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full overflow-hidden">
                 <SelectValue placeholder="Seleccionar categoria" />
               </SelectTrigger>
               <SelectContent>
@@ -222,16 +243,40 @@ export function InvoiceForm({
               <Label htmlFor="amount">Monto ($)</Label>
               <Input
                 id="amount"
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                {...form.register("amount")}
+                type="text"
+                inputMode="numeric"
+                placeholder="200.000"
+                value={formatArgNumber(form.watch("amount"))}
+                onChange={(e) => {
+                  const raw = unformatArgNumber(e.target.value);
+                  form.setValue("amount", raw, { shouldValidate: true });
+                }}
               />
               {form.formState.errors.amount && (
                 <p className="text-sm text-destructive">
                   {form.formState.errors.amount.message}
                 </p>
               )}
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="invoiceNumber">Numero de comprobante (opcional)</Label>
+              <Input
+                id="invoiceNumber"
+                placeholder="00001-00012345"
+                {...form.register("invoiceNumber")}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="invoiceDate">Fecha del comprobante (opcional)</Label>
+              <Input
+                id="invoiceDate"
+                type="date"
+                {...form.register("invoiceDate")}
+              />
             </div>
           </div>
 

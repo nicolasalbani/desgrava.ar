@@ -2,20 +2,22 @@
 // These texts must match EXACTLY what appears in the SiRADIG web interface
 
 export const SIRADIG_CATEGORY_MAP: Record<string, string> = {
-  ALQUILER_VIVIENDA: "Alquileres",
   CUOTAS_MEDICO_ASISTENCIALES: "Cuotas Medico Asistenciales",
-  GASTOS_MEDICOS: "Gastos Medicos y Paramédicos",
   PRIMAS_SEGURO_MUERTE: "Primas de Seguro para caso de muerte",
+  PRIMAS_AHORRO_SEGUROS_MIXTOS: "Primas de Ahorro correspondientes a Seguros Mixtos",
+  APORTES_RETIRO_PRIVADO: "Aportes correspondientes a Planes de Seguro de Retiro Privados",
   DONACIONES: "Donaciones",
-  SERVICIO_DOMESTICO: "Casas Particulares",
   INTERESES_HIPOTECARIOS: "Intereses Credito Hipotecario",
-  HONORARIOS_ASISTENCIA_SANITARIA: "Honorarios Servicio Asistencia Sanitaria, Médica y Paramédica",
-  GASTOS_EDUCATIVOS: "Gastos de Educación",
   GASTOS_SEPELIO: "Gastos de Sepelio",
-  INDUMENTARIA_EQUIPAMIENTO: "Indumentaria y Equipamiento",
-  VEHICULO: "Vehículo",
-  VIANDAS_TRANSPORTE: "Viandas y Transporte",
-  HERRAMIENTAS_EDUCATIVAS: "Herramientas Educativas",
+  GASTOS_MEDICOS: "Gastos Medicos y Paramédicos",
+  GASTOS_INDUMENTARIA_TRABAJO: "Indumentaria y Equipamiento",
+  ALQUILER_VIVIENDA: "Alquileres",
+  SERVICIO_DOMESTICO: "Casas Particulares",
+  APORTE_SGR: "Aporte a sociedades de garantía recíproca",
+  VEHICULOS_CORREDORES: "Vehículos de corredores y viajantes de comercio",
+  INTERESES_CORREDORES: "Intereses de corredores y viajantes de comercio",
+  GASTOS_EDUCATIVOS: "Gastos de Educación",
+  OTRAS_DEDUCCIONES: "Otras deducciones",
 };
 
 export const SIRADIG_INVOICE_TYPE_MAP: Record<string, string> = {

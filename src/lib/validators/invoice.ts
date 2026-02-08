@@ -2,20 +2,22 @@ import { z } from "zod";
 import { cuitSchema } from "./cuit";
 
 export const DEDUCTION_CATEGORIES = [
-  "ALQUILER_VIVIENDA",
   "CUOTAS_MEDICO_ASISTENCIALES",
-  "GASTOS_MEDICOS",
   "PRIMAS_SEGURO_MUERTE",
+  "PRIMAS_AHORRO_SEGUROS_MIXTOS",
+  "APORTES_RETIRO_PRIVADO",
   "DONACIONES",
-  "SERVICIO_DOMESTICO",
   "INTERESES_HIPOTECARIOS",
-  "HONORARIOS_ASISTENCIA_SANITARIA",
-  "GASTOS_EDUCATIVOS",
   "GASTOS_SEPELIO",
-  "INDUMENTARIA_EQUIPAMIENTO",
-  "VEHICULO",
-  "VIANDAS_TRANSPORTE",
-  "HERRAMIENTAS_EDUCATIVAS",
+  "GASTOS_MEDICOS",
+  "GASTOS_INDUMENTARIA_TRABAJO",
+  "ALQUILER_VIVIENDA",
+  "SERVICIO_DOMESTICO",
+  "APORTE_SGR",
+  "VEHICULOS_CORREDORES",
+  "INTERESES_CORREDORES",
+  "GASTOS_EDUCATIVOS",
+  "OTRAS_DEDUCCIONES",
 ] as const;
 
 export const INVOICE_TYPES = [
@@ -33,20 +35,22 @@ export const INVOICE_TYPES = [
 ] as const;
 
 export const DEDUCTION_CATEGORY_LABELS: Record<string, string> = {
-  ALQUILER_VIVIENDA: "Alquiler de vivienda",
-  CUOTAS_MEDICO_ASISTENCIALES: "Cuotas medico-asistenciales",
-  GASTOS_MEDICOS: "Gastos medicos",
-  PRIMAS_SEGURO_MUERTE: "Primas de seguro de muerte",
+  CUOTAS_MEDICO_ASISTENCIALES: "Cuotas Médico-Asistenciales",
+  PRIMAS_SEGURO_MUERTE: "Primas de Seguro para el caso de muerte/riesgo de muerte",
+  PRIMAS_AHORRO_SEGUROS_MIXTOS: "Primas de Ahorro correspondientes a Seguros Mixtos",
+  APORTES_RETIRO_PRIVADO: "Aportes correspondientes a Planes de Seguro de Retiro Privados",
   DONACIONES: "Donaciones",
-  SERVICIO_DOMESTICO: "Servicio domestico",
-  INTERESES_HIPOTECARIOS: "Intereses hipotecarios",
-  HONORARIOS_ASISTENCIA_SANITARIA: "Honorarios asistencia sanitaria",
-  GASTOS_EDUCATIVOS: "Gastos educativos",
+  INTERESES_HIPOTECARIOS: "Intereses préstamo hipotecario",
   GASTOS_SEPELIO: "Gastos de sepelio",
-  INDUMENTARIA_EQUIPAMIENTO: "Indumentaria y equipamiento",
-  VEHICULO: "Vehiculo",
-  VIANDAS_TRANSPORTE: "Viandas y transporte",
-  HERRAMIENTAS_EDUCATIVAS: "Herramientas educativas",
+  GASTOS_MEDICOS: "Gastos médicos y paramédicos",
+  GASTOS_INDUMENTARIA_TRABAJO: "Gastos de Adquisición de Indumentaria y Equipamiento para uso exclusivo en el lugar de trabajo",
+  ALQUILER_VIVIENDA: "Alquiler de inmuebles destinados a casa habitación",
+  SERVICIO_DOMESTICO: "Deducción del personal doméstico",
+  APORTE_SGR: "Aporte a sociedades de garantía recíproca",
+  VEHICULOS_CORREDORES: "Vehículos de corredores y viajantes de comercio",
+  INTERESES_CORREDORES: "Intereses de corredores y viajantes de comercio",
+  GASTOS_EDUCATIVOS: "Gastos de Educación",
+  OTRAS_DEDUCCIONES: "Otras deducciones",
 };
 
 export const INVOICE_TYPE_LABELS: Record<string, string> = {
@@ -68,6 +72,8 @@ export const createInvoiceSchema = z.object({
   providerCuit: cuitSchema,
   providerName: z.string().optional(),
   invoiceType: z.enum(INVOICE_TYPES),
+  invoiceNumber: z.string().optional(), // "XXXXX-YYYYYYYY"
+  invoiceDate: z.coerce.date().optional(),
   amount: z.coerce.number().positive("El monto debe ser mayor a 0"),
   fiscalYear: z.coerce.number().int().min(2020).max(2030),
   fiscalMonth: z.coerce.number().int().min(1).max(12),

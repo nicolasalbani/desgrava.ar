@@ -20,6 +20,7 @@ import { toast } from "sonner";
 interface ExtractedFields {
   cuit: string | null;
   invoiceType: string | null;
+  invoiceNumber: string | null;
   amount: number | null;
   date: string | null;
   providerName: string | null;
@@ -85,6 +86,8 @@ export function FileUploader() {
         providerCuit: extracted.cuit ? formatCuit(extracted.cuit) : "",
         providerName: extracted.providerName ?? "",
         invoiceType: extracted.invoiceType ?? "",
+        invoiceNumber: extracted.invoiceNumber ?? "",
+        invoiceDate: extracted.date ?? "",
         amount: extracted.amount ?? undefined,
         fiscalYear: extracted.date
           ? parseInt(extracted.date.split("-")[0])

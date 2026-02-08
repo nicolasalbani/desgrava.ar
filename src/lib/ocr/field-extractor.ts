@@ -1,6 +1,7 @@
 export interface ExtractedFields {
   cuit: string | null;
   invoiceType: string | null;
+  invoiceNumber: string | null; // "XXXXX-YYYYYYYY" (punto de venta + comp. nro)
   amount: number | null;
   date: string | null;
   providerName: string | null;
@@ -32,6 +33,16 @@ const INVOICE_TYPE_PATTERNS: [RegExp, string][] = [
 
 const DATE_PATTERN = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/;
 
+// Matches "Punto de Venta: XXXXX Comp. Nro: YYYYYYYY" or "Pto. Vta.: XXXXX" + "Comp. Nro.: YYYYYYYY"
+const INVOICE_NUMBER_PATTERNS = [
+  // Combined format: 00001-00012345
+  /(?:Punto\s+de\s+Venta|Pto\.?\s*Vta\.?)\s*:?\s*(\d{1,5})\s+(?:Comp\.?\s*Nro\.?)\s*:?\s*(\d{1,8})/i,
+  // Hyphenated format on one line: 00001 - 00012345
+  /(?:Punto\s+de\s+Venta|Pto\.?\s*Vta\.?)\s*:?\s*(\d{1,5})\s*[-–]\s*(?:Comp\.?\s*Nro\.?)\s*:?\s*(\d{1,8})/i,
+  // Standalone hyphenated number near "Nro" context: Nro. 00001-00012345
+  /N[ºº°]?\s*\.?\s*:?\s*(\d{4,5})\s*[-–]\s*(\d{5,8})/i,
+];
+
 function parseArgentineAmount(raw: string): number | null {
   const cleaned = raw.replace(/\./g, "").replace(",", ".");
   const num = parseFloat(cleaned);
@@ -40,7 +51,7 @@ function parseArgentineAmount(raw: string): number | null {
 
 export function extractFields(text: string): ExtractedFields {
   let fieldsFound = 0;
-  const totalFields = 4;
+  const totalFields = 5;
 
   const cuitMatches = text.match(CUIT_PATTERN);
   const cuit = cuitMatches ? cuitMatches[0].replace(/-/g, "") : null;
@@ -76,6 +87,18 @@ export function extractFields(text: string): ExtractedFields {
     fieldsFound++;
   }
 
+  let invoiceNumber: string | null = null;
+  for (const pattern of INVOICE_NUMBER_PATTERNS) {
+    const match = text.match(pattern);
+    if (match) {
+      const ptoVenta = match[1].padStart(5, "0");
+      const compNro = match[2].padStart(8, "0");
+      invoiceNumber = `${ptoVenta}-${compNro}`;
+      fieldsFound++;
+      break;
+    }
+  }
+
   let providerName: string | null = null;
   const nameMatch = text.match(
     /(?:RAZ[OÓ]N\s+SOCIAL|DENOMINACI[OÓ]N|NOMBRE)\s*:?\s*(.+)/i
@@ -86,5 +109,5 @@ export function extractFields(text: string): ExtractedFields {
 
   const confidence = fieldsFound / totalFields;
 
-  return { cuit, invoiceType, amount, date, providerName, confidence };
+  return { cuit, invoiceType, invoiceNumber, amount, date, providerName, confidence };
 }
