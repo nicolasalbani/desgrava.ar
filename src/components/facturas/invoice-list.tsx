@@ -107,7 +107,7 @@ export function InvoiceList() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos los anios</SelectItem>
+            <SelectItem value="all">Todos los años</SelectItem>
             {years.map((y) => (
               <SelectItem key={y} value={String(y)}>
                 {y}

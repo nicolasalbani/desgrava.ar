@@ -237,7 +237,7 @@ export function InvoiceForm({
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Anio fiscal</Label>
+              <Label>Año fiscal</Label>
               <Select
                 value={form.watch("fiscalYear")}
                 onValueChange={(v) =>
