@@ -143,14 +143,28 @@ export function InvoiceList() {
         </div>
       ) : (
         <div className="border rounded-md">
-          <Table>
+          <Table className="table-fixed w-full">
+            <colgroup>
+              <col className="w-[12%]" />
+              <col className="w-[14%]" />
+              <col className="w-[8%]" />
+              <col className="w-[12%]" />
+              <col className="w-[8%]" />
+              <col className="w-[10%]" />
+              <col className="w-[8%]" />
+              <col className="w-[7%]" />
+              <col className="w-[8%]" />
+              <col className="w-[7%]" />
+              <col className="w-[6%]" />
+            </colgroup>
             <TableHeader>
               <TableRow>
+                <TableHead>Proveedor</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Nro. Comprobante</TableHead>
-                <TableHead>Fecha Comprobante</TableHead>
-                <TableHead>CUIT Proveedor</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead>CUIT</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
                 <TableHead>Periodo</TableHead>
                 <TableHead>Estado</TableHead>
@@ -161,7 +175,10 @@ export function InvoiceList() {
             <TableBody>
               {invoices.map((inv) => (
                 <TableRow key={inv.id}>
-                  <TableCell className="font-medium">
+                  <TableCell className="font-medium truncate" title={inv.providerName || "—"}>
+                    {inv.providerName || "—"}
+                  </TableCell>
+                  <TableCell className="truncate" title={DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ?? inv.deductionCategory}>
                     {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
                       inv.deductionCategory}
                   </TableCell>
