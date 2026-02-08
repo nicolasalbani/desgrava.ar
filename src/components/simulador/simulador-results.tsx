@@ -114,52 +114,56 @@ export function SimuladorResults({ result }: { result: SimulationResult }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table className="table-fixed w-full">
+            <colgroup>
+              <col className="w-[65%]" />
+              <col className="w-[35%]" />
+            </colgroup>
             <TableBody>
               <TableRow>
-                <TableCell className="font-medium">Salario bruto {viewMode === "mensual" ? "(incl. aguinaldo)" : "(13 sueldos)"}</TableCell>
+                <TableCell className="font-medium truncate" title={`Salario bruto ${viewMode === "mensual" ? "(incl. aguinaldo)" : "(13 sueldos)"}`}>Salario bruto {viewMode === "mensual" ? "(incl. aguinaldo)" : "(13 sueldos)"}</TableCell>
                 <TableCell className="text-right">{formatMoney(scaled(result.salarioBrutoAnual, d))}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Aportes obligatorios</TableCell>
+                <TableCell className="font-medium truncate" title="Aportes obligatorios">Aportes obligatorios</TableCell>
                 <TableCell className="text-right text-destructive">-{formatMoney(scaled(result.deduccionesMandatorias, d))}</TableCell>
               </TableRow>
               <TableRow className="bg-muted/50">
-                <TableCell className="font-semibold">Ganancia neta</TableCell>
+                <TableCell className="font-semibold truncate" title="Ganancia neta">Ganancia neta</TableCell>
                 <TableCell className="text-right font-semibold">{formatMoney(scaled(result.gananciaNetaAnual, d))}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Deducciones personales</TableCell>
+                <TableCell className="font-medium truncate" title="Deducciones personales">Deducciones personales</TableCell>
                 <TableCell className="text-right text-destructive">-{formatMoney(scaled(result.deduccionesPersonales, d))}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Deducciones por comprobantes (SiRADIG)</TableCell>
+                <TableCell className="font-medium truncate" title="Deducciones por comprobantes (SiRADIG)">Deducciones por comprobantes (SiRADIG)</TableCell>
                 <TableCell className="text-right text-destructive">-{formatMoney(scaled(result.deduccionesPorComprobantes, d))}</TableCell>
               </TableRow>
               <TableRow className="bg-muted/50">
-                <TableCell className="font-semibold">Ganancia imponible SIN deducciones SiRADIG</TableCell>
+                <TableCell className="font-semibold truncate" title="Ganancia imponible SIN deducciones SiRADIG">Ganancia imponible SIN deducciones SiRADIG</TableCell>
                 <TableCell className="text-right font-semibold">{formatMoney(scaled(result.gananciaImponibleSinDeducciones, d))}</TableCell>
               </TableRow>
               <TableRow className="bg-muted/50">
-                <TableCell className="font-semibold">Ganancia imponible CON deducciones SiRADIG</TableCell>
+                <TableCell className="font-semibold truncate" title="Ganancia imponible CON deducciones SiRADIG">Ganancia imponible CON deducciones SiRADIG</TableCell>
                 <TableCell className="text-right font-semibold">{formatMoney(scaled(result.gananciaImponibleConDeducciones, d))}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">
+                <TableCell className="font-medium truncate" title={`Impuesto SIN deducciones (tasa ${result.tasaEfectivaSin}%)`}>
                   Impuesto SIN deducciones
                   <Badge variant="secondary" className="ml-2">tasa {result.tasaEfectivaSin}%</Badge>
                 </TableCell>
                 <TableCell className="text-right">{formatMoney(scaled(result.impuestoSinDeducciones, d))}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">
+                <TableCell className="font-medium truncate" title={`Impuesto CON deducciones (tasa ${result.tasaEfectivaCon}%)`}>
                   Impuesto CON deducciones
                   <Badge variant="secondary" className="ml-2">tasa {result.tasaEfectivaCon}%</Badge>
                 </TableCell>
                 <TableCell className="text-right">{formatMoney(scaled(result.impuestoConDeducciones, d))}</TableCell>
               </TableRow>
               <TableRow className="border-t-2">
-                <TableCell className="font-bold text-green-600">AHORRO {viewMode === "mensual" ? "MENSUAL" : "ANUAL"}</TableCell>
+                <TableCell className="font-bold text-green-600 truncate" title={`AHORRO ${viewMode === "mensual" ? "MENSUAL" : "ANUAL"}`}>AHORRO {viewMode === "mensual" ? "MENSUAL" : "ANUAL"}</TableCell>
                 <TableCell className="text-right font-bold text-green-600">{formatMoney(scaled(result.ahorroAnual, d))}</TableCell>
               </TableRow>
             </TableBody>
@@ -174,7 +178,13 @@ export function SimuladorResults({ result }: { result: SimulationResult }) {
             <CardDescription>Como se calcula cada deduccion segun las reglas de SiRADIG</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
+            <Table className="table-fixed w-full">
+              <colgroup>
+                <col className="w-[35%]" />
+                <col className="w-[18%]" />
+                <col className="w-[18%]" />
+                <col className="hidden md:table-column w-[29%]" />
+              </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead>Categoria</TableHead>
@@ -186,10 +196,10 @@ export function SimuladorResults({ result }: { result: SimulationResult }) {
               <TableBody>
                 {result.detalleDeduciones.map((det, i) => (
                   <TableRow key={i}>
-                    <TableCell className="font-medium">{det.label}</TableCell>
-                    <TableCell className="text-right">{formatMoney(scaled(det.inputAmount, d))}</TableCell>
-                    <TableCell className="text-right font-semibold">{formatMoney(scaled(det.deductibleAmount, d))}</TableCell>
-                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{det.notes}</TableCell>
+                    <TableCell className="font-medium truncate" title={det.label}>{det.label}</TableCell>
+                    <TableCell className="text-right truncate" title={formatMoney(scaled(det.inputAmount, d))}>{formatMoney(scaled(det.inputAmount, d))}</TableCell>
+                    <TableCell className="text-right font-semibold truncate" title={formatMoney(scaled(det.deductibleAmount, d))}>{formatMoney(scaled(det.deductibleAmount, d))}</TableCell>
+                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground truncate" title={det.notes}>{det.notes}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

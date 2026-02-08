@@ -285,7 +285,7 @@ export function SimuladorForm() {
                     key={field.id}
                     className="flex flex-col sm:flex-row gap-3 items-start sm:items-end"
                   >
-                    <div className="flex-1 space-y-1 w-full">
+                    <div className="flex-1 min-w-0 space-y-1 w-full">
                       {index === 0 && (
                         <Label className="text-xs text-muted-foreground">
                           Categoria
@@ -297,7 +297,7 @@ export function SimuladorForm() {
                           form.setValue(`deducciones.${index}.category`, v)
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full overflow-hidden">
                           <SelectValue placeholder="Seleccionar categoria" />
                         </SelectTrigger>
                         <SelectContent>
@@ -310,7 +310,7 @@ export function SimuladorForm() {
                       </Select>
                     </div>
 
-                    <div className="w-full sm:w-48 space-y-1">
+                    <div className="w-full sm:w-48 sm:shrink-0 space-y-1">
                       {index === 0 && (
                         <Label className="text-xs text-muted-foreground">
                           Monto mensual ($)

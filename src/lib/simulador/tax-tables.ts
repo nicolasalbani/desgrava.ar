@@ -15,16 +15,22 @@ export interface PersonalDeductions {
 }
 
 export interface DeductionLimits {
-  alquilerVivienda: { rate: Decimal; annualMax: Decimal };
-  cuotasMedicoAsistenciales: { rate: Decimal }; // 5% of net income cap
-  gastosMedicos: { rate: Decimal; netIncomeCapRate: Decimal };
+  cuotasMedicoAsistenciales: { netIncomeCapRate: Decimal };
   primasSeguroMuerte: { annualMax: Decimal };
+  primasAhorroSegurosMixtos: { annualMax: Decimal };
+  aportesRetiroPrivado: { annualMax: Decimal };
   donaciones: { netIncomeCapRate: Decimal };
-  servicioDomestico: { annualMax: Decimal };
   interesesHipotecarios: { annualMax: Decimal };
-  honorariosAsistenciaSanitaria: { rate: Decimal; netIncomeCapRate: Decimal };
-  gastosEducativos: { annualMax: Decimal };
   gastosSepelio: { annualMax: Decimal };
+  gastosMedicos: { rate: Decimal; netIncomeCapRate: Decimal };
+  gastosIndumentariaTrabajo: Record<string, never>;
+  alquilerVivienda: { rate: Decimal; annualMax: Decimal };
+  servicioDomestico: { annualMax: Decimal };
+  aporteSgr: Record<string, never>;
+  vehiculosCorredores: Record<string, never>;
+  interesesCorredores: Record<string, never>;
+  gastosEducativos: { annualMax: Decimal };
+  otrasDeducciones: Record<string, never>;
 }
 
 // Period 2025 (fiscal year 2025, applicable for SiRADIG filings)
@@ -52,16 +58,22 @@ export const TAX_TABLES_2025 = {
   ] satisfies TaxBracket[],
 
   deductionLimits: {
-    alquilerVivienda: { rate: new Decimal("0.40"), annualMax: new Decimal("3_091_035.00") },
-    cuotasMedicoAsistenciales: { rate: new Decimal("1.00") }, // 100% deductible, but capped at 5% of net income
-    gastosMedicos: { rate: new Decimal("0.40"), netIncomeCapRate: new Decimal("0.05") },
+    cuotasMedicoAsistenciales: { netIncomeCapRate: new Decimal("0.05") },
     primasSeguroMuerte: { annualMax: new Decimal("42_921.24") },
+    primasAhorroSegurosMixtos: { annualMax: new Decimal("42_921.24") },
+    aportesRetiroPrivado: { annualMax: new Decimal("42_921.24") },
     donaciones: { netIncomeCapRate: new Decimal("0.05") },
-    servicioDomestico: { annualMax: new Decimal("3_091_035.00") },
     interesesHipotecarios: { annualMax: new Decimal("20_000.00") },
-    honorariosAsistenciaSanitaria: { rate: new Decimal("0.40"), netIncomeCapRate: new Decimal("0.05") },
-    gastosEducativos: { annualMax: new Decimal("1_163_862.77") },
     gastosSepelio: { annualMax: new Decimal("996_920.00") },
+    gastosMedicos: { rate: new Decimal("0.40"), netIncomeCapRate: new Decimal("0.05") },
+    gastosIndumentariaTrabajo: {},
+    alquilerVivienda: { rate: new Decimal("0.40"), annualMax: new Decimal("3_091_035.00") },
+    servicioDomestico: { annualMax: new Decimal("3_091_035.00") },
+    aporteSgr: {},
+    vehiculosCorredores: {},
+    interesesCorredores: {},
+    gastosEducativos: { annualMax: new Decimal("1_163_862.77") },
+    otrasDeducciones: {},
   } satisfies DeductionLimits,
 
   // Mandatory deductions rates (employee contributions)
