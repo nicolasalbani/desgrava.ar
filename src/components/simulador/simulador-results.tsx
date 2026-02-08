@@ -77,12 +77,12 @@ export function SimuladorResults({ result }: { result: SimulationResult }) {
                 <p className="text-3xl font-bold text-green-600 dark:text-green-400">
                   {formatMoney(scaled(result.ahorroAnual, d))}
                   <span className="text-base font-normal text-muted-foreground ml-1">
-                    /{viewMode === "mensual" ? "mes" : "ano"}
+                    /{viewMode === "mensual" ? "mes" : "año"}
                   </span>
                 </p>
                 {viewMode === "mensual" && (
                   <p className="text-sm text-muted-foreground">
-                    {formatMoney(result.ahorroAnual)} por ano
+                    {formatMoney(result.ahorroAnual)} por año
                   </p>
                 )}
                 {viewMode === "anual" && (

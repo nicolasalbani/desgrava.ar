@@ -92,10 +92,6 @@ export function SimuladorForm() {
     ? uploadEntries.filter((e) => e.status === "success" || e.status === "error").length / uploadEntries.length
     : 0;
 
-  const successfulUploads = uploadEntries.filter(
-    (e) => e.status === "success" && e.extractedAmount != null
-  );
-
   const handleFilesSelected = useCallback(async (files: File[]) => {
     const validFiles = files
       .filter((f) => ALLOWED_UPLOAD_TYPES.includes(f.type))
@@ -139,18 +135,27 @@ export function SimuladorForm() {
         }
 
         const data = await res.json();
+        const amount = data.extractedFields?.amount ?? null;
+
         setUploadEntries((prev) =>
           prev.map((e) =>
             e.id === entry.id
               ? {
                   ...e,
                   status: "success" as const,
-                  extractedAmount: data.extractedFields?.amount ?? null,
+                  extractedAmount: amount,
                   extractedProvider: data.extractedFields?.providerName ?? null,
                 }
               : e
           )
         );
+
+        // Auto-append deduction to the form
+        append({
+          category: "",
+          monthlyAmount: amount != null ? amount.toString() : "",
+          _sourceFilename: entry.file.name,
+        });
       } catch {
         setUploadEntries((prev) =>
           prev.map((e) =>
@@ -163,7 +168,7 @@ export function SimuladorForm() {
     }
 
     setIsUploading(false);
-  }, []);
+  }, [append]);
 
   const handleRemoveEntry = useCallback((id: string) => {
     setUploadEntries((prev) => prev.filter((e) => e.id !== id));
@@ -172,17 +177,6 @@ export function SimuladorForm() {
   const handleClearAll = useCallback(() => {
     setUploadEntries([]);
   }, []);
-
-  const populateFromUploads = useCallback(() => {
-    for (const entry of successfulUploads) {
-      append({
-        category: "",
-        monthlyAmount: entry.extractedAmount != null ? entry.extractedAmount.toString() : "",
-        _sourceFilename: entry.file.name,
-      });
-    }
-    setUploadEntries([]);
-  }, [successfulUploads, append]);
 
   async function onSubmit(data: FormData) {
     setLoading(true);
@@ -307,18 +301,6 @@ export function SimuladorForm() {
                   onRemoveEntry={handleRemoveEntry}
                   onClearAll={handleClearAll}
                 />
-                {successfulUploads.length > 0 && !isUploading && (
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    className="mt-2 w-full"
-                    onClick={populateFromUploads}
-                  >
-                    <FileText className="h-4 w-4 mr-1" />
-                    Cargar {successfulUploads.length} deduccion(es) extraida(s)
-                  </Button>
-                )}
               </div>
 
               {fields.length === 0 && uploadEntries.length === 0 && (
