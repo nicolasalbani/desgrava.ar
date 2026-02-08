@@ -9,11 +9,11 @@ export interface ExtractedFields {
 
 const CUIT_PATTERN = /\b(20|23|24|27|30|33|34)-?\d{8}-?\d\b/g;
 const AMOUNT_PATTERNS = [
-  /TOTAL\s*\$?\s*([\d.,]+)/i,
-  /IMPORTE\s+TOTAL\s*\$?\s*([\d.,]+)/i,
-  /TOTAL\s+A\s+PAGAR\s*\$?\s*([\d.,]+)/i,
-  /NETO\s+GRAVADO\s*\$?\s*([\d.,]+)/i,
-  /IMP\.\s*TOTAL\s*\$?\s*([\d.,]+)/i,
+  /IMPORTE\s+TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+  /TOTAL\s+A\s+PAGAR\s*:?\s*\$?\s*([\d.,]+)/i,
+  /IMP\.\s*TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
+  /NETO\s+GRAVADO\s*:?\s*\$?\s*([\d.,]+)/i,
+  /(?<!SUB)TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
 ];
 
 const INVOICE_TYPE_PATTERNS: [RegExp, string][] = [

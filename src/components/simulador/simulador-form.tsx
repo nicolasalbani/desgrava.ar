@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -22,10 +23,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Calculator, Plus, Trash2, Loader2 } from "lucide-react";
+import { Calculator, Plus, Trash2, Loader2, FileText } from "lucide-react";
 import { CATEGORY_LABELS, type SimuladorCategory } from "@/lib/simulador/deduction-rules";
 import { SimuladorResults } from "./simulador-results";
+import { PdfUploadDropzone, type FileUploadEntry } from "./pdf-upload-dropzone";
 import type { SimulationResult } from "@/lib/simulador/calculator";
+
+const ALLOWED_UPLOAD_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+const MAX_UPLOAD_FILES = 10;
 
 const formSchema = z.object({
   salarioBrutoMensual: z.string().min(1, "El salario es requerido").refine(
@@ -43,6 +53,7 @@ const formSchema = z.object({
           (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
           { message: "El monto debe ser mayor a 0" }
         ),
+        _sourceFilename: z.string().optional(),
       })
     )
     ,
@@ -55,6 +66,10 @@ const categories = Object.entries(CATEGORY_LABELS) as [SimuladorCategory, string
 export function SimuladorForm() {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // PDF upload state
+  const [uploadEntries, setUploadEntries] = useState<FileUploadEntry[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -71,6 +86,103 @@ export function SimuladorForm() {
     control: form.control,
     name: "deducciones",
   });
+
+  // Upload logic
+  const uploadProgress = uploadEntries.length > 0
+    ? uploadEntries.filter((e) => e.status === "success" || e.status === "error").length / uploadEntries.length
+    : 0;
+
+  const successfulUploads = uploadEntries.filter(
+    (e) => e.status === "success" && e.extractedAmount != null
+  );
+
+  const handleFilesSelected = useCallback(async (files: File[]) => {
+    const validFiles = files
+      .filter((f) => ALLOWED_UPLOAD_TYPES.includes(f.type))
+      .slice(0, MAX_UPLOAD_FILES);
+
+    if (validFiles.length === 0) return;
+
+    const newEntries: FileUploadEntry[] = validFiles.map((file) => ({
+      id: `${file.name}-${Date.now()}-${Math.random()}`,
+      file,
+      status: "pending" as const,
+    }));
+
+    setUploadEntries((prev) => [...prev, ...newEntries]);
+    setIsUploading(true);
+
+    for (const entry of newEntries) {
+      setUploadEntries((prev) =>
+        prev.map((e) => (e.id === entry.id ? { ...e, status: "uploading" as const } : e))
+      );
+
+      try {
+        const formData = new FormData();
+        formData.append("file", entry.file);
+
+        const res = await fetch("/api/simulador/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          setUploadEntries((prev) =>
+            prev.map((e) =>
+              e.id === entry.id
+                ? { ...e, status: "error" as const, error: err.error || "Error al procesar" }
+                : e
+            )
+          );
+          continue;
+        }
+
+        const data = await res.json();
+        setUploadEntries((prev) =>
+          prev.map((e) =>
+            e.id === entry.id
+              ? {
+                  ...e,
+                  status: "success" as const,
+                  extractedAmount: data.extractedFields?.amount ?? null,
+                  extractedProvider: data.extractedFields?.providerName ?? null,
+                }
+              : e
+          )
+        );
+      } catch {
+        setUploadEntries((prev) =>
+          prev.map((e) =>
+            e.id === entry.id
+              ? { ...e, status: "error" as const, error: "Error de conexion" }
+              : e
+          )
+        );
+      }
+    }
+
+    setIsUploading(false);
+  }, []);
+
+  const handleRemoveEntry = useCallback((id: string) => {
+    setUploadEntries((prev) => prev.filter((e) => e.id !== id));
+  }, []);
+
+  const handleClearAll = useCallback(() => {
+    setUploadEntries([]);
+  }, []);
+
+  const populateFromUploads = useCallback(() => {
+    for (const entry of successfulUploads) {
+      append({
+        category: "",
+        monthlyAmount: entry.extractedAmount != null ? entry.extractedAmount.toString() : "",
+        _sourceFilename: entry.file.name,
+      });
+    }
+    setUploadEntries([]);
+  }, [successfulUploads, append]);
 
   async function onSubmit(data: FormData) {
     setLoading(true);
@@ -172,7 +284,7 @@ export function SimuladorForm() {
                 <div>
                   <h3 className="font-semibold">Deducciones por comprobantes</h3>
                   <p className="text-sm text-muted-foreground">
-                    Agrega las deducciones que queres cargar en SiRADIG
+                    Subi tus facturas para cargar automaticamente o agrega deducciones manualmente
                   </p>
                 </div>
                 <Button
@@ -186,9 +298,32 @@ export function SimuladorForm() {
                 </Button>
               </div>
 
-              {fields.length === 0 && (
+              <div className="mb-4">
+                <PdfUploadDropzone
+                  entries={uploadEntries}
+                  isUploading={isUploading}
+                  progress={uploadProgress}
+                  onFilesSelected={handleFilesSelected}
+                  onRemoveEntry={handleRemoveEntry}
+                  onClearAll={handleClearAll}
+                />
+                {successfulUploads.length > 0 && !isUploading && (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    className="mt-2 w-full"
+                    onClick={populateFromUploads}
+                  >
+                    <FileText className="h-4 w-4 mr-1" />
+                    Cargar {successfulUploads.length} deduccion(es) extraida(s)
+                  </Button>
+                )}
+              </div>
+
+              {fields.length === 0 && uploadEntries.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
-                  No hay deducciones agregadas. Hace click en &quot;Agregar&quot; para
+                  No hay deducciones agregadas. Subi facturas o hace click en &quot;Agregar&quot; para
                   sumar una deduccion.
                 </p>
               )}
@@ -236,6 +371,13 @@ export function SimuladorForm() {
                         {...form.register(`deducciones.${index}.monthlyAmount`)}
                       />
                     </div>
+
+                    {form.watch(`deducciones.${index}._sourceFilename`) && (
+                      <Badge variant="outline" className="shrink-0 text-xs max-w-32 truncate hidden sm:flex">
+                        <FileText className="h-3 w-3 mr-1 shrink-0" />
+                        {form.watch(`deducciones.${index}._sourceFilename`)}
+                      </Badge>
+                    )}
 
                     <Button
                       type="button"

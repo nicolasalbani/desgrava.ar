@@ -19,10 +19,11 @@ function formatCompact(value: number): string {
   return "$" + value;
 }
 
-export function SimuladorChart({ result }: { result: SimulationResult }) {
+export function SimuladorChart({ result, viewMode = "mensual" }: { result: SimulationResult; viewMode?: "mensual" | "anual" }) {
+  const d = viewMode === "mensual" ? 12 : 1;
   const data = [
-    { name: "Sin deducciones", impuesto: parseFloat(result.impuestoSinDeducciones) },
-    { name: "Con deducciones", impuesto: parseFloat(result.impuestoConDeducciones) },
+    { name: "Sin deducciones", impuesto: parseFloat(result.impuestoSinDeducciones) / d },
+    { name: "Con deducciones", impuesto: parseFloat(result.impuestoConDeducciones) / d },
   ];
 
   const colors = ["hsl(0, 70%, 55%)", "hsl(142, 70%, 45%)"];

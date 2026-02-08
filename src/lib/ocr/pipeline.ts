@@ -15,8 +15,10 @@ export async function processDocument(
 
   if (mimeType === "application/pdf") {
     try {
-      const pdfParseModule = await import("pdf-parse"); const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
-      const result = await pdfParse(buffer);
+      const { PDFParse } = await import("pdf-parse");
+      const parser = new PDFParse({ data: new Uint8Array(buffer), verbosity: 0 });
+      await parser.load();
+      const result = await parser.getText();
       text = result.text;
 
       if (text.trim().length > 50) {
