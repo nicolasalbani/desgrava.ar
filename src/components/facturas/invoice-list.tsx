@@ -31,6 +31,8 @@ interface Invoice {
   providerCuit: string;
   providerName: string | null;
   invoiceType: string;
+  invoiceNumber: string | null;
+  invoiceDate: string | null;
   amount: string;
   fiscalYear: number;
   fiscalMonth: number;
@@ -146,6 +148,8 @@ export function InvoiceList() {
               <TableRow>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead>Nro. Comprobante</TableHead>
+                <TableHead>Fecha Comprobante</TableHead>
                 <TableHead>CUIT Proveedor</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
                 <TableHead>Periodo</TableHead>
@@ -163,6 +167,14 @@ export function InvoiceList() {
                   </TableCell>
                   <TableCell>
                     {INVOICE_TYPE_LABELS[inv.invoiceType] ?? inv.invoiceType}
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {inv.invoiceNumber ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    {inv.invoiceDate
+                      ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
+                      : "—"}
                   </TableCell>
                   <TableCell className="font-mono text-sm">
                     {inv.providerCuit}
