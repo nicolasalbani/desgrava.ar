@@ -26,7 +26,7 @@ import {
 import { Calculator, Plus, Trash2, Loader2, FileText } from "lucide-react";
 import { CATEGORY_LABELS, type SimuladorCategory } from "@/lib/simulador/deduction-rules";
 import { SimuladorResults } from "./simulador-results";
-import { PdfUploadDropzone, type FileUploadEntry } from "./pdf-upload-dropzone";
+import { PdfUploadDropzone } from "./pdf-upload-dropzone";
 import type { SimulationResult } from "@/lib/simulador/calculator";
 
 const ALLOWED_UPLOAD_TYPES = [
@@ -39,7 +39,10 @@ const MAX_UPLOAD_FILES = 10;
 
 const formSchema = z.object({
   salarioBrutoMensual: z.string().min(1, "El salario es requerido").refine(
-    (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
+    (val) => {
+      const num = parseFloat(unformatArgNumber(val));
+      return !isNaN(num) && num > 0;
+    },
     { message: "El salario debe ser mayor a 0" }
   ),
   tieneHijos: z.string(),
@@ -50,7 +53,10 @@ const formSchema = z.object({
       z.object({
         category: z.string().min(1, "Selecciona una categoria"),
         monthlyAmount: z.string().min(1, "Ingresa un monto").refine(
-          (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
+          (val) => {
+            const num = parseFloat(unformatArgNumber(val));
+            return !isNaN(num) && num > 0;
+          },
           { message: "El monto debe ser mayor a 0" }
         ),
         _sourceFilename: z.string().optional(),
@@ -63,13 +69,23 @@ type FormData = z.infer<typeof formSchema>;
 
 const categories = Object.entries(CATEGORY_LABELS) as [SimuladorCategory, string][];
 
+function formatArgNumber(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("es-AR");
+}
+
+function unformatArgNumber(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 export function SimuladorForm() {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   // PDF upload state
-  const [uploadEntries, setUploadEntries] = useState<FileUploadEntry[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -87,11 +103,6 @@ export function SimuladorForm() {
     name: "deducciones",
   });
 
-  // Upload logic
-  const uploadProgress = uploadEntries.length > 0
-    ? uploadEntries.filter((e) => e.status === "success" || e.status === "error").length / uploadEntries.length
-    : 0;
-
   const handleFilesSelected = useCallback(async (files: File[]) => {
     const validFiles = files
       .filter((f) => ALLOWED_UPLOAD_TYPES.includes(f.type))
@@ -99,84 +110,40 @@ export function SimuladorForm() {
 
     if (validFiles.length === 0) return;
 
-    const newEntries: FileUploadEntry[] = validFiles.map((file) => ({
-      id: `${file.name}-${Date.now()}-${Math.random()}`,
-      file,
-      status: "pending" as const,
-    }));
-
-    setUploadEntries((prev) => [...prev, ...newEntries]);
     setIsUploading(true);
+    setUploadProgress(0);
 
-    for (const entry of newEntries) {
-      setUploadEntries((prev) =>
-        prev.map((e) => (e.id === entry.id ? { ...e, status: "uploading" as const } : e))
-      );
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
 
       try {
         const formData = new FormData();
-        formData.append("file", entry.file);
+        formData.append("file", file);
 
         const res = await fetch("/api/simulador/upload", {
           method: "POST",
           body: formData,
         });
 
-        if (!res.ok) {
-          const err = await res.json();
-          setUploadEntries((prev) =>
-            prev.map((e) =>
-              e.id === entry.id
-                ? { ...e, status: "error" as const, error: err.error || "Error al procesar" }
-                : e
-            )
-          );
-          continue;
+        if (res.ok) {
+          const data = await res.json();
+          const amount = data.extractedFields?.amount ?? null;
+
+          append({
+            category: "",
+            monthlyAmount: amount != null ? amount.toString() : "",
+            _sourceFilename: file.name,
+          });
         }
-
-        const data = await res.json();
-        const amount = data.extractedFields?.amount ?? null;
-
-        setUploadEntries((prev) =>
-          prev.map((e) =>
-            e.id === entry.id
-              ? {
-                  ...e,
-                  status: "success" as const,
-                  extractedAmount: amount,
-                  extractedProvider: data.extractedFields?.providerName ?? null,
-                }
-              : e
-          )
-        );
-
-        // Auto-append deduction to the form
-        append({
-          category: "",
-          monthlyAmount: amount != null ? amount.toString() : "",
-          _sourceFilename: entry.file.name,
-        });
       } catch {
-        setUploadEntries((prev) =>
-          prev.map((e) =>
-            e.id === entry.id
-              ? { ...e, status: "error" as const, error: "Error de conexion" }
-              : e
-          )
-        );
+        // skip failed files silently
       }
+
+      setUploadProgress((i + 1) / validFiles.length);
     }
 
     setIsUploading(false);
   }, [append]);
-
-  const handleRemoveEntry = useCallback((id: string) => {
-    setUploadEntries((prev) => prev.filter((e) => e.id !== id));
-  }, []);
-
-  const handleClearAll = useCallback(() => {
-    setUploadEntries([]);
-  }, []);
 
   async function onSubmit(data: FormData) {
     setLoading(true);
@@ -185,13 +152,13 @@ export function SimuladorForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          salarioBrutoMensual: parseFloat(data.salarioBrutoMensual),
+          salarioBrutoMensual: parseFloat(unformatArgNumber(data.salarioBrutoMensual)),
           tieneHijos: parseInt(data.tieneHijos),
           tieneConyuge: data.tieneConyuge,
           incluyeSindicato: data.incluyeSindicato,
           deducciones: data.deducciones.map((d) => ({
             category: d.category,
-            monthlyAmount: parseFloat(d.monthlyAmount),
+            monthlyAmount: parseFloat(unformatArgNumber(d.monthlyAmount)),
           })),
         }),
       });
@@ -230,9 +197,14 @@ export function SimuladorForm() {
                 <Label htmlFor="salario">Salario bruto mensual ($)</Label>
                 <Input
                   id="salario"
-                  type="number"
-                  placeholder="2000000"
-                  {...form.register("salarioBrutoMensual")}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="2.000.000"
+                  value={formatArgNumber(form.watch("salarioBrutoMensual"))}
+                  onChange={(e) => {
+                    const raw = unformatArgNumber(e.target.value);
+                    form.setValue("salarioBrutoMensual", raw, { shouldValidate: true });
+                  }}
                 />
                 {form.formState.errors.salarioBrutoMensual && (
                   <p className="text-sm text-destructive">
@@ -294,16 +266,13 @@ export function SimuladorForm() {
 
               <div className="mb-4">
                 <PdfUploadDropzone
-                  entries={uploadEntries}
                   isUploading={isUploading}
                   progress={uploadProgress}
                   onFilesSelected={handleFilesSelected}
-                  onRemoveEntry={handleRemoveEntry}
-                  onClearAll={handleClearAll}
                 />
               </div>
 
-              {fields.length === 0 && uploadEntries.length === 0 && (
+              {fields.length === 0 && !isUploading && (
                 <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
                   No hay deducciones agregadas. Subi facturas o hace click en &quot;Agregar&quot; para
                   sumar una deduccion.
@@ -348,9 +317,14 @@ export function SimuladorForm() {
                         </Label>
                       )}
                       <Input
-                        type="number"
-                        placeholder="200000"
-                        {...form.register(`deducciones.${index}.monthlyAmount`)}
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="200.000"
+                        value={formatArgNumber(form.watch(`deducciones.${index}.monthlyAmount`))}
+                        onChange={(e) => {
+                          const raw = unformatArgNumber(e.target.value);
+                          form.setValue(`deducciones.${index}.monthlyAmount`, raw, { shouldValidate: true });
+                        }}
                       />
                     </div>
 
