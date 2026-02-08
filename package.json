@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS='--disable-warning=DEP0169' next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -11,7 +11,7 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@hookform/resolvers": "^5.2.2",
-    "@prisma/client": "^7.3.0",
+    "@prisma/client": "^7.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "decimal.js": "^10.6.0",
@@ -22,7 +22,7 @@
     "p-queue": "^9.1.0",
     "pdf-parse": "^2.4.5",
     "playwright": "^1.58.2",
-    "prisma": "^7.3.0",
+    "prisma": "^7.2.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",

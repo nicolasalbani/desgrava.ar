@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, Calculator } from "lucide-react";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  const { data: session } = useSession();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -22,7 +24,11 @@ export function Navbar() {
             Simulador
           </Link>
           <Button asChild>
-            <Link href="/login">Iniciar sesion</Link>
+            {session ? (
+              <Link href="/dashboard">Ir al panel</Link>
+            ) : (
+              <Link href="/login">Iniciar sesion</Link>
+            )}
           </Button>
         </nav>
 
@@ -37,9 +43,15 @@ export function Navbar() {
               <Link href="/simulador" onClick={() => setOpen(false)} className="text-lg font-medium">
                 Simulador
               </Link>
-              <Link href="/login" onClick={() => setOpen(false)} className="text-lg font-medium">
-                Iniciar sesion
-              </Link>
+              {session ? (
+                <Link href="/dashboard" onClick={() => setOpen(false)} className="text-lg font-medium">
+                  Ir al panel
+                </Link>
+              ) : (
+                <Link href="/login" onClick={() => setOpen(false)} className="text-lg font-medium">
+                  Iniciar sesion
+                </Link>
+              )}
             </nav>
           </SheetContent>
         </Sheet>
