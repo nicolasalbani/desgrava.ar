@@ -3,12 +3,24 @@ import { decrypt } from "@/lib/crypto/encryption";
 import { getContext, releaseContext, enqueueJob } from "./browser-pool";
 import { loginToArca, navigateToSiradig } from "./arca-navigator";
 import { fillDeductionForm, submitDeduction } from "./siradig-navigator";
+import {
+  saveScreenshot,
+  ensureVideoDir,
+  finalizeVideo,
+  getJobScreenshots,
+  clearJobArtifacts,
+} from "./artifact-manager";
+import type { ScreenshotMeta } from "./artifact-manager";
 
 export type LogCallback = (jobId: string, message: string) => void;
 
 // In-memory log storage for SSE streaming
 const jobLogs = new Map<string, string[]>();
 const jobStatuses = new Map<string, string>();
+const jobVideoReady = new Map<string, string>();
+
+export { getJobScreenshots };
+export type { ScreenshotMeta };
 
 export function getJobLogs(jobId: string): string[] {
   return jobLogs.get(jobId) ?? [];
@@ -18,9 +30,15 @@ export function getJobStatus(jobId: string): string | undefined {
   return jobStatuses.get(jobId);
 }
 
+export function getJobVideoFilename(jobId: string): string | null {
+  return jobVideoReady.get(jobId) ?? null;
+}
+
 export function clearJobLogs(jobId: string): void {
   jobLogs.delete(jobId);
   jobStatuses.delete(jobId);
+  jobVideoReady.delete(jobId);
+  clearJobArtifacts(jobId);
 }
 
 function setJobStatus(jobId: string, status: string) {
@@ -80,6 +98,19 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
       },
     });
 
+    // Screenshot step counter
+    let stepCounter = 0;
+
+    const onScreenshot = async (
+      buffer: Buffer,
+      slug: string,
+      label: string
+    ) => {
+      stepCounter++;
+      await saveScreenshot(jobId, stepCounter, slug, label, buffer);
+      await appendLog(jobId, `Screenshot: ${label}`, onLog);
+    };
+
     try {
       // Decrypt credentials
       await appendLog(jobId, "Desencriptando credenciales...", onLog);
@@ -89,9 +120,10 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         credential.authTag
       );
 
-      // Get browser context
+      // Get browser context with video recording
       await appendLog(jobId, "Iniciando navegador...", onLog);
-      const context = await getContext(userId);
+      const videoDir = await ensureVideoDir(jobId);
+      const context = await getContext(userId, { recordVideoDir: videoDir });
       const page = await context.newPage();
 
       try {
@@ -100,7 +132,8 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           page,
           credential.cuit,
           clave,
-          (msg) => appendLog(jobId, msg, onLog)
+          (msg) => appendLog(jobId, msg, onLog),
+          onScreenshot
         );
 
         if (!loginResult.success) {
@@ -123,7 +156,8 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         // Navigate to SiRADIG
         const navigated = await navigateToSiradig(
           page,
-          (msg) => appendLog(jobId, msg, onLog)
+          (msg) => appendLog(jobId, msg, onLog),
+          onScreenshot
         );
 
         if (!navigated) {
@@ -150,7 +184,8 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               amount: job.invoice.amount.toString(),
               fiscalMonth: job.invoice.fiscalMonth,
             },
-            (msg) => appendLog(jobId, msg, onLog)
+            (msg) => appendLog(jobId, msg, onLog),
+            onScreenshot
           );
 
           if (!fillResult.success) {
@@ -175,7 +210,8 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             // Auto-submit
             const submitResult = await submitDeduction(
               page,
-              (msg) => appendLog(jobId, msg, onLog)
+              (msg) => appendLog(jobId, msg, onLog),
+              onScreenshot
             );
 
             setJobStatus(jobId, submitResult.success ? "COMPLETED" : "FAILED");
@@ -195,10 +231,10 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               });
             }
           } else {
-            // Save screenshot and wait for user confirmation
-            // In production, save to file storage
-            const screenshotBase64 = fillResult.screenshotBuffer
-              ? `data:image/png;base64,${fillResult.screenshotBuffer.toString("base64")}`
+            // Save screenshot URL pointing to the API route instead of base64
+            const lastScreenshot = getJobScreenshots(jobId).at(-1);
+            const screenshotUrl = lastScreenshot
+              ? `/api/automatizacion/${jobId}/artifacts/${lastScreenshot.name}`
               : null;
 
             setJobStatus(jobId, "WAITING_CONFIRMATION");
@@ -206,7 +242,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               where: { id: jobId },
               data: {
                 status: "WAITING_CONFIRMATION",
-                screenshotUrl: screenshotBase64,
+                screenshotUrl,
               },
             });
 
@@ -237,6 +273,17 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
       });
     } finally {
       await releaseContext(userId);
+
+      // Finalize video after context is released (recording is done)
+      try {
+        const videoFilename = await finalizeVideo(jobId);
+        if (videoFilename) {
+          jobVideoReady.set(jobId, videoFilename);
+          await appendLog(jobId, "Grabacion de video disponible.", onLog);
+        }
+      } catch {
+        // Video finalization is best-effort
+      }
     }
   });
 }

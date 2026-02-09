@@ -2,7 +2,12 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getJobLogs, getJobStatus } from "@/lib/automation/job-processor";
+import {
+  getJobLogs,
+  getJobStatus,
+  getJobScreenshots,
+  getJobVideoFilename,
+} from "@/lib/automation/job-processor";
 
 const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED", "WAITING_CONFIRMATION"];
 
@@ -26,30 +31,57 @@ export async function GET(
   }
 
   const encoder = new TextEncoder();
-  let lastIndex = 0;
+  let lastLogIndex = 0;
+  let lastScreenshotIndex = 0;
 
   const stream = new ReadableStream({
     async start(controller) {
-      const sendLogs = () => {
+      const sendUpdates = () => {
+        // Send new logs
         const logs = getJobLogs(jobId);
-        while (lastIndex < logs.length) {
-          const data = JSON.stringify({ log: logs[lastIndex] });
+        while (lastLogIndex < logs.length) {
+          const data = JSON.stringify({ log: logs[lastLogIndex] });
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-          lastIndex++;
+          lastLogIndex++;
+        }
+
+        // Send new screenshot metadata
+        const screenshots = getJobScreenshots(jobId);
+        while (lastScreenshotIndex < screenshots.length) {
+          const meta = screenshots[lastScreenshotIndex];
+          const data = JSON.stringify({
+            screenshot: {
+              step: meta.step,
+              name: meta.name,
+              label: meta.label,
+              timestamp: meta.timestamp,
+              url: `/api/automatizacion/${jobId}/artifacts/${meta.name}`,
+            },
+          });
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          lastScreenshotIndex++;
         }
       };
 
-      // Poll for new logs using in-memory status (no DB query)
+      // Poll for new logs and screenshots
       const interval = setInterval(() => {
-        sendLogs();
+        sendUpdates();
 
         const status = getJobStatus(jobId);
         if (status && TERMINAL_STATUSES.includes(status)) {
-          sendLogs(); // Final flush
+          sendUpdates(); // Final flush
+
+          const videoFilename = getJobVideoFilename(jobId);
+          const terminalData: Record<string, unknown> = {
+            done: true,
+            status,
+          };
+          if (videoFilename) {
+            terminalData.videoUrl = `/api/automatizacion/${jobId}/artifacts/video`;
+          }
+
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ done: true, status })}\n\n`
-            )
+            encoder.encode(`data: ${JSON.stringify(terminalData)}\n\n`)
           );
           clearInterval(interval);
           controller.close();
@@ -57,7 +89,7 @@ export async function GET(
       }, 1000);
 
       // Initial send
-      sendLogs();
+      sendUpdates();
     },
   });
 

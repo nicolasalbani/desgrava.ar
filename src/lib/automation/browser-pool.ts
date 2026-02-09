@@ -23,7 +23,14 @@ async function ensureBrowser(): Promise<Browser> {
   return browser;
 }
 
-export async function getContext(userId: string): Promise<BrowserContext> {
+export interface ContextOptions {
+  recordVideoDir?: string;
+}
+
+export async function getContext(
+  userId: string,
+  options?: ContextOptions
+): Promise<BrowserContext> {
   const existing = contextMap.get(userId);
   if (existing) return existing;
 
@@ -34,6 +41,14 @@ export async function getContext(userId: string): Promise<BrowserContext> {
     viewport: { width: 1280, height: 720 },
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    ...(options?.recordVideoDir
+      ? {
+          recordVideo: {
+            dir: options.recordVideoDir,
+            size: { width: 1280, height: 720 },
+          },
+        }
+      : {}),
   });
 
   context.setDefaultTimeout(BROWSER_TIMEOUT);

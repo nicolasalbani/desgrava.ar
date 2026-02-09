@@ -7,22 +7,41 @@ export interface LoginResult {
   hasCaptcha?: boolean;
 }
 
+export type ScreenshotCallback = (
+  buffer: Buffer,
+  slug: string,
+  label: string
+) => Promise<void>;
+
 export async function loginToArca(
   page: Page,
   cuit: string,
   clave: string,
-  onLog?: (msg: string) => void
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback
 ): Promise<LoginResult> {
   const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.login;
 
   try {
     log("Navegando a la pagina de login de ARCA...");
     await page.goto(sel.url, { waitUntil: "networkidle" });
 
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "login-page",
+      "Pagina de login ARCA"
+    );
+
     // Check for CAPTCHA
     const captcha = await page.$(sel.captchaContainer);
     if (captcha) {
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "captcha-detected",
+        "CAPTCHA detectado"
+      );
       log("CAPTCHA detectado. Se requiere intervencion manual.");
       return { success: false, error: "CAPTCHA detectado", hasCaptcha: true };
     }
@@ -32,6 +51,12 @@ export async function loginToArca(
     await page.fill(sel.cuitInput, cuit);
     await page.click(sel.cuitSubmit);
     await page.waitForLoadState("networkidle");
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "after-cuit",
+      "CUIT ingresado"
+    );
 
     // Enter password
     log("Ingresando clave fiscal...");
@@ -43,6 +68,11 @@ export async function loginToArca(
     const errorEl = await page.$(sel.errorMessage);
     if (errorEl) {
       const errorText = await errorEl.textContent();
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "login-error",
+        "Error de login"
+      );
       log(`Error de login: ${errorText}`);
       return {
         success: false,
@@ -57,6 +87,12 @@ export async function loginToArca(
       return { success: false, error: "Login fallido" };
     }
 
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "login-success",
+      "Login exitoso"
+    );
+
     log("Login exitoso en ARCA");
     return { success: true };
   } catch (error) {
@@ -68,15 +104,23 @@ export async function loginToArca(
 
 export async function navigateToSiradig(
   page: Page,
-  onLog?: (msg: string) => void
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback
 ): Promise<boolean> {
   const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
 
   try {
     log("Navegando al portal de servicios...");
     await page.goto(ARCA_SELECTORS.portal.servicesUrl, {
       waitUntil: "networkidle",
     });
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "portal",
+      "Portal de servicios ARCA"
+    );
 
     // Try to find SiRADIG link directly or search for it
     let siradigLink = await page.$(ARCA_SELECTORS.portal.siradigLink);
@@ -99,6 +143,12 @@ export async function navigateToSiradig(
     log("Accediendo a SiRADIG...");
     await siradigLink.click();
     await page.waitForLoadState("networkidle");
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "siradig-loaded",
+      "SiRADIG cargado"
+    );
 
     log("SiRADIG cargado correctamente");
     return true;

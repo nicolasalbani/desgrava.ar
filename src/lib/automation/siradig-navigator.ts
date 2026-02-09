@@ -1,6 +1,7 @@
 import { Page } from "playwright";
 import { ARCA_SELECTORS } from "./selectors";
 import { getSiradigCategoryText, getSiradigInvoiceTypeText } from "./deduction-mapper";
+import type { ScreenshotCallback } from "./arca-navigator";
 
 export interface InvoiceData {
   deductionCategory: string;
@@ -19,9 +20,11 @@ export interface FillResult {
 export async function fillDeductionForm(
   page: Page,
   invoice: InvoiceData,
-  onLog?: (msg: string) => void
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.siradig;
 
   try {
@@ -32,6 +35,12 @@ export async function fillDeductionForm(
       await deductionsLink.click();
       await page.waitForLoadState("networkidle");
     }
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "deductions-section",
+      "Seccion de deducciones"
+    );
 
     // Click "Add deduction"
     log("Iniciando nueva deduccion...");
@@ -47,6 +56,12 @@ export async function fillDeductionForm(
     log(`Seleccionando categoria: ${categoryText}`);
     await page.selectOption(sel.categoryDropdown, { label: categoryText });
     await page.waitForTimeout(1000); // Wait for dependent fields to load
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "category-selected",
+      `Categoria: ${categoryText}`
+    );
 
     // Fill CUIT
     log(`Ingresando CUIT del proveedor: ${invoice.providerCuit}`);
@@ -75,6 +90,8 @@ export async function fillDeductionForm(
     log("Capturando screenshot de preview...");
     const screenshotBuffer = await page.screenshot({ fullPage: true });
 
+    await capture(screenshotBuffer, "form-filled", "Formulario completado");
+
     log("Formulario completado. Esperando confirmacion del usuario.");
     return { success: true, screenshotBuffer };
   } catch (error) {
@@ -86,9 +103,11 @@ export async function fillDeductionForm(
 
 export async function submitDeduction(
   page: Page,
-  onLog?: (msg: string) => void
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.siradig;
 
   try {
@@ -99,6 +118,12 @@ export async function submitDeduction(
     }
     await saveButton.click();
     await page.waitForLoadState("networkidle");
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "after-save",
+      "Guardando deduccion"
+    );
 
     // Check for confirmation dialog
     const confirmButton = await page.$(sel.confirmButton);
@@ -111,6 +136,11 @@ export async function submitDeduction(
     // Check for success
     const success = await page.$(sel.successMessage);
     if (success) {
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "submission-success",
+        "Deduccion enviada exitosamente"
+      );
       log("Deduccion enviada exitosamente");
       return { success: true };
     }
@@ -119,6 +149,11 @@ export async function submitDeduction(
     const errorEl = await page.$(sel.errorContainer);
     if (errorEl) {
       const errorText = await errorEl.textContent();
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "submission-error",
+        "Error al enviar"
+      );
       log(`Error al enviar: ${errorText}`);
       return { success: false, error: errorText?.trim() || "Error al enviar" };
     }
