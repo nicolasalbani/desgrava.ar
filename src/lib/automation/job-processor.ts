@@ -153,14 +153,14 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           return;
         }
 
-        // Navigate to SiRADIG
-        const navigated = await navigateToSiradig(
+        // Navigate to SiRADIG (opens in a new tab)
+        const siradigPage = await navigateToSiradig(
           page,
           (msg) => appendLog(jobId, msg, onLog),
           onScreenshot
         );
 
-        if (!navigated) {
+        if (!siradigPage) {
           setJobStatus(jobId, "FAILED");
           await prisma.automationJob.update({
             where: { id: jobId },
@@ -173,10 +173,10 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           return;
         }
 
-        // Fill the deduction form
+        // Fill the deduction form (on the SiRADIG tab)
         if (job.invoice) {
           const fillResult = await fillDeductionForm(
-            page,
+            siradigPage,
             {
               deductionCategory: job.invoice.deductionCategory,
               providerCuit: job.invoice.providerCuit,
@@ -209,7 +209,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           if (preference?.autoMode) {
             // Auto-submit
             const submitResult = await submitDeduction(
-              page,
+              siradigPage,
               (msg) => appendLog(jobId, msg, onLog),
               onScreenshot
             );

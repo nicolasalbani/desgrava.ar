@@ -106,7 +106,7 @@ export async function navigateToSiradig(
   page: Page,
   onLog?: (msg: string) => void,
   onScreenshot?: ScreenshotCallback
-): Promise<boolean> {
+): Promise<Page | null> {
   const log = onLog ?? (() => {});
   const capture = onScreenshot ?? (async () => {});
 
@@ -137,24 +137,28 @@ export async function navigateToSiradig(
 
     if (!siradigLink) {
       log("No se encontro el acceso a SiRADIG");
-      return false;
+      return null;
     }
 
-    log("Accediendo a SiRADIG...");
-    await siradigLink.click();
-    await page.waitForLoadState("networkidle");
+    // SiRADIG opens in a new tab — capture the popup
+    log("Accediendo a SiRADIG - Trabajador...");
+    const [siradigPage] = await Promise.all([
+      page.waitForEvent("popup"),
+      siradigLink.click(),
+    ]);
+    await siradigPage.waitForLoadState("networkidle");
 
     await capture(
-      await page.screenshot({ fullPage: true }),
+      await siradigPage.screenshot({ fullPage: true }),
       "siradig-loaded",
       "SiRADIG cargado"
     );
 
-    log("SiRADIG cargado correctamente");
-    return true;
+    log("SiRADIG cargado correctamente (nueva pestaña)");
+    return siradigPage;
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error navegando a SiRADIG: ${msg}`);
-    return false;
+    return null;
   }
 }

@@ -18,7 +18,7 @@ export const ARCA_SELECTORS = {
   // Post-login portal
   portal: {
     servicesUrl: "https://portalcf.cloud.afip.gob.ar/portal/app/",
-    siradigLink: "a[href*='siradig'], a[title*='SiRADIG']",
+    siradigLink: "a:has-text('SiRADIG - Trabajador'), a[href*='siradig'], a[title*='SiRADIG']",
     searchService: "#buscadorInput",
   },
 
