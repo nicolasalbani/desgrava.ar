@@ -90,10 +90,18 @@ export async function DELETE(
 
   const existing = await prisma.invoice.findFirst({
     where: { id, userId: session.user.id },
+    include: { _count: { select: { automationJobs: true } } },
   });
 
   if (!existing) {
     return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 });
+  }
+
+  if (existing._count.automationJobs > 0) {
+    return NextResponse.json(
+      { error: "No se puede eliminar una factura con automatizaciones vinculadas. Elimina las automatizaciones primero." },
+      { status: 409 }
+    );
   }
 
   await prisma.invoice.delete({ where: { id } });

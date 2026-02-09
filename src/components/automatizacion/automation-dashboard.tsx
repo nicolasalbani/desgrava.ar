@@ -25,8 +25,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Loader2, Play, Eye, CheckCircle, XCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Bot, Loader2, Eye, CheckCircle, Square, Trash2 } from "lucide-react";
 import { DEDUCTION_CATEGORY_LABELS } from "@/lib/validators/invoice";
 import { toast } from "sonner";
 import { JobDetail } from "./job-detail";
@@ -58,10 +67,15 @@ const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secon
   CANCELLED: { label: "Cancelado", variant: "secondary" },
 };
 
+const CANCELLABLE_STATUSES = ["PENDING", "RUNNING", "WAITING_CONFIRMATION"];
+const DELETABLE_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
+
 export function AutomationDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     fetchJobs();
@@ -94,7 +108,11 @@ export function AutomationDashboard() {
     }
   }
 
-  async function handleCancel(jobId: string) {
+  async function handleCancel() {
+    if (!cancelTarget) return;
+    const jobId = cancelTarget;
+    setCancelTarget(null);
+
     const res = await fetch(`/api/automatizacion/${jobId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -106,6 +124,24 @@ export function AutomationDashboard() {
       fetchJobs();
     } else {
       toast.error("Error al cancelar");
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    const jobId = deleteTarget;
+    setDeleteTarget(null);
+
+    const res = await fetch(`/api/automatizacion/${jobId}`, {
+      method: "DELETE",
+    });
+
+    if (res.ok) {
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+      toast.success("Job eliminado");
+    } else {
+      const data = await res.json().catch(() => null);
+      toast.error(data?.error ?? "Error al eliminar");
     }
   }
 
@@ -160,6 +196,8 @@ export function AutomationDashboard() {
                       label: job.status,
                       variant: "secondary" as const,
                     };
+                    const isCancellable = CANCELLABLE_STATUSES.includes(job.status);
+                    const isDeletable = DELETABLE_STATUSES.includes(job.status);
                     return (
                       <TableRow key={job.id}>
                         <TableCell>
@@ -206,24 +244,34 @@ export function AutomationDashboard() {
                               <Eye className="h-4 w-4" />
                             </Button>
                             {job.status === "WAITING_CONFIRMATION" && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleConfirm(job.id)}
-                                  title="Confirmar"
-                                >
-                                  <CheckCircle className="h-4 w-4 text-green-500" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleCancel(job.id)}
-                                  title="Cancelar"
-                                >
-                                  <XCircle className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleConfirm(job.id)}
+                                title="Confirmar"
+                              >
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              </Button>
+                            )}
+                            {isCancellable && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setCancelTarget(job.id)}
+                                title="Detener"
+                              >
+                                <Square className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
+                            {isDeletable && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDeleteTarget(job.id)}
+                                title="Eliminar"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             )}
                           </div>
                         </TableCell>
@@ -251,6 +299,40 @@ export function AutomationDashboard() {
           {selectedJob && <JobDetail jobId={selectedJob} />}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Detener automatizacion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se cancelara el job de automatizacion. Si estaba en ejecucion, se detendra el proceso.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancel}>
+              Detener
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar automatizacion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminara el registro de este job permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
 
   const invoices = await prisma.invoice.findMany({
     where,
+    include: { _count: { select: { automationJobs: true } } },
     orderBy: { createdAt: "desc" },
   });
 

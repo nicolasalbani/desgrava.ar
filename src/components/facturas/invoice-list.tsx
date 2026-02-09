@@ -19,6 +19,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Loader2, Trash2, Send } from "lucide-react";
 import {
   DEDUCTION_CATEGORY_LABELS,
@@ -40,6 +50,7 @@ interface Invoice {
   source: string;
   siradiqStatus: string;
   createdAt: string;
+  _count: { automationJobs: number };
 }
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -74,6 +85,7 @@ export function InvoiceList() {
   const [status, setStatus] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInvoices();
@@ -95,8 +107,10 @@ export function InvoiceList() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Seguro que queres eliminar esta factura?")) return;
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    const id = deleteTarget;
+    setDeleteTarget(null);
 
     const res = await fetch(`/api/facturas/${id}`, { method: "DELETE" });
     if (res.ok) {
@@ -108,7 +122,8 @@ export function InvoiceList() {
       });
       toast.success("Factura eliminada");
     } else {
-      toast.error("Error al eliminar");
+      const data = await res.json().catch(() => null);
+      toast.error(data?.error ?? "Error al eliminar");
     }
   }
 
@@ -341,13 +356,25 @@ export function InvoiceList() {
                       <Badge variant="outline">{inv.source}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(inv.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {inv._count.automationJobs > 0 ? (
+                        <span title="Tiene automatizaciones vinculadas">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteTarget(inv.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -356,6 +383,23 @@ export function InvoiceList() {
           </Table>
         </div>
       )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar factura</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta accion no se puede deshacer. Se eliminara la factura permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

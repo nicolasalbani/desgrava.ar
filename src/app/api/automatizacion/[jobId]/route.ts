@@ -88,3 +88,36 @@ export async function PUT(
 
   return NextResponse.json({ error: "Accion invalida" }, { status: 400 });
 }
+
+const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ jobId: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  const { jobId } = await params;
+
+  const job = await prisma.automationJob.findFirst({
+    where: { id: jobId, userId: session.user.id },
+  });
+
+  if (!job) {
+    return NextResponse.json({ error: "Job no encontrado" }, { status: 404 });
+  }
+
+  if (!TERMINAL_STATUSES.includes(job.status)) {
+    return NextResponse.json(
+      { error: "Solo se pueden eliminar jobs finalizados. Cancela el job primero." },
+      { status: 409 }
+    );
+  }
+
+  await prisma.automationJob.delete({ where: { id: jobId } });
+
+  return NextResponse.json({ success: true });
+}
