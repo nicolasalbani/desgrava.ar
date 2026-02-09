@@ -2,7 +2,9 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getJobLogs } from "@/lib/automation/job-processor";
+import { getJobLogs, getJobStatus } from "@/lib/automation/job-processor";
+
+const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED", "WAITING_CONFIRMATION"];
 
 export async function GET(
   req: NextRequest,
@@ -37,26 +39,16 @@ export async function GET(
         }
       };
 
-      // Poll for new logs
-      const interval = setInterval(async () => {
+      // Poll for new logs using in-memory status (no DB query)
+      const interval = setInterval(() => {
         sendLogs();
 
-        // Check if job is done
-        const currentJob = await prisma.automationJob.findUnique({
-          where: { id: jobId },
-          select: { status: true },
-        });
-
-        if (
-          currentJob &&
-          ["COMPLETED", "FAILED", "CANCELLED", "WAITING_CONFIRMATION"].includes(
-            currentJob.status
-          )
-        ) {
+        const status = getJobStatus(jobId);
+        if (status && TERMINAL_STATUSES.includes(status)) {
           sendLogs(); // Final flush
           controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ done: true, status: currentJob.status })}\n\n`
+              `data: ${JSON.stringify({ done: true, status })}\n\n`
             )
           );
           clearInterval(interval);

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prismaDirectClient as prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto/encryption";
 import { getContext, releaseContext, enqueueJob } from "./browser-pool";
 import { loginToArca, navigateToSiradig } from "./arca-navigator";
@@ -8,13 +8,23 @@ export type LogCallback = (jobId: string, message: string) => void;
 
 // In-memory log storage for SSE streaming
 const jobLogs = new Map<string, string[]>();
+const jobStatuses = new Map<string, string>();
 
 export function getJobLogs(jobId: string): string[] {
   return jobLogs.get(jobId) ?? [];
 }
 
+export function getJobStatus(jobId: string): string | undefined {
+  return jobStatuses.get(jobId);
+}
+
 export function clearJobLogs(jobId: string): void {
   jobLogs.delete(jobId);
+  jobStatuses.delete(jobId);
+}
+
+function setJobStatus(jobId: string, status: string) {
+  jobStatuses.set(jobId, status);
 }
 
 async function appendLog(jobId: string, message: string, onLog?: LogCallback) {
@@ -48,6 +58,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
     if (!job) throw new Error("Job no encontrado");
     if (!job.user.arcaCredential) {
+      setJobStatus(jobId, "FAILED");
       await prisma.automationJob.update({
         where: { id: jobId },
         data: { status: "FAILED", errorMessage: "No hay credenciales ARCA configuradas" },
@@ -59,6 +70,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
     const userId = job.userId;
 
     // Update status
+    setJobStatus(jobId, "RUNNING");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -92,6 +104,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         );
 
         if (!loginResult.success) {
+          setJobStatus(jobId, "FAILED");
           await prisma.automationJob.update({
             where: { id: jobId },
             data: {
@@ -114,6 +127,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         );
 
         if (!navigated) {
+          setJobStatus(jobId, "FAILED");
           await prisma.automationJob.update({
             where: { id: jobId },
             data: {
@@ -140,6 +154,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           );
 
           if (!fillResult.success) {
+            setJobStatus(jobId, "FAILED");
             await prisma.automationJob.update({
               where: { id: jobId },
               data: {
@@ -163,6 +178,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               (msg) => appendLog(jobId, msg, onLog)
             );
 
+            setJobStatus(jobId, submitResult.success ? "COMPLETED" : "FAILED");
             await prisma.automationJob.update({
               where: { id: jobId },
               data: {
@@ -185,6 +201,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               ? `data:image/png;base64,${fillResult.screenshotBuffer.toString("base64")}`
               : null;
 
+            setJobStatus(jobId, "WAITING_CONFIRMATION");
             await prisma.automationJob.update({
               where: { id: jobId },
               data: {
@@ -209,6 +226,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error desconocido";
       await appendLog(jobId, `Error: ${msg}`, onLog);
+      setJobStatus(jobId, "FAILED");
       await prisma.automationJob.update({
         where: { id: jobId },
         data: {
@@ -237,6 +255,7 @@ export async function confirmJob(jobId: string, onLog?: LogCallback): Promise<vo
   // In this MVP, we'll re-login and re-submit
   await appendLog(jobId, "Confirmacion recibida. Re-conectando para enviar...", onLog);
 
+  setJobStatus(jobId, "RUNNING");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: { status: "RUNNING" },
@@ -244,6 +263,7 @@ export async function confirmJob(jobId: string, onLog?: LogCallback): Promise<vo
 
   // In a production version, the browser context would be kept alive
   // For MVP, mark as completed
+  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {

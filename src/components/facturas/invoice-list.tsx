@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Trash2, Send } from "lucide-react";
 import {
   DEDUCTION_CATEGORY_LABELS,
   INVOICE_TYPE_LABELS,
@@ -61,6 +62,8 @@ const STATUS_LABELS: Record<string, string> = {
   FAILED: "Error",
 };
 
+const SELECTABLE_STATUSES = ["PENDING", "FAILED"];
+
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
@@ -69,9 +72,12 @@ export function InvoiceList() {
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState<string>(String(currentYear));
   const [status, setStatus] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchInvoices();
+    setSelectedIds(new Set());
   }, [year, status]);
 
   async function fetchInvoices() {
@@ -95,10 +101,87 @@ export function InvoiceList() {
     const res = await fetch(`/api/facturas/${id}`, { method: "DELETE" });
     if (res.ok) {
       setInvoices((prev) => prev.filter((inv) => inv.id !== id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       toast.success("Factura eliminada");
     } else {
       toast.error("Error al eliminar");
     }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  const eligibleInvoices = invoices.filter((inv) =>
+    SELECTABLE_STATUSES.includes(inv.siradiqStatus)
+  );
+  const allEligibleSelected =
+    eligibleInvoices.length > 0 &&
+    eligibleInvoices.every((inv) => selectedIds.has(inv.id));
+
+  function toggleSelectAll() {
+    if (allEligibleSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(eligibleInvoices.map((inv) => inv.id)));
+    }
+  }
+
+  async function handleSubmitToSiradig() {
+    if (selectedIds.size === 0) return;
+    setSubmitting(true);
+
+    let successCount = 0;
+    let failCount = 0;
+    const failedIds = new Set<string>();
+
+    for (const invoiceId of selectedIds) {
+      try {
+        const res = await fetch("/api/automatizacion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invoiceId, jobType: "SUBMIT_INVOICE" }),
+        });
+        if (res.ok) {
+          successCount++;
+          setInvoices((prev) =>
+            prev.map((inv) =>
+              inv.id === invoiceId ? { ...inv, siradiqStatus: "QUEUED" } : inv
+            )
+          );
+        } else {
+          failCount++;
+          failedIds.add(invoiceId);
+        }
+      } catch {
+        failCount++;
+        failedIds.add(invoiceId);
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(
+        `${successCount} factura(s) enviada(s) a la cola de SiRADIG`
+      );
+    }
+    if (failCount > 0) {
+      toast.error(`${failCount} factura(s) no se pudieron enviar`);
+    }
+
+    setSelectedIds(failedIds);
+    setSubmitting(false);
   }
 
   return (
@@ -133,6 +216,34 @@ export function InvoiceList() {
         </Select>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-4 py-3">
+          <span className="text-sm font-medium">
+            {selectedIds.size} factura(s) seleccionada(s)
+          </span>
+          <Button
+            size="sm"
+            onClick={handleSubmitToSiradig}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="mr-2 h-4 w-4" />
+            )}
+            Enviar a SiRADIG
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={submitting}
+          >
+            Cancelar seleccion
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -145,10 +256,11 @@ export function InvoiceList() {
         <div className="border rounded-md">
           <Table className="table-fixed w-full">
             <colgroup>
-              <col className="w-[12%]" />
-              <col className="w-[14%]" />
+              <col className="w-[3%]" />
+              <col className="w-[11%]" />
+              <col className="w-[13%]" />
               <col className="w-[8%]" />
-              <col className="w-[12%]" />
+              <col className="w-[11%]" />
               <col className="w-[8%]" />
               <col className="w-[10%]" />
               <col className="w-[8%]" />
@@ -159,6 +271,14 @@ export function InvoiceList() {
             </colgroup>
             <TableHeader>
               <TableRow>
+                <TableHead>
+                  <Checkbox
+                    checked={allEligibleSelected && eligibleInvoices.length > 0}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Seleccionar todas"
+                    disabled={eligibleInvoices.length === 0}
+                  />
+                </TableHead>
                 <TableHead>Proveedor</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Tipo</TableHead>
@@ -173,54 +293,65 @@ export function InvoiceList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {invoices.map((inv) => (
-                <TableRow key={inv.id}>
-                  <TableCell className="font-medium truncate" title={inv.providerName || "—"}>
-                    {inv.providerName || "—"}
-                  </TableCell>
-                  <TableCell className="truncate" title={DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ?? inv.deductionCategory}>
-                    {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
-                      inv.deductionCategory}
-                  </TableCell>
-                  <TableCell>
-                    {INVOICE_TYPE_LABELS[inv.invoiceType] ?? inv.invoiceType}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {inv.invoiceNumber ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    {inv.invoiceDate
-                      ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
-                      : "—"}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {inv.providerCuit}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    ${parseFloat(inv.amount).toLocaleString("es-AR")}
-                  </TableCell>
-                  <TableCell>
-                    {inv.fiscalMonth}/{inv.fiscalYear}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANTS[inv.siradiqStatus] ?? "secondary"}>
-                      {STATUS_LABELS[inv.siradiqStatus] ?? inv.siradiqStatus}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{inv.source}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(inv.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {invoices.map((inv) => {
+                const isEligible = SELECTABLE_STATUSES.includes(inv.siradiqStatus);
+                return (
+                  <TableRow key={inv.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(inv.id)}
+                        onCheckedChange={() => toggleSelect(inv.id)}
+                        disabled={!isEligible}
+                        aria-label={`Seleccionar factura ${inv.id}`}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium truncate" title={inv.providerName || "—"}>
+                      {inv.providerName || "—"}
+                    </TableCell>
+                    <TableCell className="truncate" title={DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ?? inv.deductionCategory}>
+                      {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                        inv.deductionCategory}
+                    </TableCell>
+                    <TableCell>
+                      {INVOICE_TYPE_LABELS[inv.invoiceType] ?? inv.invoiceType}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {inv.invoiceNumber ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      {inv.invoiceDate
+                        ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {inv.providerCuit}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      ${parseFloat(inv.amount).toLocaleString("es-AR")}
+                    </TableCell>
+                    <TableCell>
+                      {inv.fiscalMonth}/{inv.fiscalYear}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={STATUS_VARIANTS[inv.siradiqStatus] ?? "secondary"}>
+                        {STATUS_LABELS[inv.siradiqStatus] ?? inv.siradiqStatus}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{inv.source}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(inv.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
