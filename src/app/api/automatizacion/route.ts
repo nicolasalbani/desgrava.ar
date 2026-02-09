@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -42,10 +43,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Fire-and-forget — processJob uses prismaDirectClient (direct PG connection)
-    // so it doesn't depend on the HTTP request lifecycle
-    processJob(job.id).catch((err) => {
-      console.error("Job processing error:", err);
+    // Run in background after response is sent.
+    // processJob uses prismaDirectClient (direct PG, not Accelerate)
+    // so it won't hit P6000 connection errors.
+    after(async () => {
+      try {
+        await processJob(job.id);
+      } catch (err) {
+        console.error("Job processing error:", err);
+      }
     });
 
     return NextResponse.json({ job }, { status: 201 });
