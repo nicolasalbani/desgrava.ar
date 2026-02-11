@@ -104,7 +104,15 @@ export function extractFields(text: string): ExtractedFields {
     /(?:RAZ[OÓ]N\s+SOCIAL|DENOMINACI[OÓ]N|NOMBRE)\s*:?\s*(.+)/i
   );
   if (nameMatch) {
-    providerName = nameMatch[1].trim().substring(0, 100);
+    // Strip trailing invoice field labels that end up on the same line
+    // due to PDF column layout being merged into a single text line
+    providerName = nameMatch[1]
+      .replace(
+        /\s+(?:Fecha\s+de\s|Punto\s+de\s+Venta|Comp\.\s*Nro|CUIT\s*:|Ingresos\s+Brutos|Condici[oó]n\s|Domicilio|Per[ií]odo|COD\.\s*\d|C\.U\.I\.T).*$/i,
+        ""
+      )
+      .trim()
+      .substring(0, 100);
   }
 
   const confidence = fieldsFound / totalFields;
