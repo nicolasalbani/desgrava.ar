@@ -83,8 +83,8 @@ export async function finalizeVideo(jobId: string): Promise<string | null> {
 
   const finalName = "recording.webm";
   const src = path.join(videoDir, webm);
-  const dest = path.join(getJobDir(jobId), finalName);
-  await rename(src, dest);
+  const dest = path.join(videoDir, finalName);
+  if (webm !== finalName) await rename(src, dest);
 
   jobVideoPaths.set(jobId, dest);
   return finalName;
@@ -93,7 +93,7 @@ export async function finalizeVideo(jobId: string): Promise<string | null> {
 export async function readVideoFile(jobId: string): Promise<Buffer | null> {
   const filePath =
     jobVideoPaths.get(jobId) ??
-    path.join(getJobDir(jobId), "recording.webm");
+    path.join(getVideoDir(jobId), "recording.webm");
   if (!existsSync(filePath)) return null;
   return readFile(filePath);
 }
