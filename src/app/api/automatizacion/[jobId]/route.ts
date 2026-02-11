@@ -119,5 +119,18 @@ export async function DELETE(
 
   await prisma.automationJob.delete({ where: { id: jobId } });
 
+  // Reset invoice status if no other jobs remain for it
+  if (job.invoiceId) {
+    const remaining = await prisma.automationJob.count({
+      where: { invoiceId: job.invoiceId },
+    });
+    if (remaining === 0) {
+      await prisma.invoice.update({
+        where: { id: job.invoiceId },
+        data: { siradiqStatus: "PENDING" },
+      });
+    }
+  }
+
   return NextResponse.json({ success: true });
 }
