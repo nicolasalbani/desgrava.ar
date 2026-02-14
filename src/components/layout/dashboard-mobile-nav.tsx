@@ -16,7 +16,6 @@ import {
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 
 const navItems = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
@@ -32,14 +31,14 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 items-center px-6 border-b">
+      <div className="flex h-16 items-center px-6 border-b border-gray-200">
         <Link href="/" className="flex items-center gap-2 font-bold text-lg" onClick={onNavigate}>
           <Calculator className="h-5 w-5" />
           desgrava.ar
         </Link>
       </div>
       <ScrollArea className="flex-1 px-3 py-4">
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-col gap-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -49,10 +48,10 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
                 href={item.href}
                 onClick={onNavigate}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150",
                   isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -62,11 +61,10 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
           })}
         </nav>
       </ScrollArea>
-      <Separator />
-      <div className="p-3">
+      <div className="border-t border-gray-200 p-3 mt-auto">
         <Button
           variant="ghost"
-          className="w-full justify-start gap-3 text-muted-foreground"
+          className="w-full justify-start gap-3 text-sm text-gray-400 hover:text-red-500 hover:bg-transparent transition-colors duration-150"
           onClick={() => signOut({ callbackUrl: "/" })}
         >
           <LogOut className="h-4 w-4" />

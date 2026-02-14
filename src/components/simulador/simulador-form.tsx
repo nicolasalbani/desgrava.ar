@@ -178,12 +178,12 @@ export function SimuladorForm() {
 
   return (
     <div className="space-y-8">
-      <Card>
+      <Card className="border-gray-200">
         <CardHeader>
           <div className="flex items-center gap-3">
             <Calculator className="h-6 w-6 text-primary" />
             <div>
-              <CardTitle className="text-lg">Datos de tu sueldo</CardTitle>
+              <CardTitle className="text-lg text-gray-900">Datos de tu sueldo</CardTitle>
               <CardDescription className="text-sm text-gray-500">
                 Ingresa tu salario bruto mensual y tu situacion familiar
               </CardDescription>
@@ -193,8 +193,8 @@ export function SimuladorForm() {
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="salario">Salario bruto mensual ($)</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="salario" className="text-sm font-medium text-gray-700">Salario bruto mensual ($)</Label>
                 <Input
                   id="salario"
                   type="text"
@@ -213,8 +213,8 @@ export function SimuladorForm() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="hijos">Hijos a cargo</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="hijos" className="text-sm font-medium text-gray-700">Hijos a cargo</Label>
                 <Input
                   id="hijos"
                   type="number"
@@ -225,7 +225,7 @@ export function SimuladorForm() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 bg-gray-50 rounded-lg p-3">
+            <div className="flex flex-col sm:flex-row gap-6 bg-gray-50 rounded-lg px-4 py-3 mt-4">
               <div className="flex items-center gap-3">
                 <Switch
                   id="conyuge"
@@ -245,10 +245,10 @@ export function SimuladorForm() {
               </div>
             </div>
 
-            <div className="border-t border-gray-200 pt-6">
+            <div className="border-t border-gray-200 my-6 pt-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold">Deducciones por comprobantes</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Deducciones por comprobantes</h3>
                   <p className="text-sm text-gray-500">
                     Subi tus facturas para cargar automaticamente o agrega deducciones manualmente
                   </p>
@@ -257,10 +257,10 @@ export function SimuladorForm() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="border-gray-300 text-gray-600 shrink-0"
+                  className="border-gray-300 text-gray-600 rounded-lg font-medium hover:bg-gray-50 hover:border-gray-400 transition-colors duration-150 shrink-0"
                   onClick={() => append({ category: "", monthlyAmount: "" })}
                 >
-                  <Plus className="h-4 w-4 mr-1" />
+                  <Plus className="h-4 w-4 mr-1 text-blue-500" />
                   Agregar
                 </Button>
               </div>
@@ -351,7 +351,7 @@ export function SimuladorForm() {
                 )}
             </div>
 
-            <Button type="submit" size="lg" className="w-full mt-6 rounded-lg transition-all duration-150 hover:brightness-90" disabled={loading}>
+            <Button type="submit" size="lg" className="w-full mt-6 rounded-xl shadow-md transition-all duration-150 hover:bg-blue-700 hover:shadow-lg active:scale-[0.98]" disabled={loading}>
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (

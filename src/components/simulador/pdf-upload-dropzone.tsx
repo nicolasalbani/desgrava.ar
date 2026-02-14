@@ -57,12 +57,12 @@ export function PdfUploadDropzone({
         onDragLeave={handleDragLeave}
         onClick={() => !isUploading && inputRef.current?.click()}
         className={cn(
-          "border border-dashed rounded-lg px-4 py-3 text-center transition-all duration-150 max-h-[120px]",
+          "border-2 border-dashed rounded-lg px-4 py-6 text-center transition-all duration-150 min-h-[100px]",
           isUploading
             ? "border-gray-300 cursor-default"
-            : "cursor-pointer hover:border-gray-400 hover:bg-gray-50/50",
+            : "cursor-pointer hover:border-blue-400 hover:bg-blue-50",
           isDragOver
-            ? "border-primary bg-primary/5"
+            ? "border-blue-400 bg-blue-50"
             : "border-gray-300"
         )}
       >
@@ -76,16 +76,16 @@ export function PdfUploadDropzone({
         />
         {isUploading ? (
           <>
-            <Loader2 className="h-5 w-5 mx-auto mb-1.5 text-muted-foreground animate-spin" />
+            <Loader2 className="h-6 w-6 mx-auto mb-1.5 text-gray-400 animate-spin" />
             <p className="text-sm font-medium">Procesando facturas...</p>
           </>
         ) : (
           <>
-            <Upload className="h-5 w-5 mx-auto mb-1.5 text-gray-400" />
-            <p className="text-sm font-medium">
+            <Upload className="h-6 w-6 mx-auto mb-1.5 text-gray-400" />
+            <p className="text-sm font-medium text-gray-600">
               Arrastra facturas aqui o hace click para seleccionar
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-gray-400 mt-1">
               PDF, JPG, PNG o WebP. Maximo 10MB por archivo.
             </p>
             {isEmpty && (

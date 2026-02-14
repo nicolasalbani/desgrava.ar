@@ -13,7 +13,7 @@ export function DashboardHeader() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="flex h-16 items-center gap-4 border-b bg-card px-6">
+    <header className="flex items-center gap-4 border-b border-gray-200 bg-white py-4 px-6">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild className="md:hidden">
           <Button variant="ghost" size="icon">
@@ -29,10 +29,10 @@ export function DashboardHeader() {
 
       {session?.user && (
         <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground hidden sm:block">
+          <span className="text-sm font-medium text-gray-700 hidden sm:block">
             {session.user.name}
           </span>
-          <Avatar className="h-8 w-8">
+          <Avatar className="h-9 w-9 ring-2 ring-gray-100">
             <AvatarImage src={session.user.image ?? undefined} />
             <AvatarFallback>
               {session.user.name?.charAt(0)?.toUpperCase() ?? "U"}
