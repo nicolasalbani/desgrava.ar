@@ -1,4 +1,4 @@
-import { mkdir, writeFile, readFile, readdir, rename } from "fs/promises";
+import { mkdir, writeFile, readFile, readdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 
@@ -12,7 +12,7 @@ export interface ScreenshotMeta {
 }
 
 const jobScreenshots = new Map<string, ScreenshotMeta[]>();
-const jobVideoPaths = new Map<string, string>();
+const jobVideoFiles = new Map<string, string[]>();
 
 export function getJobDir(jobId: string): string {
   return path.join(ARTIFACTS_ROOT, jobId);
@@ -73,36 +73,81 @@ export async function readScreenshotFile(
   return readFile(filePath);
 }
 
-export async function finalizeVideo(jobId: string): Promise<string | null> {
+export async function finalizeVideo(jobId: string): Promise<string[]> {
   const videoDir = getVideoDir(jobId);
-  if (!existsSync(videoDir)) return null;
+  if (!existsSync(videoDir)) return [];
 
   const files = await readdir(videoDir);
-  const webm = files.find((f) => f.endsWith(".webm"));
-  if (!webm) return null;
+  const webmFiles = files.filter((f) => f.endsWith(".webm")).sort();
+  if (webmFiles.length === 0) return [];
 
-  const finalName = "recording.webm";
-  const src = path.join(videoDir, webm);
-  const dest = path.join(videoDir, finalName);
-  if (webm !== finalName) await rename(src, dest);
-
-  jobVideoPaths.set(jobId, dest);
-  return finalName;
+  jobVideoFiles.set(jobId, webmFiles);
+  return webmFiles;
 }
 
-export async function readVideoFile(jobId: string): Promise<Buffer | null> {
-  const filePath =
-    jobVideoPaths.get(jobId) ??
-    path.join(getVideoDir(jobId), "recording.webm");
+export async function readVideoFile(
+  jobId: string,
+  filename?: string
+): Promise<Buffer | null> {
+  const videoDir = getVideoDir(jobId);
+
+  if (filename) {
+    if (!filename.endsWith(".webm")) return null;
+    const filePath = path.join(videoDir, filename);
+    if (!existsSync(filePath)) return null;
+    return readFile(filePath);
+  }
+
+  // Legacy fallback: first tracked file or recording.webm
+  const knownFiles = jobVideoFiles.get(jobId);
+  if (knownFiles && knownFiles.length > 0) {
+    const filePath = path.join(videoDir, knownFiles[0]);
+    if (existsSync(filePath)) return readFile(filePath);
+  }
+
+  const filePath = path.join(videoDir, "recording.webm");
   if (!existsSync(filePath)) return null;
   return readFile(filePath);
 }
 
-export function getJobVideoPath(jobId: string): string | null {
-  return jobVideoPaths.get(jobId) ?? null;
+export function getJobVideoFiles(jobId: string): string[] {
+  return jobVideoFiles.get(jobId) ?? [];
+}
+
+export async function listVideosFromDisk(jobId: string): Promise<string[]> {
+  const videoDir = getVideoDir(jobId);
+  if (!existsSync(videoDir)) return [];
+  const files = await readdir(videoDir);
+  return files.filter((f) => f.endsWith(".webm")).sort();
+}
+
+export async function listScreenshotsFromDisk(
+  jobId: string
+): Promise<ScreenshotMeta[]> {
+  const dir = getJobDir(jobId);
+  if (!existsSync(dir)) return [];
+
+  const files = await readdir(dir);
+  const pattern = /^step-(\d{2})-([\w-]+)\.png$/;
+
+  return files
+    .map((f) => {
+      const match = f.match(pattern);
+      if (!match) return null;
+      const step = parseInt(match[1], 10);
+      const slug = match[2];
+      return {
+        step,
+        name: f,
+        label: slug.replace(/-/g, " "),
+        timestamp: "",
+      } satisfies ScreenshotMeta;
+    })
+    .filter((m): m is ScreenshotMeta => m !== null)
+    .sort((a, b) => a.step - b.step);
 }
 
 export function clearJobArtifacts(jobId: string): void {
   jobScreenshots.delete(jobId);
-  jobVideoPaths.delete(jobId);
+  jobVideoFiles.delete(jobId);
 }

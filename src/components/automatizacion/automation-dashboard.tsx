@@ -289,7 +289,7 @@ export function AutomationDashboard() {
         open={!!selectedJob}
         onOpenChange={(open) => !open && setSelectedJob(null)}
       >
-        <DialogContent className="max-w-2xl max-h-[80vh]">
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalle del trabajo</DialogTitle>
             <DialogDescription>

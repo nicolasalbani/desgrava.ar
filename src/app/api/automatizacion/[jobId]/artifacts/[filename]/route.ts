@@ -23,16 +23,19 @@ export async function GET(
     return new Response("No encontrado", { status: 404 });
   }
 
-  // Video file
-  if (filename === "video" || filename === "recording.webm") {
-    const buffer = await readVideoFile(jobId);
+  // Video file — legacy "video" alias or any .webm filename
+  if (filename === "video" || filename.endsWith(".webm")) {
+    const buffer = await readVideoFile(
+      jobId,
+      filename === "video" ? undefined : filename
+    );
     if (!buffer) {
       return new Response("Video no disponible", { status: 404 });
     }
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "video/webm",
-        "Content-Disposition": `inline; filename="job-${jobId}-recording.webm"`,
+        "Content-Disposition": `inline; filename="job-${jobId}-${filename === "video" ? "recording.webm" : filename}"`,
         "Cache-Control": "private, max-age=3600",
       },
     });

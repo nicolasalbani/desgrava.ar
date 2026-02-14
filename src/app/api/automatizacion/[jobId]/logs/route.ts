@@ -6,7 +6,7 @@ import {
   getJobLogs,
   getJobStatus,
   getJobScreenshots,
-  getJobVideoFilename,
+  getJobVideoFilenames,
 } from "@/lib/automation/job-processor";
 
 const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED", "WAITING_CONFIRMATION"];
@@ -33,6 +33,7 @@ export async function GET(
   const encoder = new TextEncoder();
   let lastLogIndex = 0;
   let lastScreenshotIndex = 0;
+  let lastSentStatus = "";
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -61,9 +62,18 @@ export async function GET(
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
           lastScreenshotIndex++;
         }
+
+        // Send status changes
+        const currentStatus = getJobStatus(jobId);
+        if (currentStatus && currentStatus !== lastSentStatus) {
+          lastSentStatus = currentStatus;
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ status: currentStatus })}\n\n`)
+          );
+        }
       };
 
-      // Poll for new logs and screenshots
+      // Poll for new logs, screenshots, and status
       const interval = setInterval(() => {
         sendUpdates();
 
@@ -71,13 +81,15 @@ export async function GET(
         if (status && TERMINAL_STATUSES.includes(status)) {
           sendUpdates(); // Final flush
 
-          const videoFilename = getJobVideoFilename(jobId);
+          const videoFilenames = getJobVideoFilenames(jobId);
           const terminalData: Record<string, unknown> = {
             done: true,
             status,
           };
-          if (videoFilename) {
-            terminalData.videoUrl = `/api/automatizacion/${jobId}/artifacts/video`;
+          if (videoFilenames.length > 0) {
+            terminalData.videoUrls = videoFilenames.map(
+              (f) => `/api/automatizacion/${jobId}/artifacts/${f}`
+            );
           }
 
           controller.enqueue(

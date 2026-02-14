@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,34 +27,55 @@ interface JobInfo {
   logs: string[];
 }
 
+const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
+
 export function JobDetail({ jobId }: { jobId: string }) {
   const [job, setJob] = useState<JobInfo | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [screenshots, setScreenshots] = useState<ScreenshotInfo[]>([]);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoUrls, setVideoUrls] = useState<string[]>([]);
+  const [activeVideoIndex, setActiveVideoIndex] = useState(0);
+  const [videoErrors, setVideoErrors] = useState<Set<string>>(new Set());
   const [streaming, setStreaming] = useState(true);
   const [expandedScreenshot, setExpandedScreenshot] =
     useState<ScreenshotInfo | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const jobLoadedRef = useRef(false);
+  const initialStatusRef = useRef<string | null>(null);
 
+  // Fetch initial job data including screenshots and video
   useEffect(() => {
+    jobLoadedRef.current = false;
     fetch(`/api/automatizacion/${jobId}`)
       .then((r) => r.json())
       .then((data) => {
         setJob(data.job);
+        initialStatusRef.current = data.job.status;
+
         if (data.job.logs && Array.isArray(data.job.logs)) {
           setLogs(data.job.logs);
         }
+        if (data.screenshots && Array.isArray(data.screenshots)) {
+          setScreenshots(data.screenshots);
+        }
+        if (data.videoUrls && Array.isArray(data.videoUrls)) {
+          setVideoUrls(data.videoUrls);
+        }
+
+        // If already in terminal state, no streaming needed
+        if (TERMINAL_STATUSES.includes(data.job.status)) {
+          setStreaming(false);
+        }
+
+        jobLoadedRef.current = true;
       });
   }, [jobId]);
 
-  useEffect(() => {
-    if (!job) return;
-    if (["COMPLETED", "FAILED", "CANCELLED"].includes(job.status)) {
-      setStreaming(false);
-      return;
-    }
+  // SSE for real-time updates (only for non-terminal jobs)
+  const connectSSE = useCallback(() => {
+    if (!jobLoadedRef.current || !initialStatusRef.current) return undefined;
+    if (TERMINAL_STATUSES.includes(initialStatusRef.current)) return undefined;
 
     const eventSource = new EventSource(
       `/api/automatizacion/${jobId}/logs`
@@ -74,10 +95,18 @@ export function JobDetail({ jobId }: { jobId: string }) {
         });
       }
 
+      // Update status in real-time (PENDING → RUNNING, etc.)
+      if (data.status) {
+        setJob((prev) => (prev ? { ...prev, status: data.status } : prev));
+      }
+
       if (data.done) {
         setStreaming(false);
-        if (data.videoUrl) {
-          setVideoUrl(data.videoUrl);
+        if (data.videoUrls && Array.isArray(data.videoUrls)) {
+          setVideoUrls(data.videoUrls);
+        }
+        if (data.status) {
+          setJob((prev) => (prev ? { ...prev, status: data.status } : prev));
         }
         eventSource.close();
       }
@@ -88,8 +117,14 @@ export function JobDetail({ jobId }: { jobId: string }) {
       eventSource.close();
     };
 
-    return () => eventSource.close();
-  }, [job, jobId]);
+    return eventSource;
+  }, [jobId]);
+
+  useEffect(() => {
+    if (!job) return;
+    const eventSource = connectSSE();
+    return () => eventSource?.close();
+  }, [job !== null, connectSSE]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -111,6 +146,8 @@ export function JobDetail({ jobId }: { jobId: string }) {
     });
   }
 
+  const playableVideos = videoUrls.filter((url) => !videoErrors.has(url));
+
   if (!job) {
     return (
       <div className="flex justify-center py-6">
@@ -120,7 +157,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0 overflow-hidden">
       {/* Status bar */}
       <div className="flex items-center gap-2">
         <Badge variant="outline">{job.status}</Badge>
@@ -133,7 +170,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
       </div>
 
       {/* Screenshot timeline */}
-      {screenshots.length > 0 && (
+      {(screenshots.length > 0 || streaming) && (
         <div>
           <h4 className="font-medium mb-2 flex items-center gap-2">
             <Camera className="h-4 w-4" />
@@ -198,22 +235,55 @@ export function JobDetail({ jobId }: { jobId: string }) {
         </div>
       )}
 
-      {/* Video player */}
-      {videoUrl && (
+      {/* Video player / carousel */}
+      {playableVideos.length > 0 && (
         <div>
           <h4 className="font-medium mb-2 flex items-center gap-2">
             <Play className="h-4 w-4" />
             Grabacion de sesion
+            {playableVideos.length > 1 && (
+              <span className="text-sm text-muted-foreground font-normal">
+                ({activeVideoIndex + 1} de {playableVideos.length})
+              </span>
+            )}
           </h4>
-          <div className="border rounded-md overflow-hidden">
+          <div className="border rounded-md overflow-hidden relative">
             <video
+              key={playableVideos[activeVideoIndex]}
               controls
               className="w-full"
-              src={videoUrl}
+              src={playableVideos[activeVideoIndex]}
               preload="metadata"
+              onError={() => {
+                const failedUrl = playableVideos[activeVideoIndex];
+                setVideoErrors((prev) => new Set(prev).add(failedUrl));
+                if (activeVideoIndex > 0) {
+                  setActiveVideoIndex((i) => i - 1);
+                }
+              }}
             >
               Tu navegador no soporta video HTML5.
             </video>
+            {playableVideos.length > 1 && (
+              <div className="flex justify-center gap-2 py-2 bg-muted/50">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={activeVideoIndex === 0}
+                  onClick={() => setActiveVideoIndex((i) => i - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={activeVideoIndex === playableVideos.length - 1}
+                  onClick={() => setActiveVideoIndex((i) => i + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

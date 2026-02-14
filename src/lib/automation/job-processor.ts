@@ -17,7 +17,7 @@ export type LogCallback = (jobId: string, message: string) => void;
 // In-memory log storage for SSE streaming
 const jobLogs = new Map<string, string[]>();
 const jobStatuses = new Map<string, string>();
-const jobVideoReady = new Map<string, string>();
+const jobVideoReady = new Map<string, string[]>();
 
 export { getJobScreenshots };
 export type { ScreenshotMeta };
@@ -30,8 +30,8 @@ export function getJobStatus(jobId: string): string | undefined {
   return jobStatuses.get(jobId);
 }
 
-export function getJobVideoFilename(jobId: string): string | null {
-  return jobVideoReady.get(jobId) ?? null;
+export function getJobVideoFilenames(jobId: string): string[] {
+  return jobVideoReady.get(jobId) ?? [];
 }
 
 export function clearJobLogs(jobId: string): void {
@@ -276,9 +276,9 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
       // Finalize video after context is released (recording is done)
       try {
-        const videoFilename = await finalizeVideo(jobId);
-        if (videoFilename) {
-          jobVideoReady.set(jobId, videoFilename);
+        const videoFilenames = await finalizeVideo(jobId);
+        if (videoFilenames.length > 0) {
+          jobVideoReady.set(jobId, videoFilenames);
           await appendLog(jobId, "Grabacion de video disponible.", onLog);
         }
       } catch {
