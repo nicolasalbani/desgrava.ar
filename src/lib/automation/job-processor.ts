@@ -2,7 +2,11 @@ import { prismaDirectClient as prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto/encryption";
 import { getContext, releaseContext, enqueueJob } from "./browser-pool";
 import { loginToArca, navigateToSiradig } from "./arca-navigator";
-import { fillDeductionForm, submitDeduction } from "./siradig-navigator";
+import {
+  navigateToDeductionSection,
+  fillDeductionForm,
+  submitDeduction,
+} from "./siradig-navigator";
 import {
   saveScreenshot,
   ensureVideoDir,
@@ -173,8 +177,30 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           return;
         }
 
-        // Fill the deduction form (on the SiRADIG tab)
+        // Navigate through SiRADIG to the deductions section
+        // (person selection → period → draft → form → deductions accordion)
         if (job.invoice) {
+          const navResult = await navigateToDeductionSection(
+            siradigPage,
+            job.invoice.fiscalYear,
+            (msg) => appendLog(jobId, msg, onLog),
+            onScreenshot
+          );
+
+          if (!navResult.success) {
+            setJobStatus(jobId, "FAILED");
+            await prisma.automationJob.update({
+              where: { id: jobId },
+              data: {
+                status: "FAILED",
+                errorMessage: navResult.error,
+                completedAt: new Date(),
+              },
+            });
+            return;
+          }
+
+          // Fill the deduction form (category selection + form fields)
           const fillResult = await fillDeductionForm(
             siradigPage,
             {

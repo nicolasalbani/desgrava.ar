@@ -25,21 +25,13 @@ export const ARCA_SELECTORS = {
   // SiRADIG application
   siradig: {
     baseUrl: "https://siradig.afip.gob.ar",
-    // Period selection
-    periodSelector: "select[name*='periodo'], #periodo",
-    employerSelector: "select[name*='empleador'], #empleador",
-    continueButton: "button[type='submit'], input[type='submit'][value*='Continuar']",
 
-    // Deduction form
-    deductionsSection: "a[href*='deducciones'], [data-section='deducciones']",
-    addDeductionButton: "button[title*='Agregar'], a[title*='Agregar'], .btn-agregar",
-    categoryDropdown: "select[name*='concepto'], select[name*='categoria']",
-    subcategoryDropdown: "select[name*='subconcepto']",
+    // Deduction form fields (filled after category is selected)
     cuitProviderInput: "input[name*='cuit']",
     invoiceTypeSelect: "select[name*='comprobante'], select[name*='tipoComprobante']",
     amountInput: "input[name*='monto'], input[name*='importe']",
-    periodFromSelect: "select[name*='periodoDesde']",
-    periodToSelect: "select[name*='periodoHasta']",
+    periodFromSelect: "select[name*='periodoDesde'], select[name*='mesDesde'], select[name*='mes']",
+    periodToSelect: "select[name*='periodoHasta'], select[name*='mesHasta']",
     saveButton: "button[type='submit'][value*='Guardar'], input[type='submit'][value*='Guardar'], button:has-text('Guardar')",
 
     // Confirmation
