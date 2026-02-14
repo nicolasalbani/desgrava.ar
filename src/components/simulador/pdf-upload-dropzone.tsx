@@ -9,12 +9,14 @@ interface PdfUploadDropzoneProps {
   isUploading: boolean;
   progress: number;
   onFilesSelected: (files: File[]) => void;
+  isEmpty?: boolean;
 }
 
 export function PdfUploadDropzone({
   isUploading,
   progress,
   onFilesSelected,
+  isEmpty,
 }: PdfUploadDropzoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,13 +57,13 @@ export function PdfUploadDropzone({
         onDragLeave={handleDragLeave}
         onClick={() => !isUploading && inputRef.current?.click()}
         className={cn(
-          "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+          "border border-dashed rounded-lg px-4 py-3 text-center transition-all duration-150 max-h-[120px]",
           isUploading
-            ? "border-muted-foreground/25 cursor-default"
-            : "cursor-pointer hover:border-muted-foreground/50",
+            ? "border-gray-300 cursor-default"
+            : "cursor-pointer hover:border-gray-400 hover:bg-gray-50/50",
           isDragOver
             ? "border-primary bg-primary/5"
-            : "border-muted-foreground/25"
+            : "border-gray-300"
         )}
       >
         <input
@@ -74,18 +76,23 @@ export function PdfUploadDropzone({
         />
         {isUploading ? (
           <>
-            <Loader2 className="h-8 w-8 mx-auto mb-2 text-muted-foreground animate-spin" />
+            <Loader2 className="h-5 w-5 mx-auto mb-1.5 text-muted-foreground animate-spin" />
             <p className="text-sm font-medium">Procesando facturas...</p>
           </>
         ) : (
           <>
-            <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <Upload className="h-5 w-5 mx-auto mb-1.5 text-gray-400" />
             <p className="text-sm font-medium">
               Arrastra facturas aqui o hace click para seleccionar
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-gray-400 mt-0.5">
               PDF, JPG, PNG o WebP. Maximo 10MB por archivo.
             </p>
+            {isEmpty && (
+              <p className="text-xs text-gray-400 mt-1">
+                No hay deducciones agregadas. Subi facturas o usa &quot;Agregar&quot;.
+              </p>
+            )}
           </>
         )}
       </div>

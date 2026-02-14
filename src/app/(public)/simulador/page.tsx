@@ -2,7 +2,7 @@ import { SimuladorForm } from "@/components/simulador/simulador-form";
 
 export default function SimuladorPage() {
   return (
-    <div className="container py-10 max-w-3xl">
+    <div className="mx-auto w-full max-w-3xl lg:max-w-[800px] px-4 sm:px-6 py-10">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Simulador de Deducciones</h1>
         <p className="text-muted-foreground">

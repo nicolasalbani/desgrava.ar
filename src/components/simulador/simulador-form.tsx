@@ -181,10 +181,10 @@ export function SimuladorForm() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <Calculator className="h-6 w-6" />
+            <Calculator className="h-6 w-6 text-primary" />
             <div>
-              <CardTitle>Datos de tu sueldo</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-lg">Datos de tu sueldo</CardTitle>
+              <CardDescription className="text-sm text-gray-500">
                 Ingresa tu salario bruto mensual y tu situacion familiar
               </CardDescription>
             </div>
@@ -192,7 +192,7 @@ export function SimuladorForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="salario">Salario bruto mensual ($)</Label>
                 <Input
@@ -225,14 +225,14 @@ export function SimuladorForm() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-6">
+            <div className="flex flex-col sm:flex-row gap-4 bg-gray-50 rounded-lg p-3">
               <div className="flex items-center gap-3">
                 <Switch
                   id="conyuge"
                   checked={form.watch("tieneConyuge")}
                   onCheckedChange={(v) => form.setValue("tieneConyuge", v)}
                 />
-                <Label htmlFor="conyuge">Conyuge a cargo</Label>
+                <Label htmlFor="conyuge" className="cursor-pointer">Conyuge a cargo</Label>
               </div>
 
               <div className="flex items-center gap-3">
@@ -241,15 +241,15 @@ export function SimuladorForm() {
                   checked={form.watch("incluyeSindicato")}
                   onCheckedChange={(v) => form.setValue("incluyeSindicato", v)}
                 />
-                <Label htmlFor="sindicato">Aporte sindical (2%)</Label>
+                <Label htmlFor="sindicato" className="cursor-pointer">Aporte sindical (2%)</Label>
               </div>
             </div>
 
-            <div className="border-t pt-6">
+            <div className="border-t border-gray-200 pt-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="font-semibold">Deducciones por comprobantes</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="text-lg font-semibold">Deducciones por comprobantes</h3>
+                  <p className="text-sm text-gray-500">
                     Subi tus facturas para cargar automaticamente o agrega deducciones manualmente
                   </p>
                 </div>
@@ -257,6 +257,7 @@ export function SimuladorForm() {
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="border-gray-300 text-gray-600 shrink-0"
                   onClick={() => append({ category: "", monthlyAmount: "" })}
                 >
                   <Plus className="h-4 w-4 mr-1" />
@@ -269,15 +270,9 @@ export function SimuladorForm() {
                   isUploading={isUploading}
                   progress={uploadProgress}
                   onFilesSelected={handleFilesSelected}
+                  isEmpty={fields.length === 0}
                 />
               </div>
-
-              {fields.length === 0 && !isUploading && (
-                <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
-                  No hay deducciones agregadas. Subi facturas o hace click en &quot;Agregar&quot; para
-                  sumar una deduccion.
-                </p>
-              )}
 
               <div className="space-y-3">
                 {fields.map((field, index) => (
@@ -356,7 +351,7 @@ export function SimuladorForm() {
                 )}
             </div>
 
-            <Button type="submit" size="lg" className="w-full" disabled={loading}>
+            <Button type="submit" size="lg" className="w-full mt-6 rounded-lg transition-all duration-150 hover:brightness-90" disabled={loading}>
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
