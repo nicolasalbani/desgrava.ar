@@ -92,24 +92,32 @@ export async function navigateToDeductionSection(
       // Modal didn't appear, continue normally
     }
 
-    // Step 4: Create new draft ("Crear Nuevo Borrador")
-    log("Creando nuevo borrador...");
-    const createDraft = page.getByText("Crear Nuevo Borrador").first();
-    await createDraft.waitFor({ timeout: 30000 });
-    await createDraft.click();
-    await page.waitForLoadState("networkidle");
+    // Step 4: Create new draft if needed, or skip if draft already exists
+    // When a draft exists, #btn_nuevo_borrador is hidden (display:none)
+    // and the menu items are already visible
+    const createDraftBtn = page.locator("#btn_nuevo_borrador");
+    if (await createDraftBtn.isVisible()) {
+      log("Creando nuevo borrador...");
+      await createDraftBtn.click();
+      // Clicking triggers slideDown animations for menu items (up to 1500ms)
+      await page.waitForTimeout(2000);
+    } else {
+      log("Borrador existente detectado, continuando...");
+    }
 
     await capture(
       await page.screenshot({ fullPage: true }),
-      "draft-created",
-      "Borrador creado/abierto"
+      "draft-menu",
+      "Menu del borrador"
     );
 
-    // Step 5: Click "Carga de Formulario"
+    // Step 5: Click "Carga de Formulario" (#btn_carga)
+    // This button uses a jQuery click handler that navigates via
+    // document.location.href after a 400ms delay
     log("Accediendo a Carga de Formulario...");
-    const formLoad = page.getByText("Carga de Formulario").first();
-    await formLoad.waitFor({ timeout: 30000 });
-    await formLoad.click();
+    const formLoadBtn = page.locator("#btn_carga");
+    await formLoadBtn.waitFor({ state: "visible", timeout: 30000 });
+    await formLoadBtn.click();
     await page.waitForLoadState("networkidle");
 
     await capture(
