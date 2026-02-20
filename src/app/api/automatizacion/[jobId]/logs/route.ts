@@ -34,15 +34,22 @@ export async function GET(
   let lastLogIndex = 0;
   let lastScreenshotIndex = 0;
   let lastSentStatus = "";
+  let closed = false;
 
   const stream = new ReadableStream({
     async start(controller) {
+      const enqueue = (data: string) => {
+        if (closed) return;
+        controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+      };
+
       const sendUpdates = () => {
+        if (closed) return;
+
         // Send new logs
         const logs = getJobLogs(jobId);
         while (lastLogIndex < logs.length) {
-          const data = JSON.stringify({ log: logs[lastLogIndex] });
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          enqueue(JSON.stringify({ log: logs[lastLogIndex] }));
           lastLogIndex++;
         }
 
@@ -50,7 +57,7 @@ export async function GET(
         const screenshots = getJobScreenshots(jobId);
         while (lastScreenshotIndex < screenshots.length) {
           const meta = screenshots[lastScreenshotIndex];
-          const data = JSON.stringify({
+          enqueue(JSON.stringify({
             screenshot: {
               step: meta.step,
               name: meta.name,
@@ -58,8 +65,7 @@ export async function GET(
               timestamp: meta.timestamp,
               url: `/api/automatizacion/${jobId}/artifacts/${meta.name}`,
             },
-          });
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          }));
           lastScreenshotIndex++;
         }
 
@@ -67,14 +73,17 @@ export async function GET(
         const currentStatus = getJobStatus(jobId);
         if (currentStatus && currentStatus !== lastSentStatus) {
           lastSentStatus = currentStatus;
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ status: currentStatus })}\n\n`)
-          );
+          enqueue(JSON.stringify({ status: currentStatus }));
         }
       };
 
       // Poll for new logs, screenshots, and status
       const interval = setInterval(() => {
+        if (closed) {
+          clearInterval(interval);
+          return;
+        }
+
         sendUpdates();
 
         const status = getJobStatus(jobId);
@@ -92,10 +101,9 @@ export async function GET(
             );
           }
 
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(terminalData)}\n\n`)
-          );
+          enqueue(JSON.stringify(terminalData));
           clearInterval(interval);
+          closed = true;
           controller.close();
         }
       }, 1000);
