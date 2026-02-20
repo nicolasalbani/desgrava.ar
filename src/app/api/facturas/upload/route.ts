@@ -47,6 +47,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       filename: file.name,
+      mimeType: file.type,
+      fileBase64: buffer.toString("base64"),
       method: result.method,
       extractedFields: result.fields,
       rawTextPreview: result.text.substring(0, 500),

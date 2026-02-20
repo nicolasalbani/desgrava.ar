@@ -82,6 +82,7 @@ const months = [
 
 export function InvoiceForm({
   defaultValues,
+  fileData,
 }: {
   defaultValues?: Partial<{
     providerCuit: string;
@@ -95,6 +96,11 @@ export function InvoiceForm({
     deductionCategory: string;
     description: string;
   }>;
+  fileData?: {
+    fileBase64: string;
+    fileMimeType: string;
+    originalFilename: string;
+  };
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -132,6 +138,11 @@ export function InvoiceForm({
           fiscalYear: parseInt(data.fiscalYear),
           fiscalMonth: parseInt(data.fiscalMonth),
           description: data.description,
+          ...(fileData?.fileBase64 ? {
+            fileBase64: fileData.fileBase64,
+            fileMimeType: fileData.fileMimeType,
+            originalFilename: fileData.originalFilename,
+          } : {}),
         }),
       });
 

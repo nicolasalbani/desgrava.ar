@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, Send } from "lucide-react";
+import { Loader2, Trash2, Send, FileDown } from "lucide-react";
 import {
   DEDUCTION_CATEGORY_LABELS,
   INVOICE_TYPE_LABELS,
@@ -49,6 +49,7 @@ interface Invoice {
   fiscalMonth: number;
   source: string;
   siradiqStatus: string;
+  hasFile: boolean;
   createdAt: string;
   _count: { automationJobs: number };
 }
@@ -334,24 +335,43 @@ export function InvoiceList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {inv._count.automationJobs > 0 ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          disabled
-                          title="Tiene automatizaciones vinculadas"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteTarget(inv.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="flex gap-1">
+                        {inv.hasFile && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            asChild
+                            title="Ver comprobante"
+                          >
+                            <a
+                              href={`/api/facturas/${inv.id}/file`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <FileDown className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        )}
+                        {inv._count.automationJobs > 0 ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled
+                            title="Tiene automatizaciones vinculadas"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteTarget(inv.id)}
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

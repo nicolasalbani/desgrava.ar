@@ -98,7 +98,8 @@ model Invoice {
   ocrConfidence     Float? // 0-1 for OCR-sourced
   siradiqStatus     SiradiqStatus     @default(PENDING)
   originalFilename  String?
-  fileUrl           String?
+  fileData          Bytes?
+  fileMimeType      String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 

@@ -26,11 +26,33 @@ export async function GET(req: NextRequest) {
 
   const invoices = await prisma.invoice.findMany({
     where,
-    include: { _count: { select: { automationJobs: true } } },
+    select: {
+      id: true,
+      deductionCategory: true,
+      providerCuit: true,
+      providerName: true,
+      invoiceType: true,
+      invoiceNumber: true,
+      invoiceDate: true,
+      amount: true,
+      fiscalYear: true,
+      fiscalMonth: true,
+      source: true,
+      siradiqStatus: true,
+      originalFilename: true,
+      fileMimeType: true,
+      createdAt: true,
+      _count: { select: { automationJobs: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({ invoices });
+  const result = invoices.map((inv) => ({
+    ...inv,
+    hasFile: !!inv.fileMimeType,
+  }));
+
+  return NextResponse.json({ invoices: result });
 }
 
 export async function POST(req: NextRequest) {
@@ -41,7 +63,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const parsed = createInvoiceSchema.safeParse(body);
+    const { fileBase64, fileMimeType, originalFilename, ...invoiceBody } = body;
+    const parsed = createInvoiceSchema.safeParse(invoiceBody);
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -55,7 +78,12 @@ export async function POST(req: NextRequest) {
         userId: session.user.id,
         ...parsed.data,
         amount: new Prisma.Decimal(parsed.data.amount),
-        source: "MANUAL",
+        source: fileBase64 ? "PDF" : "MANUAL",
+        ...(fileBase64 ? {
+          fileData: Buffer.from(fileBase64, "base64"),
+          fileMimeType: fileMimeType || "application/octet-stream",
+          originalFilename: originalFilename || null,
+        } : {}),
       },
     });
 
