@@ -200,82 +200,8 @@ export async function fillDeductionForm(
   const capture = onScreenshot ?? (async () => {});
 
   try {
-    // Step 7: Click "Agregar Deducciones y Desgravaciones" dropdown toggle
-    log("Abriendo menu de tipos de deduccion...");
-    const addDeductionToggle = page.locator("#btn_agregar_deducciones");
-    await addDeductionToggle.waitFor({ state: "visible", timeout: 15000 });
-    await addDeductionToggle.click();
-    await page.waitForTimeout(1500); // Wait for slideDown animation
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "add-deduction-menu",
-      "Menu de tipos de deduccion abierto"
-    );
-
-    // Step 8: Select the specific deduction category by its link ID
     const categoryText = getSiradigCategoryText(invoice.deductionCategory);
-    const linkId = getSiradigCategoryLinkId(invoice.deductionCategory);
-    log(`Seleccionando categoria: ${categoryText}`);
-
-    if (linkId) {
-      // For alquiler categories, expand the hidden sub-menu first
-      if (isAlquilerCategory(linkId)) {
-        log("Expandiendo sub-menu de alquiler de inmuebles...");
-        await page.locator("#link_menu_alquiler_inmuebles").click();
-        await page.waitForTimeout(1000);
-      }
-
-      const categoryLink = page.locator(`#${linkId}`);
-      await categoryLink.waitFor({ state: "visible", timeout: 10000 });
-      await categoryLink.click();
-    } else {
-      // Fallback: search within the dropdown menu only
-      const categoryLink = page
-        .locator("#menu_deducciones")
-        .getByText(categoryText, { exact: false })
-        .first();
-      await categoryLink.waitFor({ timeout: 10000 });
-      await categoryLink.click();
-    }
-    await page.waitForLoadState("networkidle");
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "category-selected",
-      `Categoria: ${categoryText}`
-    );
-
-    // Step 9: Fill CUIT (#numeroDoc) and wait for Denominación (#razonSocial)
-    log(`Ingresando CUIT del proveedor: ${invoice.providerCuit}`);
-    await page.fill("#numeroDoc", invoice.providerCuit);
-    // Trigger change event to fetch provider name via AJAX
-    await page.locator("#numeroDoc").dispatchEvent("change");
-
-    // Wait for Denominación to be populated
-    log("Esperando denominacion del proveedor...");
-    try {
-      await page.waitForFunction(
-        () => {
-          const el = document.getElementById(
-            "razonSocial"
-          ) as HTMLInputElement;
-          return el && el.value.trim() !== "";
-        },
-        { timeout: 10000 }
-      );
-    } catch {
-      log("No se pudo obtener la denominacion automaticamente");
-    }
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "cuit-filled",
-      "CUIT ingresado y denominacion obtenida"
-    );
-
-    // Step 10: Select Período (month) from #mesDesde
-    const monthValue = String(invoice.fiscalMonth);
+    const cuitDigits = invoice.providerCuit.replace(/-/g, "");
     const monthNames = [
       "",
       "Enero",
@@ -291,14 +217,144 @@ export async function fillDeductionForm(
       "Noviembre",
       "Diciembre",
     ];
+    const monthName = monthNames[invoice.fiscalMonth] || "";
+
+    // Check for an existing entry in the deductions table matching
+    // category, CUIT, and period — if found, edit it instead of creating new.
+    // Structure: #div_tabla_deducciones_agrupadas > fieldset > legend (category)
+    //            > div > table > tbody > tr (CUIT | Denominación | Período | ...)
     log(
-      `Seleccionando periodo: ${monthNames[invoice.fiscalMonth] || monthValue}`
+      `Buscando deduccion existente para ${categoryText} / CUIT ${invoice.providerCuit} / ${monthName}...`
     );
-    await page.selectOption("#mesDesde", monthValue);
+    const categoryLower = categoryText.toLowerCase();
+    const fieldsets = page.locator(
+      "#div_tabla_deducciones_agrupadas fieldset.grupo_deducciones"
+    );
+
+    let foundExisting = false;
+    const fieldsetCount = await fieldsets.count();
+    for (let f = 0; f < fieldsetCount && !foundExisting; f++) {
+      const fieldset = fieldsets.nth(f);
+      const legendText =
+        (await fieldset.locator("legend").textContent()) ?? "";
+
+      // Case-insensitive category match
+      if (!legendText.toLowerCase().includes(categoryLower)) continue;
+
+      // Search rows within this fieldset for matching CUIT and period
+      const rows = fieldset.locator("tbody tr");
+      const rowCount = await rows.count();
+      for (let r = 0; r < rowCount; r++) {
+        const row = rows.nth(r);
+        const rowText = (await row.textContent()) ?? "";
+        const normalizedRow = rowText.replace(/-/g, "");
+
+        if (normalizedRow.includes(cuitDigits) && rowText.includes(monthName)) {
+          log(
+            `Deduccion existente encontrada para CUIT ${invoice.providerCuit}, periodo ${monthName}. Editando...`
+          );
+          const editBtn = row.locator(".act_editar");
+          await editBtn.click();
+          await page.waitForLoadState("networkidle");
+
+          await capture(
+            await page.screenshot({ fullPage: true }),
+            "existing-entry-edit",
+            "Editando deduccion existente"
+          );
+          foundExisting = true;
+          break;
+        }
+      }
+    }
+
+    if (!foundExisting) {
+      // Step 7: Click "Agregar Deducciones y Desgravaciones" dropdown toggle
+      log("Abriendo menu de tipos de deduccion...");
+      const addDeductionToggle = page.locator("#btn_agregar_deducciones");
+      await addDeductionToggle.waitFor({ state: "visible", timeout: 15000 });
+      await addDeductionToggle.click();
+      await page.waitForTimeout(1500); // Wait for slideDown animation
+
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "add-deduction-menu",
+        "Menu de tipos de deduccion abierto"
+      );
+
+      // Step 8: Select the specific deduction category by its link ID
+      const linkId = getSiradigCategoryLinkId(invoice.deductionCategory);
+      log(`Seleccionando categoria: ${categoryText}`);
+
+      if (linkId) {
+        // For alquiler categories, expand the hidden sub-menu first
+        if (isAlquilerCategory(linkId)) {
+          log("Expandiendo sub-menu de alquiler de inmuebles...");
+          await page.locator("#link_menu_alquiler_inmuebles").click();
+          await page.waitForTimeout(1000);
+        }
+
+        const categoryLink = page.locator(`#${linkId}`);
+        await categoryLink.waitFor({ state: "visible", timeout: 10000 });
+        await categoryLink.click();
+      } else {
+        // Fallback: search within the dropdown menu only
+        const categoryLink = page
+          .locator("#menu_deducciones")
+          .getByText(categoryText, { exact: false })
+          .first();
+        await categoryLink.waitFor({ timeout: 10000 });
+        await categoryLink.click();
+      }
+      await page.waitForLoadState("networkidle");
+
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "category-selected",
+        `Categoria: ${categoryText}`
+      );
+
+      // Step 9: Fill CUIT (#numeroDoc) and wait for Denominación (#razonSocial)
+      log(`Ingresando CUIT del proveedor: ${invoice.providerCuit}`);
+      await page.fill("#numeroDoc", invoice.providerCuit);
+      // Trigger change event to fetch provider name via AJAX
+      await page.locator("#numeroDoc").dispatchEvent("change");
+
+      // Wait for Denominación to be populated
+      log("Esperando denominacion del proveedor...");
+      try {
+        await page.waitForFunction(
+          () => {
+            const el = document.getElementById(
+              "razonSocial"
+            ) as HTMLInputElement;
+            return el && el.value.trim() !== "";
+          },
+          { timeout: 10000 }
+        );
+      } catch {
+        log("No se pudo obtener la denominacion automaticamente");
+      }
+
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "cuit-filled",
+        "CUIT ingresado y denominacion obtenida"
+      );
+
+      // Step 10: Select Período (month) from #mesDesde
+      const monthValue = String(invoice.fiscalMonth);
+      log(
+        `Seleccionando periodo: ${monthName || monthValue}`
+      );
+      await page.selectOption("#mesDesde", monthValue);
+    }
 
     // Step 11: Click "Alta de Comprobante" to open the dialog
     log("Abriendo formulario de alta de comprobante...");
-    await page.locator("#btn_alta_comprobante").click();
+    const altaBtn = page.locator("#btn_alta_comprobante");
+    await altaBtn.waitFor({ state: "visible", timeout: 15000 });
+    await altaBtn.click();
     await page.waitForTimeout(1000); // Wait for dialog animation
 
     await capture(
