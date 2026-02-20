@@ -9,14 +9,12 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 interface Preference {
-  autoMode: boolean;
   defaultFiscalYear: number;
   notifications: boolean;
 }
 
 export default function ConfiguracionPage() {
   const [preference, setPreference] = useState<Preference>({
-    autoMode: false,
     defaultFiscalYear: new Date().getFullYear(),
     notifications: true,
   });
@@ -68,22 +66,6 @@ export default function ConfiguracionPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="autoMode">Modo automatico</Label>
-              <p className="text-sm text-muted-foreground">
-                Enviar deducciones a SiRADIG automaticamente sin confirmacion
-              </p>
-            </div>
-            <Switch
-              id="autoMode"
-              checked={preference.autoMode}
-              onCheckedChange={(checked) =>
-                setPreference((prev) => ({ ...prev, autoMode: checked }))
-              }
-            />
-          </div>
-
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="notifications">Notificaciones</Label>

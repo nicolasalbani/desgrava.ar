@@ -35,7 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Bot, Loader2, Eye, CheckCircle, Square, Trash2 } from "lucide-react";
+import { Bot, Loader2, Eye, Square, Trash2 } from "lucide-react";
 import { DEDUCTION_CATEGORY_LABELS } from "@/lib/validators/invoice";
 import { toast } from "sonner";
 import { JobDetail } from "./job-detail";
@@ -61,13 +61,12 @@ interface Job {
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   PENDING: { label: "Pendiente", variant: "secondary" },
   RUNNING: { label: "Ejecutando", variant: "outline" },
-  WAITING_CONFIRMATION: { label: "Esperando confirmacion", variant: "outline" },
   COMPLETED: { label: "Completado", variant: "default" },
   FAILED: { label: "Error", variant: "destructive" },
   CANCELLED: { label: "Cancelado", variant: "secondary" },
 };
 
-const CANCELLABLE_STATUSES = ["PENDING", "RUNNING", "WAITING_CONFIRMATION"];
+const CANCELLABLE_STATUSES = ["PENDING", "RUNNING"];
 const DELETABLE_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
 
 export function AutomationDashboard() {
@@ -93,20 +92,7 @@ export function AutomationDashboard() {
     }
   }
 
-  async function handleConfirm(jobId: string) {
-    const res = await fetch(`/api/automatizacion/${jobId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "confirm" }),
-    });
 
-    if (res.ok) {
-      toast.success("Job confirmado");
-      fetchJobs();
-    } else {
-      toast.error("Error al confirmar");
-    }
-  }
 
   async function handleCancel() {
     if (!cancelTarget) return;
@@ -243,16 +229,6 @@ export function AutomationDashboard() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            {job.status === "WAITING_CONFIRMATION" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleConfirm(job.id)}
-                                title="Confirmar"
-                              >
-                                <CheckCircle className="h-4 w-4 text-green-500" />
-                              </Button>
-                            )}
                             {isCancellable && (
                               <Button
                                 variant="ghost"

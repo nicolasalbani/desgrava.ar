@@ -9,7 +9,7 @@ import {
   getJobVideoFilenames,
 } from "@/lib/automation/job-processor";
 
-const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED", "WAITING_CONFIRMATION"];
+const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
 
 export async function GET(
   req: NextRequest,

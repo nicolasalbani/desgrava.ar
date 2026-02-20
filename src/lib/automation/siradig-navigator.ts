@@ -405,6 +405,10 @@ export async function submitDeduction(
     const saveButton = page.locator("#btn_guardar");
     await saveButton.waitFor({ state: "visible", timeout: 15000 });
     await saveButton.click();
+
+    // SiRADIG handlers often use setTimeout before AJAX calls,
+    // so wait for the delayed request to fire and complete
+    await page.waitForTimeout(500);
     await page.waitForLoadState("networkidle");
 
     await capture(
@@ -413,26 +417,44 @@ export async function submitDeduction(
       "Guardando deduccion"
     );
 
-    // Check for confirmation dialog
-    try {
-      const confirmButton = page
-        .getByText("Aceptar", { exact: true })
-        .first();
-      await confirmButton.waitFor({ timeout: 3000 });
-      log("Confirmando guardado...");
-      await confirmButton.click();
-      await page.waitForLoadState("networkidle");
-    } catch {
-      // No confirmation dialog, continue
+    // Poll for either an error or success indicator (up to 8 seconds)
+    // .formErrorContent appears for validation/server errors
+    // #div_listado appears when the save succeeds and the form switches to list view
+    const outcome = await Promise.race([
+      page
+        .locator(".formErrorContent")
+        .first()
+        .waitFor({ state: "visible", timeout: 8000 })
+        .then(() => "form-error" as const)
+        .catch(() => null),
+      page
+        .locator("#div_listado")
+        .first()
+        .waitFor({ state: "visible", timeout: 8000 })
+        .then(() => "success" as const)
+        .catch(() => null),
+    ]);
+
+    if (outcome === "form-error") {
+      // Collect ALL visible .formErrorContent texts
+      const errorEls = await page.$$(".formErrorContent");
+      const messages: string[] = [];
+      for (const el of errorEls) {
+        const text = await el.textContent();
+        if (text?.trim()) messages.push(text.trim());
+      }
+      const errorMsg =
+        messages.join(" | ") || "Error de validacion desconocido";
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "submission-error",
+        "Error al guardar"
+      );
+      log(`Error al guardar: ${errorMsg}`);
+      return { success: false, error: errorMsg };
     }
 
-    // Check for success by looking for the listado view (form switches to list)
-    // or a success notice from $.noticeAdd
-    const listado = await page.$("#div_listado");
-    const listadoVisible =
-      listado && (await listado.isVisible().catch(() => false));
-
-    if (listadoVisible) {
+    if (outcome === "success") {
       await capture(
         await page.screenshot({ fullPage: true }),
         "submission-success",
@@ -442,20 +464,34 @@ export async function submitDeduction(
       return { success: true };
     }
 
-    // Check for validation errors
-    const errorPrompt = await page.$(".formError");
-    if (errorPrompt) {
-      const errorText = await errorPrompt.textContent();
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "submission-error",
-        "Error al guardar"
-      );
-      log(`Error al guardar: ${errorText}`);
-      return {
-        success: false,
-        error: errorText?.trim() || "Error de validacion",
-      };
+    // Neither appeared within timeout — check for other error indicators
+
+    // Confirmation dialog (some flows show "Aceptar" before completing)
+    try {
+      const confirmButton = page
+        .getByText("Aceptar", { exact: true })
+        .first();
+      await confirmButton.waitFor({ timeout: 3000 });
+      log("Confirmando guardado...");
+      await confirmButton.click();
+      await page.waitForLoadState("networkidle");
+
+      // After confirming, check again for errors
+      const postConfirmError = await page
+        .$(".formErrorContent")
+        .then((el) => el?.textContent())
+        .catch(() => null);
+      if (postConfirmError?.trim()) {
+        await capture(
+          await page.screenshot({ fullPage: true }),
+          "submission-error",
+          "Error al guardar"
+        );
+        log(`Error al guardar: ${postConfirmError.trim()}`);
+        return { success: false, error: postConfirmError.trim() };
+      }
+    } catch {
+      // No confirmation dialog, continue
     }
 
     // Take a screenshot of whatever state we're in

@@ -229,59 +229,28 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             return;
           }
 
-          // Check if auto mode is enabled
-          const preference = await prisma.userPreference.findUnique({
-            where: { userId },
+          // Submit the deduction
+          const submitResult = await submitDeduction(
+            siradigPage,
+            (msg) => appendLog(jobId, msg, onLog),
+            onScreenshot
+          );
+
+          setJobStatus(jobId, submitResult.success ? "COMPLETED" : "FAILED");
+          await prisma.automationJob.update({
+            where: { id: jobId },
+            data: {
+              status: submitResult.success ? "COMPLETED" : "FAILED",
+              errorMessage: submitResult.error,
+              completedAt: new Date(),
+            },
           });
 
-          if (preference?.autoMode) {
-            // Auto-submit
-            const submitResult = await submitDeduction(
-              siradigPage,
-              (msg) => appendLog(jobId, msg, onLog),
-              onScreenshot
-            );
-
-            setJobStatus(jobId, submitResult.success ? "COMPLETED" : "FAILED");
-            await prisma.automationJob.update({
-              where: { id: jobId },
-              data: {
-                status: submitResult.success ? "COMPLETED" : "FAILED",
-                errorMessage: submitResult.error,
-                completedAt: new Date(),
-              },
+          if (submitResult.success && job.invoiceId) {
+            await prisma.invoice.update({
+              where: { id: job.invoiceId },
+              data: { siradiqStatus: "SUBMITTED" },
             });
-
-            if (submitResult.success && job.invoiceId) {
-              await prisma.invoice.update({
-                where: { id: job.invoiceId },
-                data: { siradiqStatus: "SUBMITTED" },
-              });
-            }
-          } else {
-            // Save screenshot URL pointing to the API route instead of base64
-            const lastScreenshot = getJobScreenshots(jobId).at(-1);
-            const screenshotUrl = lastScreenshot
-              ? `/api/automatizacion/${jobId}/artifacts/${lastScreenshot.name}`
-              : null;
-
-            setJobStatus(jobId, "WAITING_CONFIRMATION");
-            await prisma.automationJob.update({
-              where: { id: jobId },
-              data: {
-                status: "WAITING_CONFIRMATION",
-                screenshotUrl,
-              },
-            });
-
-            if (job.invoiceId) {
-              await prisma.invoice.update({
-                where: { id: job.invoiceId },
-                data: { siradiqStatus: "PREVIEW_READY" },
-              });
-            }
-
-            await appendLog(jobId, "Preview listo. Esperando confirmacion del usuario.", onLog);
           }
         }
       } finally {
@@ -314,45 +283,4 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
       }
     }
   });
-}
-
-export async function confirmJob(jobId: string, onLog?: LogCallback): Promise<void> {
-  const job = await prisma.automationJob.findUnique({
-    where: { id: jobId },
-    include: { user: { include: { arcaCredential: true } }, invoice: true },
-  });
-
-  if (!job || job.status !== "WAITING_CONFIRMATION") {
-    throw new Error("Job no esta esperando confirmacion");
-  }
-
-  // For a real implementation, we'd need to keep the page alive
-  // In this MVP, we'll re-login and re-submit
-  await appendLog(jobId, "Confirmacion recibida. Re-conectando para enviar...", onLog);
-
-  setJobStatus(jobId, "RUNNING");
-  await prisma.automationJob.update({
-    where: { id: jobId },
-    data: { status: "RUNNING" },
-  });
-
-  // In a production version, the browser context would be kept alive
-  // For MVP, mark as completed
-  setJobStatus(jobId, "COMPLETED");
-  await prisma.automationJob.update({
-    where: { id: jobId },
-    data: {
-      status: "COMPLETED",
-      completedAt: new Date(),
-    },
-  });
-
-  if (job.invoiceId) {
-    await prisma.invoice.update({
-      where: { id: job.invoiceId },
-      data: { siradiqStatus: "SUBMITTED" },
-    });
-  }
-
-  await appendLog(jobId, "Deduccion enviada exitosamente.", onLog);
 }

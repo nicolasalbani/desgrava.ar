@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { confirmJob, getJobScreenshots, getJobVideoFilenames } from "@/lib/automation/job-processor";
+import { getJobScreenshots, getJobVideoFilenames } from "@/lib/automation/job-processor";
 import { listScreenshotsFromDisk, listVideosFromDisk } from "@/lib/automation/artifact-manager";
 
 export async function GET(
@@ -82,16 +82,6 @@ export async function PUT(
 
   const body = await req.json();
   const { action } = body;
-
-  if (action === "confirm") {
-    try {
-      await confirmJob(jobId);
-      return NextResponse.json({ success: true, message: "Job confirmado" });
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Error";
-      return NextResponse.json({ error: msg }, { status: 400 });
-    }
-  }
 
   if (action === "cancel") {
     await prisma.automationJob.update({

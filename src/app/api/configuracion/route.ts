@@ -15,7 +15,6 @@ export async function GET() {
 
   return NextResponse.json({
     preference: preference ?? {
-      autoMode: false,
       defaultFiscalYear: new Date().getFullYear(),
       notifications: true,
     },
@@ -29,14 +28,13 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { autoMode, defaultFiscalYear, notifications } = body;
+  const { defaultFiscalYear, notifications } = body;
 
   const preference = await prisma.userPreference.upsert({
     where: { userId: session.user.id },
-    update: { autoMode, defaultFiscalYear, notifications },
+    update: { defaultFiscalYear, notifications },
     create: {
       userId: session.user.id,
-      autoMode: autoMode ?? false,
       defaultFiscalYear: defaultFiscalYear ?? new Date().getFullYear(),
       notifications: notifications ?? true,
     },
