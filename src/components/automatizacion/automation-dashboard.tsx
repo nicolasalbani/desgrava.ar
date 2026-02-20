@@ -36,7 +36,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Bot, Loader2, Eye, Square, Trash2 } from "lucide-react";
-import { DEDUCTION_CATEGORY_LABELS } from "@/lib/validators/invoice";
+import { DEDUCTION_CATEGORY_LABELS, INVOICE_TYPE_LABELS } from "@/lib/validators/invoice";
 import { toast } from "sonner";
 import { JobDetail } from "./job-detail";
 
@@ -52,7 +52,11 @@ interface Job {
   invoice: {
     deductionCategory: string;
     providerCuit: string;
+    providerName: string | null;
+    invoiceType: string;
     amount: string;
+    invoiceNumber: string | null;
+    invoiceDate: string | null;
     fiscalMonth: number;
     fiscalYear: number;
   } | null;
@@ -169,10 +173,14 @@ export function AutomationDashboard() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Factura</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Intentos</TableHead>
+                    <TableHead>Proveedor</TableHead>
+                    <TableHead>Categoria</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Nro. Comprobante</TableHead>
                     <TableHead>Fecha</TableHead>
+                    <TableHead>CUIT</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead>Estado</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -186,38 +194,44 @@ export function AutomationDashboard() {
                     const isDeletable = DELETABLE_STATUSES.includes(job.status);
                     return (
                       <TableRow key={job.id}>
-                        <TableCell>
-                          {job.invoice ? (
-                            <div>
-                              <p className="font-medium">
-                                {DEDUCTION_CATEGORY_LABELS[
-                                  job.invoice.deductionCategory
-                                ] ?? job.invoice.deductionCategory}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                ${parseFloat(job.invoice.amount).toLocaleString("es-AR")}{" "}
-                                - {job.invoice.fiscalMonth}/{job.invoice.fiscalYear}
-                              </p>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">
-                              {job.jobType}
-                            </span>
-                          )}
+                        <TableCell className="text-sm">
+                          {job.invoice?.providerName ?? job.invoice?.providerCuit ?? "-"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {job.invoice
+                            ? (DEDUCTION_CATEGORY_LABELS[job.invoice.deductionCategory] ?? job.invoice.deductionCategory)
+                            : job.jobType}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {job.invoice
+                            ? (INVOICE_TYPE_LABELS[job.invoice.invoiceType] ?? job.invoice.invoiceType)
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {job.invoice?.invoiceNumber ?? "-"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {job.invoice?.invoiceDate
+                            ? new Date(job.invoice.invoiceDate).toLocaleDateString("es-AR")
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {job.invoice?.providerCuit ?? "-"}
+                        </TableCell>
+                        <TableCell className="text-sm text-right">
+                          {job.invoice
+                            ? `$${parseFloat(job.invoice.amount).toLocaleString("es-AR")}`
+                            : "-"}
                         </TableCell>
                         <TableCell>
                           <Badge variant={statusConfig.variant}>
                             {statusConfig.label}
                           </Badge>
                           {job.errorMessage && (
-                            <p className="text-xs text-destructive mt-1">
+                            <p className="text-xs text-destructive mt-1 max-w-48 truncate" title={job.errorMessage}>
                               {job.errorMessage}
                             </p>
                           )}
-                        </TableCell>
-                        <TableCell>{job.attempts}</TableCell>
-                        <TableCell className="text-sm">
-                          {new Date(job.createdAt).toLocaleDateString("es-AR")}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">

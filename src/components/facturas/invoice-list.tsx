@@ -269,21 +269,7 @@ export function InvoiceList() {
         </div>
       ) : (
         <div className="border rounded-md">
-          <Table className="table-fixed w-full">
-            <colgroup>
-              <col className="w-[3%]" />
-              <col className="w-[11%]" />
-              <col className="w-[13%]" />
-              <col className="w-[8%]" />
-              <col className="w-[11%]" />
-              <col className="w-[8%]" />
-              <col className="w-[10%]" />
-              <col className="w-[8%]" />
-              <col className="w-[7%]" />
-              <col className="w-[8%]" />
-              <col className="w-[7%]" />
-              <col className="w-[6%]" />
-            </colgroup>
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>
@@ -301,10 +287,8 @@ export function InvoiceList() {
                 <TableHead>Fecha</TableHead>
                 <TableHead>CUIT</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
-                <TableHead>Periodo</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Origen</TableHead>
-                <TableHead></TableHead>
+                <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -320,32 +304,29 @@ export function InvoiceList() {
                         aria-label={`Seleccionar factura ${inv.id}`}
                       />
                     </TableCell>
-                    <TableCell className="font-medium truncate" title={inv.providerName || "—"}>
-                      {inv.providerName || "—"}
+                    <TableCell className="text-sm">
+                      {inv.providerName || inv.providerCuit}
                     </TableCell>
-                    <TableCell className="truncate" title={DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ?? inv.deductionCategory}>
+                    <TableCell className="text-sm">
                       {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
                         inv.deductionCategory}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-sm">
                       {INVOICE_TYPE_LABELS[inv.invoiceType] ?? inv.invoiceType}
                     </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {inv.invoiceNumber ?? "—"}
+                    <TableCell className="text-sm">
+                      {inv.invoiceNumber ?? "-"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-sm">
                       {inv.invoiceDate
                         ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
-                        : "—"}
+                        : "-"}
                     </TableCell>
-                    <TableCell className="font-mono text-sm">
+                    <TableCell className="text-sm">
                       {inv.providerCuit}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="text-sm text-right">
                       ${parseFloat(inv.amount).toLocaleString("es-AR")}
-                    </TableCell>
-                    <TableCell>
-                      {inv.fiscalMonth}/{inv.fiscalYear}
                     </TableCell>
                     <TableCell>
                       <Badge variant={STATUS_VARIANTS[inv.siradiqStatus] ?? "secondary"}>
@@ -353,19 +334,15 @@ export function InvoiceList() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{inv.source}</Badge>
-                    </TableCell>
-                    <TableCell>
                       {inv._count.automationJobs > 0 ? (
-                        <span title="Tiene automatizaciones vinculadas">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled
+                          title="Tiene automatizaciones vinculadas"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       ) : (
                         <Button
                           variant="ghost"

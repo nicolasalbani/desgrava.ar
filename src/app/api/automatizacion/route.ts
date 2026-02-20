@@ -77,7 +77,11 @@ export async function GET() {
         select: {
           deductionCategory: true,
           providerCuit: true,
+          providerName: true,
+          invoiceType: true,
           amount: true,
+          invoiceNumber: true,
+          invoiceDate: true,
           fiscalMonth: true,
           fiscalYear: true,
         },
