@@ -1,7 +1,7 @@
 import { chromium, Browser, BrowserContext } from "playwright";
 import PQueue from "p-queue";
 
-const MAX_CONCURRENT = 3;
+const MAX_CONCURRENT = 1;
 const BROWSER_TIMEOUT = 60_000;
 
 let browser: Browser | null = null;
