@@ -200,13 +200,15 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             return;
           }
 
-          // Fill the deduction form (category selection + form fields)
+          // Fill the deduction form (category selection + comprobante dialog)
           const fillResult = await fillDeductionForm(
             siradigPage,
             {
               deductionCategory: job.invoice.deductionCategory,
               providerCuit: job.invoice.providerCuit,
               invoiceType: job.invoice.invoiceType,
+              invoiceNumber: job.invoice.invoiceNumber ?? undefined,
+              invoiceDate: job.invoice.invoiceDate?.toISOString() ?? undefined,
               amount: job.invoice.amount.toString(),
               fiscalMonth: job.invoice.fiscalMonth,
             },

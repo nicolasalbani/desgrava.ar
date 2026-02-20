@@ -1,12 +1,18 @@
 import { Page } from "playwright";
-import { ARCA_SELECTORS } from "./selectors";
-import { getSiradigCategoryText, getSiradigInvoiceTypeText } from "./deduction-mapper";
+import {
+  getSiradigCategoryText,
+  getSiradigInvoiceTypeText,
+  getSiradigCategoryLinkId,
+  isAlquilerCategory,
+} from "./deduction-mapper";
 import type { ScreenshotCallback } from "./arca-navigator";
 
 export interface InvoiceData {
   deductionCategory: string;
   providerCuit: string;
   invoiceType: string;
+  invoiceNumber?: string; // "XXXXX-YYYYYYYY" (punto de venta - número)
+  invoiceDate?: string; // ISO date string
   amount: string;
   fiscalMonth: number;
 }
@@ -18,13 +24,24 @@ export interface FillResult {
 }
 
 /**
+ * Format an ISO date string to DD/MM/YYYY for SiRADIG date fields.
+ */
+function formatDateDDMMYYYY(isoDate: string): string {
+  const date = new Date(isoDate);
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = date.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+/**
  * Navigate through SiRADIG from the initial person selection page
  * all the way to the deductions section of the F572 form.
  *
  * Steps (matching the ARCA/SiRADIG UI flow):
  * 2. Select person to represent
  * 3. Select fiscal period and click "Continuar"
- * 4. Create new draft ("Crear Nuevo Borrador")
+ * 4. Create new draft ("Crear Nuevo Borrador") or skip if exists
  * 5. Click "Carga de Formulario"
  * 6. Expand "3 - Deducciones y desgravaciones" accordion
  */
@@ -162,12 +179,16 @@ export async function navigateToDeductionSection(
 
 /**
  * Select a deduction category from the "Agregar Deducciones y Desgravaciones"
- * dropdown and fill in the deduction form fields.
+ * dropdown, then fill the deduction form including the comprobante dialog.
  *
  * Steps:
  * 7. Click "Agregar Deducciones y Desgravaciones" toggle
  * 8. Select the specific category link from the expanded dropdown
- * 9. Fill form fields (CUIT, invoice type, amount, period)
+ * 9. Fill CUIT and wait for Denominación (AJAX lookup)
+ * 10. Select Período (month)
+ * 11. Click "Alta de Comprobante" to open dialog
+ * 12. Fill comprobante fields (fecha, tipo, número, monto, monto reintegrado)
+ * 13. Click "Agregar" in dialog to add the comprobante
  */
 export async function fillDeductionForm(
   page: Page,
@@ -177,17 +198,14 @@ export async function fillDeductionForm(
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
   const capture = onScreenshot ?? (async () => {});
-  const sel = ARCA_SELECTORS.siradig;
 
   try {
     // Step 7: Click "Agregar Deducciones y Desgravaciones" dropdown toggle
     log("Abriendo menu de tipos de deduccion...");
-    const addDeductionToggle = page
-      .getByText("Agregar Deducciones y Desgravaciones")
-      .first();
-    await addDeductionToggle.waitFor({ timeout: 15000 });
+    const addDeductionToggle = page.locator("#btn_agregar_deducciones");
+    await addDeductionToggle.waitFor({ state: "visible", timeout: 15000 });
     await addDeductionToggle.click();
-    await page.waitForTimeout(1500); // Wait for dropdown/panel to expand
+    await page.waitForTimeout(1500); // Wait for slideDown animation
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -195,14 +213,31 @@ export async function fillDeductionForm(
       "Menu de tipos de deduccion abierto"
     );
 
-    // Step 8: Select the specific deduction category from the expanded list
+    // Step 8: Select the specific deduction category by its link ID
     const categoryText = getSiradigCategoryText(invoice.deductionCategory);
+    const linkId = getSiradigCategoryLinkId(invoice.deductionCategory);
     log(`Seleccionando categoria: ${categoryText}`);
 
-    // Categories appear as links in the expanded dropdown panel
-    const categoryLink = page.getByText(categoryText, { exact: false }).first();
-    await categoryLink.waitFor({ timeout: 10000 });
-    await categoryLink.click();
+    if (linkId) {
+      // For alquiler categories, expand the hidden sub-menu first
+      if (isAlquilerCategory(linkId)) {
+        log("Expandiendo sub-menu de alquiler de inmuebles...");
+        await page.locator("#link_menu_alquiler_inmuebles").click();
+        await page.waitForTimeout(1000);
+      }
+
+      const categoryLink = page.locator(`#${linkId}`);
+      await categoryLink.waitFor({ state: "visible", timeout: 10000 });
+      await categoryLink.click();
+    } else {
+      // Fallback: search within the dropdown menu only
+      const categoryLink = page
+        .locator("#menu_deducciones")
+        .getByText(categoryText, { exact: false })
+        .first();
+      await categoryLink.waitFor({ timeout: 10000 });
+      await categoryLink.click();
+    }
     await page.waitForLoadState("networkidle");
 
     await capture(
@@ -211,75 +246,132 @@ export async function fillDeductionForm(
       `Categoria: ${categoryText}`
     );
 
-    // Step 9: Fill the form fields for this deduction category
-    // Fill CUIT
+    // Step 9: Fill CUIT (#numeroDoc) and wait for Denominación (#razonSocial)
     log(`Ingresando CUIT del proveedor: ${invoice.providerCuit}`);
-    const cuitInput = await page.$(sel.cuitProviderInput);
-    if (cuitInput) {
-      await cuitInput.fill(invoice.providerCuit);
-      await page.waitForTimeout(500);
+    await page.fill("#numeroDoc", invoice.providerCuit);
+    // Trigger change event to fetch provider name via AJAX
+    await page.locator("#numeroDoc").dispatchEvent("change");
+
+    // Wait for Denominación to be populated
+    log("Esperando denominacion del proveedor...");
+    try {
+      await page.waitForFunction(
+        () => {
+          const el = document.getElementById(
+            "razonSocial"
+          ) as HTMLInputElement;
+          return el && el.value.trim() !== "";
+        },
+        { timeout: 10000 }
+      );
+    } catch {
+      log("No se pudo obtener la denominacion automaticamente");
     }
 
-    // Select invoice type (if the field exists for this category)
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "cuit-filled",
+      "CUIT ingresado y denominacion obtenida"
+    );
+
+    // Step 10: Select Período (month) from #mesDesde
+    const monthValue = String(invoice.fiscalMonth);
+    const monthNames = [
+      "",
+      "Enero",
+      "Febrero",
+      "Marzo",
+      "Abril",
+      "Mayo",
+      "Junio",
+      "Julio",
+      "Agosto",
+      "Septiembre",
+      "Octubre",
+      "Noviembre",
+      "Diciembre",
+    ];
+    log(
+      `Seleccionando periodo: ${monthNames[invoice.fiscalMonth] || monthValue}`
+    );
+    await page.selectOption("#mesDesde", monthValue);
+
+    // Step 11: Click "Alta de Comprobante" to open the dialog
+    log("Abriendo formulario de alta de comprobante...");
+    await page.locator("#btn_alta_comprobante").click();
+    await page.waitForTimeout(1000); // Wait for dialog animation
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "comprobante-dialog",
+      "Dialogo de alta de comprobante"
+    );
+
+    // Step 12: Fill the comprobante dialog fields
+
+    // Fecha (DD/MM/YYYY format)
+    if (invoice.invoiceDate) {
+      const dateStr = formatDateDDMMYYYY(invoice.invoiceDate);
+      log(`Ingresando fecha: ${dateStr}`);
+      await page.fill("#cmpFechaEmision", dateStr);
+    }
+
+    // Tipo (select by label from #cmpTipo)
     const invoiceTypeText = getSiradigInvoiceTypeText(invoice.invoiceType);
     log(`Seleccionando tipo de comprobante: ${invoiceTypeText}`);
-    const typeSelect = await page.$(sel.invoiceTypeSelect);
-    if (typeSelect) {
-      await page.selectOption(sel.invoiceTypeSelect, {
-        label: invoiceTypeText,
-      });
+    try {
+      await page.selectOption("#cmpTipo", { label: invoiceTypeText });
+    } catch {
+      log(
+        `Tipo "${invoiceTypeText}" no disponible, manteniendo valor por defecto`
+      );
     }
 
-    // Fill amount
-    log(`Ingresando monto: $${invoice.amount}`);
-    const amountInput = await page.$(sel.amountInput);
-    if (amountInput) {
-      await amountInput.fill(invoice.amount);
-    }
-
-    // Select month/period (if the field exists for this category)
-    const monthSelect = await page.$(sel.periodFromSelect);
-    if (monthSelect) {
-      const monthNames = [
-        "",
-        "Enero",
-        "Febrero",
-        "Marzo",
-        "Abril",
-        "Mayo",
-        "Junio",
-        "Julio",
-        "Agosto",
-        "Septiembre",
-        "Octubre",
-        "Noviembre",
-        "Diciembre",
-      ];
-      const monthName = monthNames[invoice.fiscalMonth] || "";
-      if (monthName) {
-        log(`Seleccionando periodo: ${monthName}`);
-        try {
-          await page.selectOption(sel.periodFromSelect, { label: monthName });
-        } catch {
-          // Fallback: try by value (month number)
-          try {
-            await page.selectOption(
-              sel.periodFromSelect,
-              String(invoice.fiscalMonth)
-            );
-          } catch {
-            log("No se pudo seleccionar el periodo automaticamente");
-          }
-        }
+    // Número de Comprobante (split "XXXXX-YYYYYYYY" into punto de venta + número)
+    if (invoice.invoiceNumber) {
+      const parts = invoice.invoiceNumber.split("-");
+      if (parts.length === 2) {
+        log(`Ingresando numero de comprobante: ${invoice.invoiceNumber}`);
+        await page.fill("#cmpPuntoVenta", parts[0]);
+        await page.fill("#cmpNumero", parts[1]);
+      } else {
+        log(`Ingresando numero de comprobante: ${invoice.invoiceNumber}`);
+        await page.fill("#cmpNumero", invoice.invoiceNumber);
       }
     }
 
-    // Take screenshot for preview
-    log("Capturando screenshot de preview...");
+    // Monto
+    log(`Ingresando monto: $${invoice.amount}`);
+    await page.fill("#cmpMontoFacturado", invoice.amount);
+
+    // Monto Reintegrado (set to 0 if the field exists)
+    const montoReintegrado = await page.$("#cmpMontoReintegrado");
+    if (montoReintegrado) {
+      log("Ingresando monto reintegrado: $0");
+      await page.fill("#cmpMontoReintegrado", "0");
+    }
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "comprobante-filled",
+      "Comprobante completado"
+    );
+
+    // Step 13: Click "Agregar" button in the dialog to add the comprobante
+    log("Agregando comprobante...");
+    const agregarBtn = page
+      .locator(".ui-dialog-buttonset")
+      .getByText("Agregar");
+    await agregarBtn.click();
+    await page.waitForTimeout(1500); // Wait for dialog to close and table update
+
+    // Take final screenshot showing the form with the added comprobante
     const screenshotBuffer = await page.screenshot({ fullPage: true });
     await capture(screenshotBuffer, "form-filled", "Formulario completado");
 
-    log("Formulario completado. Esperando confirmacion del usuario.");
+    log(
+      "Formulario completado con comprobante agregado. Esperando confirmacion."
+    );
     return { success: true, screenshotBuffer };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
@@ -297,6 +389,9 @@ export async function fillDeductionForm(
   }
 }
 
+/**
+ * Submit the deduction by clicking "Guardar" (#btn_guardar).
+ */
 export async function submitDeduction(
   page: Page,
   onLog?: (msg: string) => void,
@@ -304,14 +399,11 @@ export async function submitDeduction(
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
   const capture = onScreenshot ?? (async () => {});
-  const sel = ARCA_SELECTORS.siradig;
 
   try {
-    log("Enviando deduccion...");
-    const saveButton = await page.$(sel.saveButton);
-    if (!saveButton) {
-      return { success: false, error: "No se encontro el boton Guardar" };
-    }
+    log("Guardando deduccion...");
+    const saveButton = page.locator("#btn_guardar");
+    await saveButton.waitFor({ state: "visible", timeout: 15000 });
     await saveButton.click();
     await page.waitForLoadState("networkidle");
 
@@ -322,46 +414,62 @@ export async function submitDeduction(
     );
 
     // Check for confirmation dialog
-    const confirmButton = await page.$(sel.confirmButton);
-    if (confirmButton) {
-      log("Confirmando envio...");
+    try {
+      const confirmButton = page
+        .getByText("Aceptar", { exact: true })
+        .first();
+      await confirmButton.waitFor({ timeout: 3000 });
+      log("Confirmando guardado...");
       await confirmButton.click();
       await page.waitForLoadState("networkidle");
+    } catch {
+      // No confirmation dialog, continue
     }
 
-    // Check for success
-    const success = await page.$(sel.successMessage);
-    if (success) {
+    // Check for success by looking for the listado view (form switches to list)
+    // or a success notice from $.noticeAdd
+    const listado = await page.$("#div_listado");
+    const listadoVisible =
+      listado && (await listado.isVisible().catch(() => false));
+
+    if (listadoVisible) {
       await capture(
         await page.screenshot({ fullPage: true }),
         "submission-success",
-        "Deduccion enviada exitosamente"
+        "Deduccion guardada exitosamente"
       );
-      log("Deduccion enviada exitosamente");
+      log("Deduccion guardada exitosamente");
       return { success: true };
     }
 
-    // Check for errors
-    const errorEl = await page.$(sel.errorContainer);
-    if (errorEl) {
-      const errorText = await errorEl.textContent();
+    // Check for validation errors
+    const errorPrompt = await page.$(".formError");
+    if (errorPrompt) {
+      const errorText = await errorPrompt.textContent();
       await capture(
         await page.screenshot({ fullPage: true }),
         "submission-error",
-        "Error al enviar"
+        "Error al guardar"
       );
-      log(`Error al enviar: ${errorText}`);
+      log(`Error al guardar: ${errorText}`);
       return {
         success: false,
-        error: errorText?.trim() || "Error al enviar",
+        error: errorText?.trim() || "Error de validacion",
       };
     }
+
+    // Take a screenshot of whatever state we're in
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "after-save-state",
+      "Estado despues de guardar"
+    );
 
     log("Deduccion procesada (sin confirmacion explicita)");
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
-    log(`Error enviando deduccion: ${msg}`);
+    log(`Error guardando deduccion: ${msg}`);
     return { success: false, error: msg };
   }
 }

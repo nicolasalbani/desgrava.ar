@@ -34,10 +34,46 @@ export const SIRADIG_INVOICE_TYPE_MAP: Record<string, string> = {
   TICKET: "Ticket",
 };
 
+// Maps our DeductionCategory enum to the link element IDs in the SiRADIG dropdown
+// These IDs come from the #menu_deducciones panel in verMenuDeducciones.do
+export const SIRADIG_CATEGORY_LINK_MAP: Record<string, string> = {
+  CUOTAS_MEDICO_ASISTENCIALES: "link_agregar_cuotas_medico_asistenciales",
+  PRIMAS_SEGURO_MUERTE: "link_agregar_primas_seguro",
+  PRIMAS_AHORRO_SEGUROS_MIXTOS: "link_agregar_primas_ahorro_seg_mix",
+  APORTES_RETIRO_PRIVADO: "link_agregar_aportes_seg_retiro_privado",
+  DONACIONES: "link_agregar_donaciones",
+  INTERESES_HIPOTECARIOS: "link_agregar_intereses_prestamo_hipotecario",
+  GASTOS_SEPELIO: "link_agregar_ded_sepelios",
+  GASTOS_MEDICOS: "link_agregar_gastos_medicos",
+  GASTOS_INDUMENTARIA_TRABAJO: "link_agregar_gastos_indu_equip",
+  ALQUILER_VIVIENDA: "link_agregar_alquiler_inmuebles_inq_o",
+  SERVICIO_DOMESTICO: "link_agregar_personal_domestico",
+  APORTE_SGR: "link_agregar_aporte_sociedades",
+  VEHICULOS_CORREDORES: "link_agregar_vehiculos_corredores_y_viajantes",
+  INTERESES_CORREDORES: "link_agregar_gastos_mvri_corredores_y_viajantes",
+  GASTOS_EDUCATIVOS: "link_agregar_gastos_educacion",
+  OTRAS_DEDUCCIONES: "link_agregar_otras_deducciones",
+};
+
+// Link IDs that live inside the hidden #menu_alquiler_inmuebles sub-menu
+const ALQUILER_LINK_IDS = new Set([
+  "link_agregar_alquiler_inmuebles_inq_n",
+  "link_agregar_alquiler_inmuebles_inq_o",
+  "link_agregar_alquiler_inmuebles_prop",
+]);
+
 export function getSiradigCategoryText(category: string): string {
   return SIRADIG_CATEGORY_MAP[category] ?? category;
 }
 
 export function getSiradigInvoiceTypeText(invoiceType: string): string {
   return SIRADIG_INVOICE_TYPE_MAP[invoiceType] ?? invoiceType;
+}
+
+export function getSiradigCategoryLinkId(category: string): string | undefined {
+  return SIRADIG_CATEGORY_LINK_MAP[category];
+}
+
+export function isAlquilerCategory(linkId: string): boolean {
+  return ALQUILER_LINK_IDS.has(linkId);
 }
