@@ -35,13 +35,20 @@ const DATE_PATTERN = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/;
 
 // Matches "Punto de Venta: XXXXX Comp. Nro: YYYYYYYY" or "Pto. Vta.: XXXXX" + "Comp. Nro.: YYYYYYYY"
 const INVOICE_NUMBER_PATTERNS = [
-  // Combined format: 00001-00012345
+  // Combined format with labels: Punto de Venta: 00001 Comp. Nro: 00012345
   /(?:Punto\s+de\s+Venta|Pto\.?\s*Vta\.?)\s*:?\s*(\d{1,5})\s+(?:Comp\.?\s*Nro\.?)\s*:?\s*(\d{1,8})/i,
-  // Hyphenated format on one line: 00001 - 00012345
-  /(?:Punto\s+de\s+Venta|Pto\.?\s*Vta\.?)\s*:?\s*(\d{1,5})\s*[-–]\s*(?:Comp\.?\s*Nro\.?)\s*:?\s*(\d{1,8})/i,
-  // Standalone hyphenated number near "Nro" context: Nro. 00001-00012345
-  /N[ºº°]?\s*\.?\s*:?\s*(\d{4,5})\s*[-–]\s*(\d{5,8})/i,
+  // Hyphenated format with labels: Pto. Vta.: 00001 - Comp. Nro.: 00012345
+  /(?:Punto\s+de\s+Venta|Pto\.?\s*Vta\.?)\s*:?\s*(\d{1,5})\s*[-–—]\s*(?:Comp\.?\s*Nro\.?)\s*:?\s*(\d{1,8})/i,
+  // N° with dash/em-dash: N° 0006 — 00140862
+  /N[ºº°]?\s*\.?\s*:?\s*(\d{4,5})\s*[-–—]\s*(\d{5,8})/i,
+  // N° with whitespace only (no dash): N° 0006 00140862
+  /N[ºº°]?\s*\.?\s*:?\s*(\d{4,5})\s+(\d{5,8})/i,
 ];
+
+// Fallback patterns for split PDF layouts where punto de venta and comp. nro
+// end up on different lines due to absolute text positioning
+const COMP_NRO_FALLBACK = /N[ºº°]?\s*\.?\s*:?\s*(\d{8})\b/i;
+const PTO_VENTA_FALLBACK = /\b(\d{4,5})\s+[ABC]\s+cod\./i;
 
 function parseArgentineAmount(raw: string): number | null {
   const cleaned = raw.replace(/\./g, "").replace(",", ".");
@@ -96,6 +103,18 @@ export function extractFields(text: string): ExtractedFields {
       invoiceNumber = `${ptoVenta}-${compNro}`;
       fieldsFound++;
       break;
+    }
+  }
+
+  // Fallback for split PDF layouts: comp. nro near N° and punto de venta near invoice type code
+  if (!invoiceNumber) {
+    const compMatch = text.match(COMP_NRO_FALLBACK);
+    const ptoMatch = text.match(PTO_VENTA_FALLBACK);
+    if (compMatch && ptoMatch) {
+      const ptoVenta = ptoMatch[1].padStart(5, "0");
+      const compNro = compMatch[1].padStart(8, "0");
+      invoiceNumber = `${ptoVenta}-${compNro}`;
+      fieldsFound++;
     }
   }
 
