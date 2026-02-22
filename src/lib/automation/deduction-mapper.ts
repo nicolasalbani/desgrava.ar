@@ -77,3 +77,20 @@ export function getSiradigCategoryLinkId(category: string): string | undefined {
 export function isAlquilerCategory(linkId: string): boolean {
   return ALQUILER_LINK_IDS.has(linkId);
 }
+
+export function isEducationCategory(category: string): boolean {
+  return category === "GASTOS_EDUCATIVOS";
+}
+
+// Keywords that indicate the provider is a school/educational institution
+// (as opposed to a store selling educational tools/supplies)
+const SCHOOL_KEYWORDS = [
+  "escuela", "colegio", "universidad", "instituto", "school",
+  "jardín", "jardin", "liceo", "academia", "educaci",
+  "kindergarten", "college", "facultad", "fundación escuelas",
+];
+
+export function isSchoolProvider(denomination: string): boolean {
+  const lower = denomination.toLowerCase();
+  return SCHOOL_KEYWORDS.some((kw) => lower.includes(kw));
+}

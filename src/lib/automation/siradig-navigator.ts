@@ -4,6 +4,8 @@ import {
   getSiradigInvoiceTypeText,
   getSiradigCategoryLinkId,
   isAlquilerCategory,
+  isEducationCategory,
+  isSchoolProvider,
 } from "./deduction-mapper";
 import type { ScreenshotCallback } from "./arca-navigator";
 
@@ -342,12 +344,59 @@ export async function fillDeductionForm(
         "CUIT ingresado y denominacion obtenida"
       );
 
+      // Education-specific: Select "Tipo de Gasto" based on provider denomination
+      if (isEducationCategory(invoice.deductionCategory)) {
+        const razonSocial = await page
+          .$eval("#razonSocial", (el) => (el as HTMLInputElement).value)
+          .catch(() => "");
+
+        const tipoGasto = isSchoolProvider(razonSocial) ? "1" : "2";
+        const tipoLabel =
+          tipoGasto === "1"
+            ? "Servicios con fines educativos"
+            : "Herramientas educativas";
+        log(`Seleccionando tipo de gasto: ${tipoLabel}`);
+        await page.selectOption("#idTipoGasto", tipoGasto);
+      }
+
       // Step 10: Select Período (month) from #mesDesde
       const monthValue = String(invoice.fiscalMonth);
       log(
         `Seleccionando periodo: ${monthName || monthValue}`
       );
       await page.selectOption("#mesDesde", monthValue);
+
+      // Education-specific: Select Familiar from dialog
+      // Must happen AFTER period selection because #mesDesde change clears familiar
+      if (isEducationCategory(invoice.deductionCategory)) {
+        log("Seleccionando familiar...");
+        await page.locator("#btn_seleccion_familiar").click();
+        await page.waitForTimeout(1000); // Wait for dialog animation
+
+        // Select the first family member from the "Carga de Familia" table
+        const familiarRow = page
+          .locator("#tabla_cargas_familia tbody tr")
+          .first();
+        await familiarRow.waitFor({ timeout: 5000 });
+        await familiarRow.locator("td").first().click();
+        await page.waitForTimeout(500);
+
+        // Click "Aceptar" in the familiar selection dialog
+        const dialogParent = page
+          .locator("#dialog_seleccion_familiar")
+          .locator("..");
+        await dialogParent
+          .locator(".ui-dialog-buttonset button")
+          .first()
+          .click();
+        await page.waitForTimeout(500);
+
+        await capture(
+          await page.screenshot({ fullPage: true }),
+          "familiar-selected",
+          "Familiar seleccionado"
+        );
+      }
     }
 
     // Step 11: Click "Alta de Comprobante" to open the dialog
