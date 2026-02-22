@@ -2,7 +2,10 @@ import { mkdir, writeFile, readFile, readdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 
-const ARTIFACTS_ROOT = path.join(process.cwd(), ".automation-data");
+const ARTIFACTS_ROOT = path.join(
+  process.env.VERCEL ? "/tmp" : process.cwd(),
+  ".automation-data"
+);
 
 export interface ScreenshotMeta {
   step: number;
