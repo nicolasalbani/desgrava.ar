@@ -4,7 +4,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "npx prisma migrate deploy && next start --port ${PORT:-3000}",
+    "startCommand": "npx prisma migrate deploy && next start",
     "restartPolicyType": "ON_FAILURE"
   }
 }
