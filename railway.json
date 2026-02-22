@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "npx prisma migrate deploy && npm start",
+    "healthcheckPath": "/api/auth/session",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}

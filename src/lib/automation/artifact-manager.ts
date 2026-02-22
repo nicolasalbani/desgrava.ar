@@ -3,7 +3,7 @@ import { existsSync } from "fs";
 import path from "path";
 
 const ARTIFACTS_ROOT = path.join(
-  process.env.VERCEL ? "/tmp" : process.cwd(),
+  process.env.DATA_DIR || process.cwd(),
   ".automation-data"
 );
 
