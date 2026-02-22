@@ -10,13 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Copy prisma files first so postinstall (prisma generate) works during npm ci
+COPY prisma ./prisma/
+COPY prisma.config.ts ./
+
 COPY package*.json ./
 RUN npm ci
 RUN npx playwright install chromium
-
-COPY prisma ./prisma/
-COPY prisma.config.ts ./
-RUN npx prisma generate
 
 COPY . .
 RUN npm run build
