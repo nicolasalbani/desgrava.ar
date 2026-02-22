@@ -5,7 +5,6 @@
   },
   "deploy": {
     "startCommand": "npx prisma migrate deploy && next start --port ${PORT:-3000}",
-    "healthcheckPath": "/api/auth/session",
     "restartPolicyType": "ON_FAILURE"
   }
 }
