@@ -22,7 +22,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   DEDUCTION_CATEGORIES,
   DEDUCTION_CATEGORY_LABELS,
@@ -104,6 +104,7 @@ export function InvoiceForm({
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const lastLookedUpCuit = useRef("");
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -120,6 +121,29 @@ export function InvoiceForm({
       description: defaultValues?.description ?? "",
     },
   });
+
+  const fetchLastCategory = useCallback(async (rawCuit: string) => {
+    const cuit = rawCuit.replace(/-/g, "");
+    if (cuit.length !== 11 || !validateCuit(cuit) || cuit === lastLookedUpCuit.current) return;
+    lastLookedUpCuit.current = cuit;
+
+    try {
+      const res = await fetch(`/api/facturas/last-category?cuit=${cuit}`);
+      if (!res.ok) return;
+      const { category } = await res.json();
+      if (category && !form.getValues("deductionCategory")) {
+        form.setValue("deductionCategory", category, { shouldValidate: true });
+      }
+    } catch {
+      // silently ignore — suggestion is best-effort
+    }
+  }, [form]);
+
+  useEffect(() => {
+    if (defaultValues?.providerCuit) {
+      fetchLastCategory(defaultValues.providerCuit);
+    }
+  }, [defaultValues?.providerCuit, fetchLastCategory]);
 
   async function onSubmit(data: FormData) {
     setSaving(true);
@@ -162,6 +186,7 @@ export function InvoiceForm({
   function handleCuitChange(e: React.ChangeEvent<HTMLInputElement>) {
     const formatted = formatCuit(e.target.value);
     form.setValue("providerCuit", formatted, { shouldValidate: true });
+    fetchLastCategory(formatted);
   }
 
   return (
