@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Upload,
@@ -119,13 +120,13 @@ export function FileUploader({
       }
     : undefined;
 
-  // --- Extracted state: show summary banner + form ---
+  // --- Extracted state: summary banner + form ---
   if (extracted) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4 rounded-2xl bg-muted/50 px-5 py-4">
           <div
-            className={`shrink-0 rounded-full p-2 ${
+            className={`shrink-0 rounded-full p-2.5 ${
               confidencePercent >= 75
                 ? "bg-emerald-500/10"
                 : "bg-amber-500/10"
@@ -139,7 +140,7 @@ export function FileUploader({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+              <FileText className="h-3.5 w-3.5 text-muted-foreground/60" />
               <p className="text-sm font-medium truncate">{filename}</p>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -153,7 +154,7 @@ export function FileUploader({
             className="text-muted-foreground hover:text-foreground shrink-0"
           >
             <X className="h-4 w-4 mr-1.5" />
-            Cancelar
+            Descartar
           </Button>
         </div>
 
@@ -190,7 +191,7 @@ export function FileUploader({
       `}
     >
       {uploading ? (
-        <div className="flex items-center justify-center gap-3 py-10">
+        <div className="flex items-center justify-center gap-3 py-12">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             Procesando{" "}
@@ -198,25 +199,33 @@ export function FileUploader({
           </p>
         </div>
       ) : (
-        <label className="flex flex-col items-center gap-3 py-10 cursor-pointer">
-          <div className="rounded-full bg-muted/80 p-3">
-            <Upload className="h-5 w-5 text-muted-foreground/60" />
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-medium text-foreground/70">
-              Arrastra tu factura aca o hace click para seleccionar
-            </p>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              PDF, JPG, PNG o WebP &mdash; maximo 10MB
-            </p>
-          </div>
-          <input
-            type="file"
-            className="hidden"
-            accept=".pdf,.jpg,.jpeg,.png,.webp"
-            onChange={handleChange}
-          />
-        </label>
+        <div className="flex flex-col items-center">
+          <label className="flex flex-col items-center gap-3 pt-10 pb-3 cursor-pointer w-full">
+            <div className="rounded-full bg-muted/80 p-3">
+              <Upload className="h-5 w-5 text-muted-foreground/60" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-foreground/70">
+                Arrastra tu factura aca o hace click para seleccionar
+              </p>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                PDF, JPG, PNG o WebP &mdash; maximo 10MB
+              </p>
+            </div>
+            <input
+              type="file"
+              className="hidden"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              onChange={handleChange}
+            />
+          </label>
+          <Link
+            href="/facturas/nueva"
+            className="text-xs text-muted-foreground/60 hover:text-foreground/80 transition-colors pb-8 pt-2"
+          >
+            o ingresa los datos manualmente
+          </Link>
+        </div>
       )}
     </div>
   );

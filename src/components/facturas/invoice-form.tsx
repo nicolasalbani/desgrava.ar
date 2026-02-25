@@ -223,11 +223,13 @@ export function InvoiceForm({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Datos del comprobante</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Card className="rounded-2xl">
+      {!onSaved && (
+        <CardHeader>
+          <CardTitle>Datos del comprobante</CardTitle>
+        </CardHeader>
+      )}
+      <CardContent className={onSaved ? "pt-6" : ""}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label>Categoria SiRADIG</Label>
