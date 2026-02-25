@@ -36,6 +36,7 @@ export function FileUploader() {
   const [method, setMethod] = useState("");
   const [fileBase64, setFileBase64] = useState("");
   const [fileMimeType, setFileMimeType] = useState("");
+  const [rawText, setRawText] = useState("");
 
   const handleFile = useCallback(async (file: File) => {
     setUploading(true);
@@ -62,6 +63,7 @@ export function FileUploader() {
       setMethod(data.method);
       setFileBase64(data.fileBase64);
       setFileMimeType(data.mimeType);
+      setRawText(data.rawText ?? "");
       toast.success("Archivo procesado correctamente");
     } catch {
       toast.error("Error al subir el archivo");
@@ -209,6 +211,7 @@ export function FileUploader() {
           <InvoiceForm
             defaultValues={defaultValues}
             fileData={{ fileBase64, fileMimeType, originalFilename: filename }}
+            invoiceRawText={rawText}
           />
         </div>
       )}

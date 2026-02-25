@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       fileBase64: buffer.toString("base64"),
       method: result.method,
       extractedFields: result.fields,
+      rawText: result.text,
       rawTextPreview: result.text.substring(0, 500),
     });
   } catch (error) {

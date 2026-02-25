@@ -83,6 +83,7 @@ const months = [
 export function InvoiceForm({
   defaultValues,
   fileData,
+  invoiceRawText,
 }: {
   defaultValues?: Partial<{
     providerCuit: string;
@@ -101,6 +102,7 @@ export function InvoiceForm({
     fileMimeType: string;
     originalFilename: string;
   };
+  invoiceRawText?: string;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -133,11 +135,30 @@ export function InvoiceForm({
       const { category } = await res.json();
       if (category && !form.getValues("deductionCategory")) {
         form.setValue("deductionCategory", category, { shouldValidate: true });
+        return;
       }
     } catch {
       // silently ignore — suggestion is best-effort
     }
-  }, [form]);
+
+    // Fallback: classify via LLM if no prior category and raw text is available
+    if (!form.getValues("deductionCategory") && invoiceRawText) {
+      try {
+        const res = await fetch("/api/facturas/classify-category", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: invoiceRawText }),
+        });
+        if (!res.ok) return;
+        const { category } = await res.json();
+        if (category && !form.getValues("deductionCategory")) {
+          form.setValue("deductionCategory", category, { shouldValidate: true });
+        }
+      } catch {
+        // silently ignore — classification is best-effort
+      }
+    }
+  }, [form, invoiceRawText]);
 
   useEffect(() => {
     if (defaultValues?.providerCuit) {
