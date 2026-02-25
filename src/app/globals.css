@@ -127,3 +127,25 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes ai-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.ai-shimmer-border {
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    var(--ring) 25%,
+    var(--primary) 50%,
+    var(--ring) 75%,
+    var(--primary) 100%
+  );
+  background-size: 200% 100%;
+  animation: ai-shimmer 2s linear infinite;
+}

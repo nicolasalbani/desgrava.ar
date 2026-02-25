@@ -21,7 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
   DEDUCTION_CATEGORIES,
@@ -106,6 +106,7 @@ export function InvoiceForm({
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [classifying, setClassifying] = useState(false);
   const lastLookedUpCuit = useRef("");
 
   const form = useForm<FormData>({
@@ -143,6 +144,7 @@ export function InvoiceForm({
 
     // Fallback: classify via LLM if no prior category and raw text is available
     if (!form.getValues("deductionCategory") && invoiceRawText) {
+      setClassifying(true);
       try {
         const res = await fetch("/api/facturas/classify-category", {
           method: "POST",
@@ -156,6 +158,8 @@ export function InvoiceForm({
         }
       } catch {
         // silently ignore — classification is best-effort
+      } finally {
+        setClassifying(false);
       }
     }
   }, [form, invoiceRawText]);
@@ -219,23 +223,36 @@ export function InvoiceForm({
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label>Categoria SiRADIG</Label>
-            <Select
-              value={form.watch("deductionCategory")}
-              onValueChange={(v) =>
-                form.setValue("deductionCategory", v, { shouldValidate: true })
-              }
-            >
-              <SelectTrigger className="w-full overflow-hidden">
-                <SelectValue placeholder="Seleccionar categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                {DEDUCTION_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {DEDUCTION_CATEGORY_LABELS[cat]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="relative">
+              {classifying && (
+                <div className="absolute -inset-px rounded-md ai-shimmer-border z-10 pointer-events-none" />
+              )}
+              <Select
+                value={form.watch("deductionCategory")}
+                onValueChange={(v) =>
+                  form.setValue("deductionCategory", v, { shouldValidate: true })
+                }
+                disabled={classifying}
+              >
+                <SelectTrigger className="w-full overflow-hidden relative">
+                  {classifying ? (
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <Sparkles className="h-4 w-4 animate-pulse text-primary" />
+                      Clasificando con IA...
+                    </span>
+                  ) : (
+                    <SelectValue placeholder="Seleccionar categoria" />
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  {DEDUCTION_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {DEDUCTION_CATEGORY_LABELS[cat]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {form.formState.errors.deductionCategory && (
               <p className="text-sm text-destructive">
                 {form.formState.errors.deductionCategory.message}
