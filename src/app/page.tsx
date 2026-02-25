@@ -21,7 +21,7 @@ const features = [
     icon: Calculator,
     title: "Simulador de ahorro",
     description:
-      "Calcula cuanto podes ahorrar en ganancias segun tus deducciones. Gratis y sin registro.",
+      "Calcula cuanto podes ahorrar en ganancias segun tus deducciones. Sin registro.",
   },
   {
     icon: Shield,
@@ -58,7 +58,7 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" asChild className="shadow-md transition-all duration-150 hover:brightness-90">
                 <Link href="/simulador">
-                  Simular ahorro gratis
+                  Simular ahorro
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
