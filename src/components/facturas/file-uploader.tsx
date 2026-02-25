@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Upload,
@@ -200,7 +199,7 @@ export function FileUploader({
         </div>
       ) : (
         <div className="flex flex-col items-center">
-          <label className="flex flex-col items-center gap-3 pt-10 pb-3 cursor-pointer w-full">
+          <label className="flex flex-col items-center gap-3 py-10 cursor-pointer w-full">
             <div className="rounded-full bg-muted/80 p-3">
               <Upload className="h-5 w-5 text-muted-foreground/60" />
             </div>
@@ -219,12 +218,6 @@ export function FileUploader({
               onChange={handleChange}
             />
           </label>
-          <Link
-            href="/facturas/nueva"
-            className="text-xs text-muted-foreground/60 hover:text-foreground/80 transition-colors pb-8 pt-2"
-          >
-            o ingresa los datos manualmente
-          </Link>
         </div>
       )}
     </div>

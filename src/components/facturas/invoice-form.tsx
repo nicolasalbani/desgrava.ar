@@ -222,14 +222,7 @@ export function InvoiceForm({
     fetchLastCategory(formatted);
   }
 
-  return (
-    <Card className="rounded-2xl">
-      {!onSaved && (
-        <CardHeader>
-          <CardTitle>Datos del comprobante</CardTitle>
-        </CardHeader>
-      )}
-      <CardContent className={onSaved ? "pt-6" : ""}>
+  const formContent = (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label>Categoria SiRADIG</Label>
@@ -435,7 +428,18 @@ export function InvoiceForm({
             </Button>
           </div>
         </form>
-      </CardContent>
+  );
+
+  if (onSaved) {
+    return formContent;
+  }
+
+  return (
+    <Card className="rounded-2xl">
+      <CardHeader>
+        <CardTitle>Datos del comprobante</CardTitle>
+      </CardHeader>
+      <CardContent>{formContent}</CardContent>
     </Card>
   );
 }
