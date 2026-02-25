@@ -1,4 +1,4 @@
-import { FileText, Bot, KeyRound, Calculator } from "lucide-react";
+import { FileText, Bot, KeyRound } from "lucide-react";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -31,15 +31,6 @@ const quickActions = [
     iconColor: "text-green-600",
     step: 3,
   },
-  {
-    title: "Simulador",
-    description: "Calcula tu ahorro en ganancias",
-    icon: Calculator,
-    href: "/simulador",
-    iconBg: "bg-purple-50",
-    iconColor: "text-purple-600",
-    step: 4,
-  },
 ];
 
 export default async function DashboardPage() {
@@ -57,7 +48,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
         {quickActions.map((action) => {
           const Icon = action.icon;
           return (
