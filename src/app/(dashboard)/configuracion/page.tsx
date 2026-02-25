@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Preference {
@@ -46,63 +46,70 @@ export default function ConfiguracionPage() {
   }
 
   if (loading) {
-    return <div className="text-muted-foreground">Cargando...</div>;
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-10 max-w-xl">
       <div>
-        <h1 className="text-3xl font-bold">Configuracion</h1>
-        <p className="text-muted-foreground mt-1">
-          Ajusta tus preferencias para la carga de deducciones
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Configuracion
+        </h1>
+        <p className="text-sm text-muted-foreground/70 mt-1">
+          Preferencias para la carga de deducciones
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Preferencias</CardTitle>
-          <CardDescription>
-            Configura el comportamiento de la automatizacion y notificaciones
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="notifications">Notificaciones</Label>
-              <p className="text-sm text-muted-foreground">
-                Recibir notificaciones sobre el estado de las cargas
-              </p>
-            </div>
-            <Switch
-              id="notifications"
-              checked={preference.notifications}
-              onCheckedChange={(checked) =>
-                setPreference((prev) => ({ ...prev, notifications: checked }))
-              }
-            />
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="notifications">Notificaciones</Label>
+            <p className="text-xs text-muted-foreground/60">
+              Recibir notificaciones sobre el estado de las cargas
+            </p>
           </div>
+          <Switch
+            id="notifications"
+            checked={preference.notifications}
+            onCheckedChange={(checked) =>
+              setPreference((prev) => ({ ...prev, notifications: checked }))
+            }
+          />
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="fiscalYear">Periodo fiscal por defecto</Label>
-            <Input
-              id="fiscalYear"
-              type="number"
-              value={preference.defaultFiscalYear}
-              onChange={(e) =>
-                setPreference((prev) => ({
-                  ...prev,
-                  defaultFiscalYear: parseInt(e.target.value) || new Date().getFullYear(),
-                }))
-              }
-              className="w-32"
-            />
-          </div>
+        <div className="border-t border-gray-200" />
 
+        <div className="space-y-2">
+          <Label htmlFor="fiscalYear">Periodo fiscal por defecto</Label>
+          <p className="text-xs text-muted-foreground/60">
+            Ano fiscal que se usara al cargar nuevas deducciones
+          </p>
+          <Input
+            id="fiscalYear"
+            type="number"
+            value={preference.defaultFiscalYear}
+            onChange={(e) =>
+              setPreference((prev) => ({
+                ...prev,
+                defaultFiscalYear:
+                  parseInt(e.target.value) || new Date().getFullYear(),
+              }))
+            }
+            className="w-32"
+          />
+        </div>
+
+        <div className="pt-1">
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Guardando..." : "Guardar cambios"}
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar cambios
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
