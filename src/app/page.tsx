@@ -7,6 +7,12 @@ import { ReviewsCarousel } from "@/components/landing/reviews-carousel";
 
 const features = [
   {
+    icon: Calculator,
+    title: "Sabe cuanto vas a ahorrar",
+    description:
+      "Simula tu devolucion de ganancias antes de cargar nada. Sin registro.",
+  },
+  {
     icon: FileText,
     title: "Subi tus facturas y listo",
     description:
@@ -17,12 +23,6 @@ const features = [
     title: "SiRADIG en un click",
     description:
       "Conecta tu clave fiscal y dejanos cargar tus deducciones automaticamente.",
-  },
-  {
-    icon: Calculator,
-    title: "Sabe cuanto vas a ahorrar",
-    description:
-      "Simula tu devolucion de ganancias antes de cargar nada. Sin registro.",
   },
   {
     icon: Shield,
