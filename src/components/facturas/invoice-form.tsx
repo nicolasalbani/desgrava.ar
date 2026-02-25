@@ -84,6 +84,8 @@ export function InvoiceForm({
   defaultValues,
   fileData,
   invoiceRawText,
+  onSaved,
+  onCancel,
 }: {
   defaultValues?: Partial<{
     providerCuit: string;
@@ -103,6 +105,8 @@ export function InvoiceForm({
     originalFilename: string;
   };
   invoiceRawText?: string;
+  onSaved?: () => void;
+  onCancel?: () => void;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -202,7 +206,11 @@ export function InvoiceForm({
       }
 
       toast.success("Factura cargada correctamente");
-      router.push("/facturas");
+      if (onSaved) {
+        onSaved();
+      } else {
+        router.push("/facturas");
+      }
     } finally {
       setSaving(false);
     }
@@ -419,7 +427,7 @@ export function InvoiceForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push("/facturas")}
+              onClick={() => (onCancel ? onCancel() : router.push("/facturas"))}
             >
               Cancelar
             </Button>

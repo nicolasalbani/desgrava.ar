@@ -1,16 +1,15 @@
 "use client";
 
 import {
-  CheckCircle,
+  Check,
   KeyRound,
   FileText,
   Bot,
   ArrowRight,
-  PartyPopper,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 type StepState = "completed" | "active" | "pending";
@@ -18,50 +17,29 @@ type StepState = "completed" | "active" | "pending";
 const STEPS = [
   {
     title: "Credenciales ARCA",
-    description: "Configura tu CUIT y clave fiscal para automatizar",
-    completedDescription: "Tus credenciales estan configuradas",
+    description: "Configura tu CUIT y clave fiscal",
+    completedDescription: "Credenciales configuradas",
     icon: KeyRound,
     href: "/credenciales",
-    activeLabel: "Comenzar",
-    iconBg: "bg-amber-50",
-    iconColor: "text-amber-600",
-    activeBorder: "border-amber-300",
-    activeShadow: "shadow-amber-100",
-    activeBadgeBg: "bg-amber-100",
-    activeBadgeText: "text-amber-700",
-    activeCtaColor: "text-amber-600",
+    activeLabel: "Configurar",
     step: 1,
   },
   {
-    title: "Cargar factura",
-    description: "Agrega facturas manualmente o subi un PDF",
-    completedDescription: "Ya tenes facturas cargadas",
+    title: "Cargar facturas",
+    description: "Subi un PDF o carga manualmente",
+    completedDescription: "Facturas cargadas",
     icon: FileText,
-    href: "/facturas/nueva",
+    href: "/facturas",
     activeLabel: "Cargar",
-    iconBg: "bg-blue-50",
-    iconColor: "text-blue-600",
-    activeBorder: "border-blue-300",
-    activeShadow: "shadow-blue-100",
-    activeBadgeBg: "bg-blue-100",
-    activeBadgeText: "text-blue-700",
-    activeCtaColor: "text-blue-600",
     step: 2,
   },
   {
-    title: "Automatizar carga",
-    description: "Envia tus facturas a SiRADIG automaticamente",
-    completedDescription: "Tus facturas fueron enviadas a SiRADIG",
+    title: "Automatizar",
+    description: "Envia tus deducciones a SiRADIG",
+    completedDescription: "Automatizacion activa",
     icon: Bot,
     href: "/automatizacion",
     activeLabel: "Automatizar",
-    iconBg: "bg-green-50",
-    iconColor: "text-green-600",
-    activeBorder: "border-green-300",
-    activeShadow: "shadow-green-100",
-    activeBadgeBg: "bg-green-100",
-    activeBadgeText: "text-green-700",
-    activeCtaColor: "text-green-600",
     step: 3,
   },
 ];
@@ -89,31 +67,45 @@ export function OnboardingTour({
   const allDone = completedCount === 3;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Header */}
       <div
-        className="animate-in fade-in duration-300"
+        className="animate-in fade-in duration-500"
         style={{ animationFillMode: "backwards" }}
       >
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-semibold tracking-tight">
           Hola, {firstName}
         </h1>
-        <p className="text-base text-gray-500 mt-1">
+        <p className="text-muted-foreground mt-1">
           {allDone
-            ? "Gestiona tus deducciones y automatiza la carga en SiRADIG"
-            : "Completa estos pasos para empezar a automatizar tus deducciones"}
+            ? "Todo listo. Tu cuenta esta completamente configurada."
+            : "Configura tu cuenta en tres simples pasos."}
         </p>
       </div>
 
-      {allDone ? (
-        <CelebrationBanner firstName={firstName} />
-      ) : (
-        <ProgressSection
-          completedCount={completedCount}
-          progressPercent={progressPercent}
-        />
+      {/* Progress — only while incomplete */}
+      {!allDone && (
+        <div
+          className="animate-in fade-in slide-in-from-bottom-1 duration-400"
+          style={{ animationDelay: "80ms", animationFillMode: "backwards" }}
+        >
+          <div className="flex items-center justify-between mb-2.5">
+            <p className="text-xs font-medium text-muted-foreground tracking-wide uppercase">
+              Progreso
+            </p>
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {completedCount}/3
+            </p>
+          </div>
+          <Progress value={progressPercent} className="h-1.5" />
+        </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+      {/* Celebration — only when all done */}
+      {allDone && <CelebrationBanner />}
+
+      {/* Step cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {STEPS.map((step, index) => (
           <StepCard
             key={step.href}
@@ -127,59 +119,21 @@ export function OnboardingTour({
   );
 }
 
-function CelebrationBanner({ firstName }: { firstName: string }) {
+function CelebrationBanner() {
   return (
     <div
-      className="relative overflow-hidden bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 rounded-xl border border-green-200 p-6 animate-in fade-in zoom-in-95 duration-700"
+      className="flex items-center gap-3 animate-in fade-in duration-700"
       style={{ animationFillMode: "backwards" }}
     >
-      <div className="absolute inset-0 ai-shimmer-border opacity-[0.07] pointer-events-none" />
-
-      <div className="relative flex items-center gap-4">
-        <div
-          className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 animate-in zoom-in-0 duration-500"
-          style={{ animationDelay: "300ms", animationFillMode: "backwards" }}
-        >
-          <PartyPopper className="h-7 w-7 text-green-600" />
-        </div>
-        <div>
-          <h2 className="text-lg font-bold text-green-900">
-            Felicitaciones, {firstName}!
-          </h2>
-          <p className="text-sm text-green-700 mt-1">
-            Completaste toda la configuracion. Tus deducciones se estan
-            cargando automaticamente en SiRADIG.
-          </p>
-        </div>
+      <div
+        className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 animate-in zoom-in-50 duration-500"
+        style={{ animationDelay: "200ms", animationFillMode: "backwards" }}
+      >
+        <Sparkles className="h-4 w-4 text-primary" />
       </div>
-    </div>
-  );
-}
-
-function ProgressSection({
-  completedCount,
-  progressPercent,
-}: {
-  completedCount: number;
-  progressPercent: number;
-}) {
-  return (
-    <div
-      className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 animate-in fade-in slide-in-from-bottom-2 duration-300"
-      style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700">Tu progreso</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {completedCount} de 3 pasos completados
-          </p>
-        </div>
-        <Badge variant="secondary">
-          {progressPercent}%
-        </Badge>
-      </div>
-      <Progress value={progressPercent} />
+      <p className="text-sm text-muted-foreground">
+        Completaste la configuracion. Tus deducciones se cargan automaticamente en SiRADIG.
+      </p>
     </div>
   );
 }
@@ -198,90 +152,94 @@ function StepCard({
   const isActive = state === "active";
   const isPending = state === "pending";
 
-  const baseDelay = 200 + index * 150;
+  const baseDelay = 150 + index * 100;
 
   return (
     <Link href={step.href} className="h-full">
       <div
         className={cn(
-          "relative bg-white rounded-xl shadow-sm p-6 h-full min-h-[180px] flex flex-col transition-all duration-200 cursor-pointer",
-          "animate-in fade-in slide-in-from-bottom-4 duration-500",
-          isCompleted &&
-            "border border-green-200 hover:shadow-md hover:border-green-300 hover:-translate-y-0.5",
-          isActive &&
-            cn(
-              "border-2 shadow-md hover:shadow-lg hover:-translate-y-1",
-              step.activeBorder,
-              step.activeShadow
-            ),
-          isPending &&
-            "border border-gray-200 opacity-60 hover:opacity-80"
+          "group relative rounded-2xl p-5 h-full min-h-[164px] flex flex-col",
+          "transition-all duration-300 ease-out",
+          "animate-in fade-in slide-in-from-bottom-3 duration-500",
+          isCompleted && [
+            "bg-primary/[0.03] border border-primary/10",
+            "hover:bg-primary/[0.05] hover:border-primary/15",
+            "hover:shadow-sm",
+          ],
+          isActive && [
+            "bg-white border border-border shadow-md",
+            "hover:shadow-lg hover:-translate-y-0.5",
+          ],
+          isPending && [
+            "bg-transparent border border-transparent",
+            "opacity-40 hover:opacity-55",
+          ]
         )}
         style={{
           animationDelay: `${baseDelay}ms`,
           animationFillMode: "backwards",
         }}
       >
-        {isActive && (
-          <div className="absolute -inset-px rounded-xl active-step-pulse ai-shimmer-border z-0 pointer-events-none opacity-40" />
-        )}
-
-        {isCompleted ? (
-          <CheckCircle className="absolute top-4 right-4 h-5 w-5 text-green-500" />
-        ) : (
-          <span
+        {/* Step indicator */}
+        <div className="flex items-center justify-between mb-4">
+          <div
             className={cn(
-              "absolute top-4 right-4 w-6 h-6 rounded-full text-xs font-medium flex items-center justify-center",
-              isActive
-                ? cn("animate-pulse", step.activeBadgeBg, step.activeBadgeText)
-                : "bg-gray-100 text-gray-400"
+              "w-10 h-10 rounded-xl flex items-center justify-center transition-colors duration-300",
+              isCompleted && "bg-primary/10",
+              isActive && "bg-primary/8",
+              isPending && "bg-muted"
             )}
           >
-            {step.step}
-          </span>
-        )}
+            <Icon
+              className={cn(
+                "h-[18px] w-[18px] transition-colors duration-300",
+                isCompleted && "text-primary",
+                isActive && "text-primary",
+                isPending && "text-muted-foreground/70"
+              )}
+            />
+          </div>
 
-        <div
-          className={cn(
-            "w-12 h-12 rounded-lg flex items-center justify-center mb-4 relative z-10",
-            isCompleted ? "bg-green-50" : step.iconBg
+          {isCompleted && (
+            <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center animate-in zoom-in-0 duration-300">
+              <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={2.5} />
+            </div>
           )}
-        >
-          <Icon
-            className={cn(
-              "h-6 w-6",
-              isCompleted ? "text-green-600" : step.iconColor
-            )}
-          />
+
+          {isActive && (
+            <span className="text-[11px] font-medium text-primary/70 tracking-wide uppercase">
+              Siguiente
+            </span>
+          )}
         </div>
 
-        <h3 className="text-base font-semibold text-gray-900 mb-2 relative z-10">
+        {/* Content */}
+        <h3
+          className={cn(
+            "text-sm font-semibold mb-1 transition-colors duration-300",
+            isCompleted && "text-primary",
+            isActive && "text-foreground",
+            isPending && "text-muted-foreground"
+          )}
+        >
           {step.title}
         </h3>
-        <p className="text-sm text-gray-500 leading-relaxed relative z-10">
+        <p
+          className={cn(
+            "text-xs leading-relaxed transition-colors duration-300",
+            isCompleted && "text-primary/50",
+            isActive && "text-muted-foreground",
+            isPending && "text-muted-foreground/60"
+          )}
+        >
           {isCompleted ? step.completedDescription : step.description}
         </p>
 
-        {isCompleted && (
-          <div className="mt-auto pt-3 relative z-10">
-            <Badge
-              variant="secondary"
-              className="bg-green-50 text-green-700 border-green-200"
-            >
-              Completado
-            </Badge>
-          </div>
-        )}
-
+        {/* Active CTA */}
         {isActive && (
-          <div
-            className={cn(
-              "mt-auto pt-3 flex items-center text-sm font-medium relative z-10",
-              step.activeCtaColor
-            )}
-          >
-            {step.activeLabel}{" "}
-            <ArrowRight className="ml-1 h-4 w-4" />
+          <div className="mt-auto pt-3 flex items-center text-xs font-medium text-primary group-hover:gap-1.5 gap-1 transition-all duration-300">
+            {step.activeLabel}
+            <ArrowRight className="h-3 w-3" />
           </div>
         )}
       </div>

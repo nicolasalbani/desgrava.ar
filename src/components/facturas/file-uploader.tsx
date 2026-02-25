@@ -1,18 +1,15 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Upload, FileText, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  X,
+} from "lucide-react";
 import { InvoiceForm } from "./invoice-form";
 import { formatCuit } from "@/lib/validators/cuit";
 import { toast } from "sonner";
@@ -27,8 +24,11 @@ interface ExtractedFields {
   confidence: number;
 }
 
-export function FileUploader() {
-  const router = useRouter();
+export function FileUploader({
+  onInvoiceSaved,
+}: {
+  onInvoiceSaved?: () => void;
+}) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [extracted, setExtracted] = useState<ExtractedFields | null>(null);
@@ -84,9 +84,24 @@ export function FileUploader() {
     if (file) handleFile(file);
   }
 
-  const confidencePercent = extracted ? Math.round(extracted.confidence * 100) : 0;
+  function reset() {
+    setExtracted(null);
+    setFilename("");
+    setFileBase64("");
+    setFileMimeType("");
+    setRawText("");
+    setMethod("");
+  }
 
-  // Build default values for the form from extracted fields
+  function handleSaved() {
+    reset();
+    onInvoiceSaved?.();
+  }
+
+  const confidencePercent = extracted
+    ? Math.round(extracted.confidence * 100)
+    : 0;
+
   const defaultValues = extracted
     ? {
         providerCuit: extracted.cuit ? formatCuit(extracted.cuit) : "",
@@ -104,116 +119,104 @@ export function FileUploader() {
       }
     : undefined;
 
-  return (
-    <div className="space-y-6">
-      {!extracted && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Subir comprobante</CardTitle>
-            <CardDescription>
-              Arrastra un archivo o hace click para seleccionar. Soporta PDF, JPG, PNG.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-lg p-10 text-center transition-colors ${
-                dragActive
-                  ? "border-primary bg-primary/5"
-                  : "border-muted-foreground/25 hover:border-primary/50"
-              }`}
-            >
-              {uploading ? (
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    Procesando {filename}...
-                  </p>
-                </div>
-              ) : (
-                <label className="cursor-pointer flex flex-col items-center gap-3">
-                  <Upload className="h-10 w-10 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">
-                      Arrastra tu factura aca o hace click para seleccionar
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      PDF, JPG, PNG o WebP. Maximo 10MB.
-                    </p>
-                  </div>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,.jpg,.jpeg,.png,.webp"
-                    onChange={handleChange}
-                  />
-                </label>
-              )}
+  // --- Extracted state: show summary banner + form ---
+  if (extracted) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4 rounded-2xl bg-muted/50 px-5 py-4">
+          <div
+            className={`shrink-0 rounded-full p-2 ${
+              confidencePercent >= 75
+                ? "bg-emerald-500/10"
+                : "bg-amber-500/10"
+            }`}
+          >
+            {confidencePercent >= 75 ? (
+              <CheckCircle className="h-4 w-4 text-emerald-600" />
+            ) : (
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-sm font-medium truncate">{filename}</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {extracted && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5" />
-                  <div>
-                    <CardTitle className="text-lg">Datos extraidos</CardTitle>
-                    <CardDescription>{filename}</CardDescription>
-                  </div>
-                </div>
-                <Badge variant="outline">{method}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                {confidencePercent >= 75 ? (
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-yellow-500" />
-                )}
-                <div className="flex-1">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Confianza de extraccion</span>
-                    <span className="font-medium">{confidencePercent}%</span>
-                  </div>
-                  <Progress value={confidencePercent} />
-                </div>
-              </div>
-
-              <p className="text-sm text-muted-foreground">
-                Revisa y completa los datos antes de guardar. Los campos extraidos
-                se pre-cargaron en el formulario.
-              </p>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setExtracted(null);
-                  setFilename("");
-                }}
-              >
-                Subir otro archivo
-              </Button>
-            </CardContent>
-          </Card>
-
-          <InvoiceForm
-            defaultValues={defaultValues}
-            fileData={{ fileBase64, fileMimeType, originalFilename: filename }}
-            invoiceRawText={rawText}
-          />
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {confidencePercent}% confianza &middot; {method}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={reset}
+            className="text-muted-foreground hover:text-foreground shrink-0"
+          >
+            <X className="h-4 w-4 mr-1.5" />
+            Cancelar
+          </Button>
         </div>
+
+        <InvoiceForm
+          defaultValues={defaultValues}
+          fileData={{ fileBase64, fileMimeType, originalFilename: filename }}
+          invoiceRawText={rawText}
+          onSaved={handleSaved}
+          onCancel={reset}
+        />
+      </div>
+    );
+  }
+
+  // --- Default state: drop zone ---
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragActive(true);
+      }}
+      onDragLeave={() => setDragActive(false)}
+      onDrop={handleDrop}
+      className={`
+        relative rounded-2xl border border-dashed
+        transition-all duration-300 ease-out
+        ${
+          uploading
+            ? "border-muted-foreground/15 bg-muted/30"
+            : dragActive
+              ? "border-primary/40 bg-primary/[0.03] shadow-sm"
+              : "border-muted-foreground/20 bg-muted/20 hover:border-muted-foreground/30 hover:bg-muted/30"
+        }
+      `}
+    >
+      {uploading ? (
+        <div className="flex items-center justify-center gap-3 py-10">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            Procesando{" "}
+            <span className="font-medium text-foreground/70">{filename}</span>
+          </p>
+        </div>
+      ) : (
+        <label className="flex flex-col items-center gap-3 py-10 cursor-pointer">
+          <div className="rounded-full bg-muted/80 p-3">
+            <Upload className="h-5 w-5 text-muted-foreground/60" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-foreground/70">
+              Arrastra tu factura aca o hace click para seleccionar
+            </p>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              PDF, JPG, PNG o WebP &mdash; maximo 10MB
+            </p>
+          </div>
+          <input
+            type="file"
+            className="hidden"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            onChange={handleChange}
+          />
+        </label>
       )}
     </div>
   );
