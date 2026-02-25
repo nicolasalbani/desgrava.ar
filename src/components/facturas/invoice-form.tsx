@@ -225,7 +225,9 @@ export function InvoiceForm({
             <Label>Categoria SiRADIG</Label>
             <div className="relative">
               {classifying && (
-                <div className="absolute -inset-px rounded-md ai-shimmer-border z-10 pointer-events-none" />
+                <div className="absolute -inset-[2px] rounded-[calc(var(--radius-md)+2px)] ai-shimmer-border pointer-events-none p-[2px]">
+                  <div className="w-full h-full rounded-md bg-background" />
+                </div>
               )}
               <Select
                 value={form.watch("deductionCategory")}
@@ -234,7 +236,7 @@ export function InvoiceForm({
                 }
                 disabled={classifying}
               >
-                <SelectTrigger className="w-full overflow-hidden relative">
+                <SelectTrigger className="w-full overflow-hidden relative z-10">
                   {classifying ? (
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <Sparkles className="h-4 w-4 animate-pulse text-primary" />
