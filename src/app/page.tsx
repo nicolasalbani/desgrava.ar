@@ -3,31 +3,32 @@ import { Button } from "@/components/ui/button";
 import { FileText, Bot, Calculator, Shield, ArrowRight } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import { ReviewsCarousel } from "@/components/landing/reviews-carousel";
 
 const features = [
   {
     icon: FileText,
-    title: "Carga de facturas",
+    title: "Subi tus facturas y listo",
     description:
-      "Subi tus facturas en PDF o cargalas manualmente. El OCR extrae los datos automaticamente.",
+      "Arrastra un PDF o carga los datos a mano. Nuestro OCR extrae todo en segundos.",
   },
   {
     icon: Bot,
-    title: "Automatizacion SiRADIG",
+    title: "SiRADIG en un click",
     description:
-      "Conecta tu clave fiscal y desgrava.ar carga tus deducciones en SiRADIG por vos.",
+      "Conecta tu clave fiscal y dejanos cargar tus deducciones automaticamente.",
   },
   {
     icon: Calculator,
-    title: "Simulador de ahorro",
+    title: "Sabe cuanto vas a ahorrar",
     description:
-      "Calcula cuanto podes ahorrar en ganancias segun tus deducciones. Sin registro.",
+      "Simula tu devolucion de ganancias antes de cargar nada. Sin registro.",
   },
   {
     icon: Shield,
-    title: "Seguridad",
+    title: "Tu clave fiscal, protegida",
     description:
-      "Tu clave fiscal se encripta con AES-256. Nunca se almacena en texto plano.",
+      "Encriptacion AES-256 de grado bancario. Nunca se almacena en texto plano.",
   },
 ];
 
@@ -41,23 +42,23 @@ export default function LandingPage() {
         <section className="py-16 md:py-20">
           <div className="max-w-5xl mx-auto px-4 md:px-6 space-y-6 text-center">
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
-              Automatiza tus deducciones
+              Recupera la plata
               <br />
-              <span className="text-primary">en SiRADIG</span>
+              <span className="text-primary">que ganancias te saca</span>
             </h1>
             <p className="text-base text-gray-500 max-w-xl mx-auto leading-relaxed">
-              Deja de perder plata. Carga tus facturas, calcula tu ahorro y
-              automatiza la carga en SiRADIG con un click.
+              Miles de pesos en deducciones se pierden cada ano porque cargarlas
+              en SiRADIG es un dolor de cabeza. desgrava.ar lo hace por vos.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button size="lg" asChild>
                 <Link href="/simulador">
-                  Simular ahorro
+                  Calcula tu ahorro
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
-                <Link href="/login">Empezar a desgravar</Link>
+                <Link href="/login">Empeza gratis</Link>
               </Button>
             </div>
           </div>
@@ -66,14 +67,6 @@ export default function LandingPage() {
         {/* Features */}
         <section className="bg-gray-50 py-14 border-t border-gray-200">
           <div className="max-w-5xl mx-auto px-4 md:px-6">
-            <div className="text-center mb-10">
-              <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
-                Todo lo que necesitas
-              </h2>
-              <p className="text-gray-500 mt-2">
-                Carga tus deducciones y ahorra en minutos.
-              </p>
-            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               {features.map((feature) => {
                 const Icon = feature.icon;
@@ -92,6 +85,13 @@ export default function LandingPage() {
                 );
               })}
             </div>
+          </div>
+        </section>
+
+        {/* Reviews */}
+        <section className="py-14 border-t border-gray-200">
+          <div className="max-w-5xl mx-auto px-4 md:px-6">
+            <ReviewsCarousel />
           </div>
         </section>
       </main>
