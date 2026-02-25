@@ -10,13 +10,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -99,8 +92,8 @@ export function InvoiceList() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [categories, setCategories] = useState<Set<string>>(new Set());
+  const [statuses, setStatuses] = useState<Set<string>>(new Set());
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [montoMin, setMontoMin] = useState("");
@@ -158,9 +151,9 @@ export function InvoiceList() {
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {
-      if (category !== "all" && inv.deductionCategory !== category)
+      if (categories.size > 0 && !categories.has(inv.deductionCategory))
         return false;
-      if (statusFilter !== "all" && inv.siradiqStatus !== statusFilter)
+      if (statuses.size > 0 && !statuses.has(inv.siradiqStatus))
         return false;
       if (fechaDesde) {
         if (!inv.invoiceDate) return false;
@@ -191,8 +184,8 @@ export function InvoiceList() {
     });
   }, [
     invoices,
-    category,
-    statusFilter,
+    categories,
+    statuses,
     fechaDesde,
     fechaHasta,
     montoMin,
@@ -202,8 +195,8 @@ export function InvoiceList() {
 
   const hasClientFilters =
     search !== "" ||
-    category !== "all" ||
-    statusFilter !== "all" ||
+    categories.size > 0 ||
+    statuses.size > 0 ||
     fechaDesde !== "" ||
     fechaHasta !== "" ||
     montoMin !== "" ||
@@ -211,8 +204,8 @@ export function InvoiceList() {
 
   function clearAllFilters() {
     setSearch("");
-    setCategory("all");
-    setStatusFilter("all");
+    setCategories(new Set());
+    setStatuses(new Set());
     setFechaDesde("");
     setFechaHasta("");
     setMontoMin("");
@@ -282,10 +275,10 @@ export function InvoiceList() {
   }
 
   // --- Filter active helpers ---
-  const isCategoryActive = category !== "all";
+  const isCategoryActive = categories.size > 0;
   const isFechaActive = fechaDesde !== "" || fechaHasta !== "";
   const isMontoActive = montoMin !== "" || montoMax !== "";
-  const isStatusActive = statusFilter !== "all";
+  const isStatusActive = statuses.size > 0;
 
   return (
     <div className="space-y-4">
@@ -406,33 +399,45 @@ export function InvoiceList() {
                         align="start"
                       >
                         <div className="space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Filtrar por categoria
-                          </p>
-                          <Select
-                            value={category}
-                            onValueChange={setCategory}
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">Todas</SelectItem>
-                              {DEDUCTION_CATEGORIES.map((cat) => (
-                                <SelectItem key={cat} value={cat}>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Filtrar por categoria
+                            </p>
+                            {isCategoryActive && (
+                              <button
+                                onClick={() => setCategories(new Set())}
+                                className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                              >
+                                Limpiar
+                              </button>
+                            )}
+                          </div>
+                          <div className="max-h-48 overflow-y-auto space-y-1">
+                            {DEDUCTION_CATEGORIES.map((cat) => (
+                              <label
+                                key={cat}
+                                className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                              >
+                                <Checkbox
+                                  checked={categories.has(cat)}
+                                  onCheckedChange={(checked) => {
+                                    setCategories((prev) => {
+                                      const next = new Set(prev);
+                                      if (checked) {
+                                        next.add(cat);
+                                      } else {
+                                        next.delete(cat);
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span className="text-xs">
                                   {DEDUCTION_CATEGORY_LABELS[cat]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {isCategoryActive && (
-                            <button
-                              onClick={() => setCategory("all")}
-                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
-                            >
-                              Limpiar
-                            </button>
-                          )}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
                         </div>
                       </PopoverContent>
                     </Popover>
@@ -607,35 +612,45 @@ export function InvoiceList() {
                         align="start"
                       >
                         <div className="space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Filtrar por estado
-                          </p>
-                          <Select
-                            value={statusFilter}
-                            onValueChange={setStatusFilter}
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">Todos</SelectItem>
-                              {Object.entries(STATUS_LABELS).map(
-                                ([key, label]) => (
-                                  <SelectItem key={key} value={key}>
-                                    {label}
-                                  </SelectItem>
-                                )
-                              )}
-                            </SelectContent>
-                          </Select>
-                          {isStatusActive && (
-                            <button
-                              onClick={() => setStatusFilter("all")}
-                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
-                            >
-                              Limpiar
-                            </button>
-                          )}
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Filtrar por estado
+                            </p>
+                            {isStatusActive && (
+                              <button
+                                onClick={() => setStatuses(new Set())}
+                                className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                              >
+                                Limpiar
+                              </button>
+                            )}
+                          </div>
+                          <div className="space-y-1">
+                            {Object.entries(STATUS_LABELS).map(
+                              ([key, label]) => (
+                                <label
+                                  key={key}
+                                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                                >
+                                  <Checkbox
+                                    checked={statuses.has(key)}
+                                    onCheckedChange={(checked) => {
+                                      setStatuses((prev) => {
+                                        const next = new Set(prev);
+                                        if (checked) {
+                                          next.add(key);
+                                        } else {
+                                          next.delete(key);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                  <span className="text-xs">{label}</span>
+                                </label>
+                              )
+                            )}
+                          </div>
                         </div>
                       </PopoverContent>
                     </Popover>
