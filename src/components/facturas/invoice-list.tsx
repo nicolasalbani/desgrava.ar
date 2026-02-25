@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -16,6 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,11 +35,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, Send, FileDown, FileText } from "lucide-react";
 import {
+  Loader2,
+  Trash2,
+  Send,
+  FileDown,
+  FileText,
+  Search,
+  X,
+  ListFilter,
+} from "lucide-react";
+import {
+  DEDUCTION_CATEGORIES,
   DEDUCTION_CATEGORY_LABELS,
 } from "@/lib/validators/invoice";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface Invoice {
   id: string;
@@ -78,46 +95,28 @@ const STATUS_LABELS: Record<string, string> = {
 
 const SELECTABLE_STATUSES = ["PENDING", "FAILED"];
 
-const SHORT_MONTHS = [
-  "Ene",
-  "Feb",
-  "Mar",
-  "Abr",
-  "May",
-  "Jun",
-  "Jul",
-  "Ago",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dic",
-];
-
-const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
-
 export function InvoiceList() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [year, setYear] = useState<string>(String(currentYear));
-  const [status, setStatus] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const [montoMin, setMontoMin] = useState("");
+  const [montoMax, setMontoMax] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInvoices();
-    setSelectedIds(new Set());
-  }, [year, status]);
+  }, []);
 
   async function fetchInvoices() {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (year !== "all") params.set("fiscalYear", year);
-      if (status !== "all") params.set("status", status);
-
-      const res = await fetch(`/api/facturas?${params}`);
+      const res = await fetch("/api/facturas");
       const data = await res.json();
       setInvoices(data.invoices || []);
     } finally {
@@ -157,7 +156,70 @@ export function InvoiceList() {
     });
   }
 
-  const eligibleInvoices = invoices.filter((inv) =>
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((inv) => {
+      if (category !== "all" && inv.deductionCategory !== category)
+        return false;
+      if (statusFilter !== "all" && inv.siradiqStatus !== statusFilter)
+        return false;
+      if (fechaDesde) {
+        if (!inv.invoiceDate) return false;
+        if (new Date(inv.invoiceDate) < new Date(fechaDesde)) return false;
+      }
+      if (fechaHasta) {
+        if (!inv.invoiceDate) return false;
+        if (new Date(inv.invoiceDate) > new Date(fechaHasta)) return false;
+      }
+      if (montoMin) {
+        const min = parseInt(montoMin);
+        if (!isNaN(min) && parseFloat(inv.amount) < min) return false;
+      }
+      if (montoMax) {
+        const max = parseInt(montoMax);
+        if (!isNaN(max) && parseFloat(inv.amount) > max) return false;
+      }
+      if (search) {
+        const q = search.toLowerCase();
+        if (
+          !inv.providerName?.toLowerCase().includes(q) &&
+          !inv.providerCuit.includes(q) &&
+          !inv.invoiceNumber?.toLowerCase().includes(q)
+        )
+          return false;
+      }
+      return true;
+    });
+  }, [
+    invoices,
+    category,
+    statusFilter,
+    fechaDesde,
+    fechaHasta,
+    montoMin,
+    montoMax,
+    search,
+  ]);
+
+  const hasClientFilters =
+    search !== "" ||
+    category !== "all" ||
+    statusFilter !== "all" ||
+    fechaDesde !== "" ||
+    fechaHasta !== "" ||
+    montoMin !== "" ||
+    montoMax !== "";
+
+  function clearAllFilters() {
+    setSearch("");
+    setCategory("all");
+    setStatusFilter("all");
+    setFechaDesde("");
+    setFechaHasta("");
+    setMontoMin("");
+    setMontoMax("");
+  }
+
+  const eligibleInvoices = filteredInvoices.filter((inv) =>
     SELECTABLE_STATUSES.includes(inv.siradiqStatus)
   );
   const allEligibleSelected =
@@ -219,43 +281,43 @@ export function InvoiceList() {
     setSubmitting(false);
   }
 
+  // --- Filter active helpers ---
+  const isCategoryActive = category !== "all";
+  const isFechaActive = fechaDesde !== "" || fechaHasta !== "";
+  const isMontoActive = montoMin !== "" || montoMax !== "";
+  const isStatusActive = statusFilter !== "all";
+
   return (
     <div className="space-y-4">
-      {/* Header: count + filters */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">
-          {!loading &&
-            `${invoices.length} ${invoices.length === 1 ? "comprobante" : "comprobantes"}`}
-        </span>
-        <div className="flex gap-2">
-          <Select value={year} onValueChange={setYear}>
-            <SelectTrigger className="w-[130px] h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los anos</SelectItem>
-              {years.map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-[150px] h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los estados</SelectItem>
-              {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                <SelectItem key={key} value={key}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* Search + count */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+          <Input
+            placeholder="Buscar por proveedor, CUIT o comprobante..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
+        {!loading && invoices.length > 0 && (
+          <span className="text-sm text-muted-foreground tabular-nums shrink-0">
+            {hasClientFilters
+              ? `${filteredInvoices.length} de ${invoices.length}`
+              : invoices.length}{" "}
+            {invoices.length === 1 && !hasClientFilters
+              ? "comprobante"
+              : "comprobantes"}
+          </span>
+        )}
       </div>
 
       {/* Selection action bar */}
@@ -302,7 +364,7 @@ export function InvoiceList() {
             Sin comprobantes
           </p>
           <p className="text-xs text-muted-foreground/50 mt-1.5 max-w-xs">
-            No hay facturas para los filtros seleccionados
+            No hay facturas cargadas
           </p>
         </div>
       ) : (
@@ -321,110 +383,386 @@ export function InvoiceList() {
                   />
                 </TableHead>
                 <TableHead>Proveedor</TableHead>
-                <TableHead>Categoria</TableHead>
+
+                {/* Categoria — funnel */}
+                <TableHead>
+                  <div className="flex items-center gap-2">
+                    <span>Categoria</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className={cn(
+                            "rounded-md p-1 transition-colors",
+                            isCategoryActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                          )}
+                        >
+                          <ListFilter className="h-3.5 w-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-60 p-3"
+                        align="start"
+                      >
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Filtrar por categoria
+                          </p>
+                          <Select
+                            value={category}
+                            onValueChange={setCategory}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Todas</SelectItem>
+                              {DEDUCTION_CATEGORIES.map((cat) => (
+                                <SelectItem key={cat} value={cat}>
+                                  {DEDUCTION_CATEGORY_LABELS[cat]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {isCategoryActive && (
+                            <button
+                              onClick={() => setCategory("all")}
+                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                            >
+                              Limpiar
+                            </button>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </TableHead>
+
                 <TableHead>Nro. Comprobante</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                <TableHead>Estado</TableHead>
+
+                {/* Fecha — funnel */}
+                <TableHead>
+                  <div className="flex items-center gap-2">
+                    <span>Fecha</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className={cn(
+                            "rounded-md p-1 transition-colors",
+                            isFechaActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                          )}
+                        >
+                          <ListFilter className="h-3.5 w-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-52 p-3"
+                        align="start"
+                      >
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Rango de fecha
+                          </p>
+                          <div className="space-y-1.5">
+                            <label className="text-xs text-muted-foreground/70">
+                              Desde
+                            </label>
+                            <Input
+                              type="date"
+                              value={fechaDesde}
+                              onChange={(e) =>
+                                setFechaDesde(e.target.value)
+                              }
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs text-muted-foreground/70">
+                              Hasta
+                            </label>
+                            <Input
+                              type="date"
+                              value={fechaHasta}
+                              onChange={(e) =>
+                                setFechaHasta(e.target.value)
+                              }
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                          {isFechaActive && (
+                            <button
+                              onClick={() => {
+                                setFechaDesde("");
+                                setFechaHasta("");
+                              }}
+                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                            >
+                              Limpiar
+                            </button>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </TableHead>
+
+                {/* Monto — funnel */}
+                <TableHead className="text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <span>Monto</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className={cn(
+                            "rounded-md p-1 transition-colors",
+                            isMontoActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                          )}
+                        >
+                          <ListFilter className="h-3.5 w-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-44 p-3"
+                        align="end"
+                      >
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Rango de monto
+                          </p>
+                          <div className="space-y-1.5">
+                            <label className="text-xs text-muted-foreground/70">
+                              Min $
+                            </label>
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="0"
+                              value={montoMin}
+                              onChange={(e) =>
+                                setMontoMin(
+                                  e.target.value.replace(/[^\d]/g, "")
+                                )
+                              }
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs text-muted-foreground/70">
+                              Max $
+                            </label>
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="999999"
+                              value={montoMax}
+                              onChange={(e) =>
+                                setMontoMax(
+                                  e.target.value.replace(/[^\d]/g, "")
+                                )
+                              }
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                          {isMontoActive && (
+                            <button
+                              onClick={() => {
+                                setMontoMin("");
+                                setMontoMax("");
+                              }}
+                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                            >
+                              Limpiar
+                            </button>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </TableHead>
+
+                {/* Estado — funnel */}
+                <TableHead>
+                  <div className="flex items-center gap-2">
+                    <span>Estado</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className={cn(
+                            "rounded-md p-1 transition-colors",
+                            isStatusActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                          )}
+                        >
+                          <ListFilter className="h-3.5 w-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-44 p-3"
+                        align="start"
+                      >
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Filtrar por estado
+                          </p>
+                          <Select
+                            value={statusFilter}
+                            onValueChange={setStatusFilter}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Todos</SelectItem>
+                              {Object.entries(STATUS_LABELS).map(
+                                ([key, label]) => (
+                                  <SelectItem key={key} value={key}>
+                                    {label}
+                                  </SelectItem>
+                                )
+                              )}
+                            </SelectContent>
+                          </Select>
+                          {isStatusActive && (
+                            <button
+                              onClick={() => setStatusFilter("all")}
+                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                            >
+                              Limpiar
+                            </button>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </TableHead>
+
                 <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {invoices.map((inv) => {
-                const isEligible = SELECTABLE_STATUSES.includes(
-                  inv.siradiqStatus
-                );
-                return (
-                  <TableRow key={inv.id}>
-                    <TableCell className="pl-4">
-                      <Checkbox
-                        checked={selectedIds.has(inv.id)}
-                        onCheckedChange={() => toggleSelect(inv.id)}
-                        disabled={!isEligible}
-                        aria-label={`Seleccionar factura ${inv.id}`}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="text-sm font-medium">
-                          {inv.providerName || inv.providerCuit}
-                        </p>
-                        {inv.providerName && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {inv.providerCuit}
+              {filteredInvoices.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={9}
+                    className="text-center py-12"
+                  >
+                    <p className="text-sm font-medium text-muted-foreground/70">
+                      Sin resultados
+                    </p>
+                    <p className="text-xs text-muted-foreground/50 mt-1">
+                      Proba con otros filtros o terminos de busqueda
+                    </p>
+                    <button
+                      onClick={clearAllFilters}
+                      className="mt-3 text-xs text-primary hover:text-primary/80 transition-colors"
+                    >
+                      Limpiar filtros
+                    </button>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredInvoices.map((inv) => {
+                  const isEligible = SELECTABLE_STATUSES.includes(
+                    inv.siradiqStatus
+                  );
+                  return (
+                    <TableRow key={inv.id}>
+                      <TableCell className="pl-4">
+                        <Checkbox
+                          checked={selectedIds.has(inv.id)}
+                          onCheckedChange={() => toggleSelect(inv.id)}
+                          disabled={!isEligible}
+                          aria-label={`Seleccionar factura ${inv.id}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="text-sm font-medium">
+                            {inv.providerName || inv.providerCuit}
                           </p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
-                        inv.deductionCategory}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {inv.invoiceNumber ?? "-"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {inv.invoiceDate
-                        ? new Date(inv.invoiceDate).toLocaleDateString(
-                            "es-AR"
-                          )
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-sm text-right font-medium tabular-nums">
-                      ${parseFloat(inv.amount).toLocaleString("es-AR")}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          STATUS_VARIANTS[inv.siradiqStatus] ?? "secondary"
-                        }
-                      >
-                        {STATUS_LABELS[inv.siradiqStatus] ??
-                          inv.siradiqStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 justify-end">
-                        {inv.hasFile && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            asChild
-                            title="Ver comprobante"
-                          >
-                            <a
-                              href={`/api/facturas/${inv.id}/file`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                          {inv.providerName && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {inv.providerCuit}
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                          inv.deductionCategory}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {inv.invoiceNumber ?? "-"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {inv.invoiceDate
+                          ? new Date(inv.invoiceDate).toLocaleDateString(
+                              "es-AR"
+                            )
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-sm text-right font-medium tabular-nums">
+                        ${parseFloat(inv.amount).toLocaleString("es-AR")}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            STATUS_VARIANTS[inv.siradiqStatus] ?? "secondary"
+                          }
+                        >
+                          {STATUS_LABELS[inv.siradiqStatus] ??
+                            inv.siradiqStatus}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 justify-end">
+                          {inv.hasFile && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              asChild
+                              title="Ver comprobante"
                             >
-                              <FileDown className="h-4 w-4" />
-                            </a>
-                          </Button>
-                        )}
-                        {inv._count.automationJobs > 0 ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled
-                            title="Tiene automatizaciones vinculadas"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteTarget(inv.id)}
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                              <a
+                                href={`/api/facturas/${inv.id}/file`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <FileDown className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          )}
+                          {inv._count.automationJobs > 0 ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled
+                              title="Tiene automatizaciones vinculadas"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeleteTarget(inv.id)}
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>
