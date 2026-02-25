@@ -1,7 +1,14 @@
 import OpenAI from "openai";
 import { DEDUCTION_CATEGORIES } from "@/lib/validators/invoice";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _openai;
+}
 
 /**
  * Descripciones oficiales de cada categoría de deducción según normativa ARCA (ex-AFIP)
@@ -75,7 +82,7 @@ INSTRUCCIONES:
 
 export async function classifyCategory(invoiceText: string): Promise<string> {
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0,
       max_tokens: 50,
