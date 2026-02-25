@@ -38,8 +38,8 @@ export default function LandingPage() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="py-24 md:py-32">
-          <div className="max-w-5xl mx-auto px-4 md:px-6 space-y-8 text-center">
+        <section className="py-16 md:py-20">
+          <div className="max-w-5xl mx-auto px-4 md:px-6 space-y-6 text-center">
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
               Automatiza tus deducciones
               <br />
@@ -49,7 +49,7 @@ export default function LandingPage() {
               Deja de perder plata. Carga tus facturas, calcula tu ahorro y
               automatiza la carga en SiRADIG con un click.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button size="lg" asChild>
                 <Link href="/simulador">
                   Simular ahorro
@@ -64,9 +64,9 @@ export default function LandingPage() {
         </section>
 
         {/* Features */}
-        <section className="bg-gray-50 py-20 border-t border-gray-200">
+        <section className="bg-gray-50 py-14 border-t border-gray-200">
           <div className="max-w-5xl mx-auto px-4 md:px-6">
-            <div className="text-center mb-14">
+            <div className="text-center mb-10">
               <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
                 Todo lo que necesitas
               </h2>
