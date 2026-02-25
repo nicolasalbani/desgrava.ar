@@ -2,11 +2,13 @@ import { AutomationDashboard } from "@/components/automatizacion/automation-dash
 
 export default function AutomatizacionPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <div>
-        <h1 className="text-3xl font-bold">Automatizacion</h1>
-        <p className="text-muted-foreground mt-1">
-          Gestiona la carga automatica de tus deducciones en SiRADIG
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Automatizacion
+        </h1>
+        <p className="text-sm text-muted-foreground/70 mt-1">
+          Carga automatica de deducciones en SiRADIG
         </p>
       </div>
       <AutomationDashboard />
