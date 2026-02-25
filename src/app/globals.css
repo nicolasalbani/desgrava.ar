@@ -149,3 +149,12 @@
   background-size: 200% 100%;
   animation: ai-shimmer 2s linear infinite;
 }
+
+@keyframes gentle-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+.active-step-pulse {
+  animation: gentle-pulse 2.5s ease-in-out infinite, ai-shimmer 2s linear infinite;
+}
