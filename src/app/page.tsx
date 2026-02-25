@@ -33,66 +33,59 @@ const features = [
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-white">
       <Navbar />
 
       <main className="flex-1">
-        {/* Hero Section */}
-        <section
-          className="relative py-20 md:py-24"
-          style={{
-            background:
-              "radial-gradient(ellipse at center, #eff6ff 0%, #ffffff 70%)",
-          }}
-        >
-          <div className="max-w-6xl mx-auto px-4 md:px-6 space-y-8 text-center">
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
+        {/* Hero */}
+        <section className="py-24 md:py-32">
+          <div className="max-w-5xl mx-auto px-4 md:px-6 space-y-8 text-center">
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
               Automatiza tus deducciones
               <br />
               <span className="text-primary">en SiRADIG</span>
             </h1>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-base text-gray-500 max-w-xl mx-auto leading-relaxed">
               Deja de perder plata. Carga tus facturas, calcula tu ahorro y
               automatiza la carga en SiRADIG con un click.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" asChild className="shadow-md transition-all duration-150 hover:brightness-90">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+              <Button size="lg" asChild>
                 <Link href="/simulador">
                   Simular ahorro
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
-              <Button size="lg" variant="outline" asChild className="transition-all duration-150 hover:bg-gray-100">
+              <Button size="lg" variant="outline" asChild>
                 <Link href="/login">Empezar a desgravar</Link>
               </Button>
             </div>
           </div>
         </section>
 
-        {/* Features Section */}
-        <section className="bg-gray-50 py-20">
-          <div className="max-w-6xl mx-auto px-4 md:px-6">
-            <div className="text-center mb-12">
-              <h2 className="text-2xl font-bold mb-2">Todo lo que necesitas</h2>
-              <p className="text-gray-500">
+        {/* Features */}
+        <section className="bg-gray-50 py-20 border-t border-gray-200">
+          <div className="max-w-5xl mx-auto px-4 md:px-6">
+            <div className="text-center mb-14">
+              <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
+                Todo lo que necesitas
+              </h2>
+              <p className="text-gray-500 mt-2">
                 Carga tus deducciones y ahorra en minutos.
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               {features.map((feature) => {
                 const Icon = feature.icon;
                 return (
-                  <div
-                    key={feature.title}
-                    className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200"
-                  >
-                    <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center mb-3">
-                      <Icon className="h-6 w-6 text-primary" />
+                  <div key={feature.title} className="space-y-3">
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <Icon className="h-5 w-5 text-gray-600" />
                     </div>
-                    <h3 className="font-semibold text-lg mb-2">
+                    <h3 className="font-medium text-gray-900">
                       {feature.title}
                     </h3>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 leading-relaxed">
                       {feature.description}
                     </p>
                   </div>

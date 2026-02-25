@@ -12,18 +12,21 @@ export function Navbar() {
   const { data: session } = useSession();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
-      <div className="max-w-6xl mx-auto px-4 md:px-6 flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-          <Calculator className="h-6 w-6" />
+    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white">
+      <div className="max-w-5xl mx-auto px-4 md:px-6 flex h-16 items-center justify-between">
+        <Link href="/" className="flex items-center gap-2 font-bold text-lg">
+          <Calculator className="h-5 w-5" />
           desgrava.ar
         </Link>
 
         <nav className="hidden md:flex items-center gap-6">
-          <Link href="/simulador" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-150">
+          <Link
+            href="/simulador"
+            className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
             Simulador
           </Link>
-          <Button asChild className="transition-all duration-150">
+          <Button asChild size="sm">
             {session ? (
               <Link href="/dashboard">Ir al panel</Link>
             ) : (
@@ -38,17 +41,29 @@ export function Navbar() {
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-[300px]">
+          <SheetContent side="right" className="w-[280px]">
             <nav className="flex flex-col gap-4 mt-8">
-              <Link href="/simulador" onClick={() => setOpen(false)} className="text-lg font-medium">
+              <Link
+                href="/simulador"
+                onClick={() => setOpen(false)}
+                className="text-base text-gray-600 hover:text-gray-900 transition-colors"
+              >
                 Simulador
               </Link>
               {session ? (
-                <Link href="/dashboard" onClick={() => setOpen(false)} className="text-lg font-medium">
+                <Link
+                  href="/dashboard"
+                  onClick={() => setOpen(false)}
+                  className="text-base text-gray-600 hover:text-gray-900 transition-colors"
+                >
                   Ir al panel
                 </Link>
               ) : (
-                <Link href="/login" onClick={() => setOpen(false)} className="text-lg font-medium">
+                <Link
+                  href="/login"
+                  onClick={() => setOpen(false)}
+                  className="text-base text-gray-600 hover:text-gray-900 transition-colors"
+                >
                   Iniciar sesion
                 </Link>
               )}
