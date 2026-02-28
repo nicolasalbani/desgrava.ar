@@ -50,4 +50,4 @@ COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/tsconfig.json ./
 
 EXPOSE 3000
-CMD sh -c "npx prisma db push --skip-generate --accept-data-loss && npx next start -p ${PORT:-3000}"
+CMD sh -c "npx prisma db push --accept-data-loss && npx next start -p ${PORT:-3000}"
