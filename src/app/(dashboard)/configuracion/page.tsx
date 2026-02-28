@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { EmailIngestCard } from "@/components/configuracion/email-ingest-card";
 
 interface Preference {
   defaultFiscalYear: number;
@@ -109,6 +110,17 @@ export default function ConfiguracionPage() {
             Guardar cambios
           </Button>
         </div>
+
+        <div className="border-t border-gray-200" />
+
+        <div className="space-y-2">
+          <Label>Email para facturas</Label>
+          <p className="text-xs text-muted-foreground/60">
+            Envia facturas por email y se cargan automaticamente
+          </p>
+        </div>
+
+        <EmailIngestCard />
       </div>
     </div>
   );

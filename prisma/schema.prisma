@@ -16,15 +16,17 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  ingestToken   String?   @unique
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts       Account[]
-  sessions       Session[]
-  arcaCredential ArcaCredential?
-  invoices       Invoice[]
-  automationJobs AutomationJob[]
-  preference     UserPreference?
+  accounts        Account[]
+  sessions        Session[]
+  arcaCredential  ArcaCredential?
+  invoices        Invoice[]
+  automationJobs  AutomationJob[]
+  preference      UserPreference?
+  emailIngestLogs EmailIngestLog[]
 }
 
 model Account {
@@ -184,6 +186,7 @@ enum InvoiceSource {
   MANUAL
   PDF
   OCR
+  EMAIL
 }
 
 enum SiradiqStatus {
@@ -208,4 +211,34 @@ enum JobStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+// ─── Email Ingest ────────────────────────────────────────────
+
+model EmailIngestLog {
+  id              String             @id @default(cuid())
+  userId          String?
+  emailId         String
+  fromAddress     String
+  toAddress       String
+  subject         String?
+  status          EmailIngestStatus  @default(RECEIVED)
+  attachmentCount Int                @default(0)
+  invoicesCreated Int                @default(0)
+  errorMessage    String?
+  createdAt       DateTime           @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([emailId])
+}
+
+enum EmailIngestStatus {
+  RECEIVED
+  PROCESSING
+  COMPLETED
+  PARTIAL
+  FAILED
+  REJECTED
 }
