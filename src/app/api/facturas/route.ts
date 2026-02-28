@@ -73,6 +73,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (parsed.data.invoiceNumber) {
+      const duplicate = await prisma.invoice.findFirst({
+        where: { userId: session.user.id, invoiceNumber: parsed.data.invoiceNumber },
+        select: { id: true },
+      });
+      if (duplicate) {
+        return NextResponse.json(
+          { error: "Ya existe un comprobante con ese número" },
+          { status: 409 }
+        );
+      }
+    }
+
     const invoice = await prisma.invoice.create({
       data: {
         userId: session.user.id,
