@@ -725,9 +725,13 @@ export function InvoiceList() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
-                          inv.deductionCategory}
+                      <TableCell className="max-w-[180px]">
+                        <span
+                          className="block truncate text-sm text-muted-foreground"
+                          title={DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ?? inv.deductionCategory}
+                        >
+                          {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ?? inv.deductionCategory}
+                        </span>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {inv.invoiceNumber ?? "-"}

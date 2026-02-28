@@ -5,6 +5,7 @@ import {
   getSiradigCategoryLinkId,
   isAlquilerCategory,
   isEducationCategory,
+  isIndumentariaTrabajoCategory,
   isSchoolProvider,
 } from "./deduction-mapper";
 import type { ScreenshotCallback } from "./arca-navigator";
@@ -343,6 +344,12 @@ export async function fillDeductionForm(
         "cuit-filled",
         "CUIT ingresado y denominacion obtenida"
       );
+
+      // Indumentaria/Equipamiento-specific: always select "Equipamiento" (#idConcepto value 2)
+      if (isIndumentariaTrabajoCategory(invoice.deductionCategory)) {
+        log("Seleccionando concepto: Equipamiento");
+        await page.selectOption("#idConcepto", "2");
+      }
 
       // Education-specific: Select "Tipo de Gasto" based on provider denomination
       if (isEducationCategory(invoice.deductionCategory)) {

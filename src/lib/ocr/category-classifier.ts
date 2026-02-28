@@ -41,7 +41,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     "Gastos médicos y paramédicos: honorarios facturados por servicios de asistencia sanitaria, médica y paramédica, tanto para el contribuyente como para sus cargas de familia. Se puede deducir el 40% del total facturado, con un límite del 5% de la ganancia neta del ejercicio.",
 
   GASTOS_INDUMENTARIA_TRABAJO:
-    "Gastos de adquisición de indumentaria y equipamiento para uso exclusivo en el lugar de trabajo: importes abonados por ropa, herramientas y equipamiento de uso estrictamente laboral, siempre que no hayan sido reintegrados por el empleador.",
+    "Gastos de adquisición de indumentaria y equipamiento para uso exclusivo en el lugar de trabajo: importes abonados por ropa, herramientas y equipamiento de uso estrictamente laboral, siempre que no hayan sido reintegrados por el empleador. Incluye también servicios de conectividad a internet (como Starlink, Fibertel, Telecentro, Personal, Movistar), telefonía laboral, y equipamiento tecnológico (computadoras, tablets, impresoras) utilizados exclusivamente para el trabajo o trabajo remoto.",
 
   ALQUILER_VIVIENDA:
     "Alquiler de inmueble destinado a casa-habitación: se puede deducir el 40% de las sumas pagadas en concepto de alquiler de vivienda, hasta el límite de la ganancia no imponible anual. Requisitos: el contribuyente no debe ser titular de ningún inmueble, y el contrato debe estar registrado en el régimen RELI de ARCA.",

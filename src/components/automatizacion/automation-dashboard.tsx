@@ -552,10 +552,15 @@ export function AutomationDashboard() {
                       <TableCell className="text-sm">
                         {job.invoice?.providerName ?? job.invoice?.providerCuit ?? "-"}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {job.invoice
-                          ? (DEDUCTION_CATEGORY_LABELS[job.invoice.deductionCategory] ?? job.invoice.deductionCategory)
-                          : job.jobType}
+                      <TableCell className="max-w-[180px]">
+                        <span
+                          className="block truncate text-sm text-muted-foreground"
+                          title={job.invoice ? (DEDUCTION_CATEGORY_LABELS[job.invoice.deductionCategory] ?? job.invoice.deductionCategory) : job.jobType}
+                        >
+                          {job.invoice
+                            ? (DEDUCTION_CATEGORY_LABELS[job.invoice.deductionCategory] ?? job.invoice.deductionCategory)
+                            : job.jobType}
+                        </span>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {job.invoice

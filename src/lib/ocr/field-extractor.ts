@@ -18,9 +18,15 @@ const AMOUNT_PATTERNS = [
 ];
 
 const INVOICE_TYPE_PATTERNS: [RegExp, string][] = [
-  [/FACTURA\s*"?A"?/i, "FACTURA_A"],
-  [/FACTURA\s*"?B"?/i, "FACTURA_B"],
-  [/FACTURA\s*"?C"?/i, "FACTURA_C"],
+  // Reversed layout: type letter appears BEFORE the word FACTURA (e.g., Starlink PDFs)
+  [/\bA\b\s+FACTURA/i, "FACTURA_A"],
+  [/\bB\b\s+FACTURA/i, "FACTURA_B"],
+  [/\bC\b\s+FACTURA/i, "FACTURA_C"],
+  // Standard layout: FACTURA followed by type letter (with or without surrounding quotes)
+  // Letter is required (no trailing ?) to avoid matching plain "FACTURA" as FACTURA_A
+  [/FACTURA\s*"?A"/i, "FACTURA_A"],
+  [/FACTURA\s*"?B"/i, "FACTURA_B"],
+  [/FACTURA\s*"?C"/i, "FACTURA_C"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?A"?/i, "NOTA_CREDITO_A"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?B"?/i, "NOTA_CREDITO_B"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?C"?/i, "NOTA_CREDITO_C"],
@@ -132,6 +138,17 @@ export function extractFields(text: string): ExtractedFields {
       )
       .trim()
       .substring(0, 100);
+  }
+
+  // Fallback: detect issuer company name by common Argentine legal suffixes
+  // (handles invoices like Starlink where the name appears without a RAZÓN SOCIAL label)
+  if (!providerName) {
+    const companyMatch = text.match(
+      /([A-ZÁÉÍÓÚÑ][a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]+(?:\s+[A-Za-záéíóúÁÉÍÓÚñÑ0-9\.]+){0,4}\s+(?:S\.R\.L\.|S\.A\.S\.|S\.A\.U\.|S\.A\.))/
+    );
+    if (companyMatch) {
+      providerName = companyMatch[1].trim().substring(0, 100);
+    }
   }
 
   const confidence = fieldsFound / totalFields;

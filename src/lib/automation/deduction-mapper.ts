@@ -82,6 +82,10 @@ export function isEducationCategory(category: string): boolean {
   return category === "GASTOS_EDUCATIVOS";
 }
 
+export function isIndumentariaTrabajoCategory(category: string): boolean {
+  return category === "GASTOS_INDUMENTARIA_TRABAJO";
+}
+
 // Keywords that indicate the provider is a school/educational institution
 // (as opposed to a store selling educational tools/supplies)
 const SCHOOL_KEYWORDS = [
