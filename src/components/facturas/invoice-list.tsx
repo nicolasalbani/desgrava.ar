@@ -88,6 +88,16 @@ const STATUS_LABELS: Record<string, string> = {
 
 const SELECTABLE_STATUSES = ["PENDING", "FAILED"];
 
+function isFutureMonth(inv: Invoice): boolean {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  return (
+    inv.fiscalYear > currentYear ||
+    (inv.fiscalYear === currentYear && inv.fiscalMonth > currentMonth)
+  );
+}
+
 export function InvoiceList() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -212,8 +222,9 @@ export function InvoiceList() {
     setMontoMax("");
   }
 
-  const eligibleInvoices = filteredInvoices.filter((inv) =>
-    SELECTABLE_STATUSES.includes(inv.siradiqStatus)
+  const eligibleInvoices = filteredInvoices.filter(
+    (inv) =>
+      SELECTABLE_STATUSES.includes(inv.siradiqStatus) && !isFutureMonth(inv)
   );
   const allEligibleSelected =
     eligibleInvoices.length > 0 &&
@@ -683,9 +694,10 @@ export function InvoiceList() {
                 </TableRow>
               ) : (
                 filteredInvoices.map((inv) => {
-                  const isEligible = SELECTABLE_STATUSES.includes(
-                    inv.siradiqStatus
-                  );
+                  const isFuture = isFutureMonth(inv);
+                  const isEligible =
+                    SELECTABLE_STATUSES.includes(inv.siradiqStatus) &&
+                    !isFuture;
                   return (
                     <TableRow key={inv.id}>
                       <TableCell className="pl-4">
@@ -693,6 +705,11 @@ export function InvoiceList() {
                           checked={selectedIds.has(inv.id)}
                           onCheckedChange={() => toggleSelect(inv.id)}
                           disabled={!isEligible}
+                          title={
+                            isFuture
+                              ? "No disponible: el periodo fiscal aun no esta habilitado en SiRADIG"
+                              : undefined
+                          }
                           aria-label={`Seleccionar factura ${inv.id}`}
                         />
                       </TableCell>

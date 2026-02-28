@@ -27,6 +27,20 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Prevent submitting invoices for future months
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      if (
+        invoice.fiscalYear > currentYear ||
+        (invoice.fiscalYear === currentYear && invoice.fiscalMonth > currentMonth)
+      ) {
+        return NextResponse.json(
+          { error: "No se pueden enviar comprobantes de periodos futuros a SiRADIG" },
+          { status: 400 }
+        );
+      }
+
       // Update invoice status
       await prisma.invoice.update({
         where: { id: invoiceId },
