@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://desgrava.ar"),
   title: "desgrava.ar - Automatiza tus deducciones en SiRADIG",
   description:
     "Carga tus facturas en SiRADIG de forma automatica. Simula tu ahorro impositivo y gestiona tus deducciones de ganancias.",
