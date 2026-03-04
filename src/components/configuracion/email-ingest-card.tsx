@@ -212,31 +212,44 @@ export function EmailIngestCard() {
             {logs.map((log) => {
               const config = STATUS_CONFIG[log.status] || STATUS_CONFIG.FAILED;
               const Icon = config.icon;
+              const isFailed = log.status === "FAILED" || log.status === "REJECTED";
+              const iconColor = isFailed
+                ? "text-destructive/70"
+                : log.status === "COMPLETED"
+                ? "text-emerald-600/70"
+                : "text-muted-foreground/60";
               return (
                 <div
                   key={log.id}
-                  className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm"
+                  className="rounded-md border border-gray-200 px-3 py-2 text-sm space-y-1"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                    <span className="truncate text-muted-foreground/70">
-                      {log.subject || log.fromAddress}
-                    </span>
-                    {log.invoicesCreated > 0 && (
-                      <span className="text-xs text-muted-foreground/50">
-                        ({log.invoicesCreated}{" "}
-                        {log.invoicesCreated === 1 ? "factura" : "facturas"})
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Icon className={`h-3.5 w-3.5 shrink-0 ${iconColor}`} />
+                      <span className="truncate text-muted-foreground/70">
+                        {log.subject || log.fromAddress}
                       </span>
-                    )}
+                      {log.invoicesCreated > 0 && (
+                        <span className="text-xs text-muted-foreground/50">
+                          ({log.invoicesCreated}{" "}
+                          {log.invoicesCreated === 1 ? "factura" : "facturas"})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant={config.variant} className="text-xs">
+                        {config.label}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground/50">
+                        {formatDate(log.createdAt)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <Badge variant={config.variant} className="text-xs">
-                      {config.label}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground/50">
-                      {formatDate(log.createdAt)}
-                    </span>
-                  </div>
+                  {isFailed && log.errorMessage && (
+                    <p className="text-xs text-muted-foreground/50 pl-5">
+                      {log.errorMessage}
+                    </p>
+                  )}
                 </div>
               );
             })}
