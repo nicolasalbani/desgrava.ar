@@ -31,6 +31,7 @@ import {
 } from "@/lib/validators/invoice";
 import { formatCuit, validateCuit } from "@/lib/validators/cuit";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 function formatArgNumber(value: string): string {
   const digits = value.replace(/\D/g, "");
@@ -55,10 +56,10 @@ const formSchema = z.object({
       (val) => validateCuit(val.replace(/-/g, "")),
       { message: "CUIT invalido (digito verificador)" }
     ),
-  providerName: z.string().optional(),
+  providerName: z.string().min(1, "El nombre del proveedor es requerido"),
   invoiceType: z.string().min(1, "Selecciona un tipo"),
-  invoiceNumber: z.string().optional(),
-  invoiceDate: z.string().optional(),
+  invoiceNumber: z.string().min(1, "El numero de comprobante es requerido"),
+  invoiceDate: z.string().min(1, "La fecha del comprobante es requerida"),
   amount: z.string().min(1, "El monto es requerido").refine(
     (val) => {
       const num = parseFloat(unformatArgNumber(val));
@@ -237,6 +238,19 @@ export function InvoiceForm({
     fetchLastCategory(formatted);
   }
 
+  const fromFile = !!fileData;
+  const watchedCategory = form.watch("deductionCategory");
+  const watchedCuit = form.watch("providerCuit");
+  const watchedProviderName = form.watch("providerName");
+  const watchedInvoiceType = form.watch("invoiceType");
+  const watchedAmount = form.watch("amount");
+  const watchedInvoiceNumber = form.watch("invoiceNumber");
+  const watchedInvoiceDate = form.watch("invoiceDate");
+
+  function missingGlow(value: string | undefined) {
+    return fromFile && !value ? "border-amber-300 bg-amber-50/50" : "";
+  }
+
   const formContent = (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
@@ -248,13 +262,13 @@ export function InvoiceForm({
                 </div>
               )}
               <Select
-                value={form.watch("deductionCategory")}
+                value={watchedCategory}
                 onValueChange={(v) =>
                   form.setValue("deductionCategory", v, { shouldValidate: true })
                 }
                 disabled={classifying}
               >
-                <SelectTrigger className="w-full overflow-hidden relative z-10">
+                <SelectTrigger className={cn("w-full overflow-hidden relative z-10", missingGlow(watchedCategory))}>
                   {classifying ? (
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <Sparkles className="h-4 w-4 animate-pulse text-primary" />
@@ -286,6 +300,7 @@ export function InvoiceForm({
               <Input
                 id="providerCuit"
                 placeholder="XX-XXXXXXXX-X"
+                className={missingGlow(watchedCuit)}
                 {...form.register("providerCuit")}
                 onChange={handleCuitChange}
               />
@@ -297,12 +312,18 @@ export function InvoiceForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="providerName">Nombre del proveedor (opcional)</Label>
+              <Label htmlFor="providerName">Nombre del proveedor</Label>
               <Input
                 id="providerName"
                 placeholder="Ej: OSDE, Galeno"
+                className={missingGlow(watchedProviderName)}
                 {...form.register("providerName")}
               />
+              {form.formState.errors.providerName && (
+                <p className="text-sm text-destructive">
+                  {form.formState.errors.providerName.message}
+                </p>
+              )}
             </div>
           </div>
 
@@ -310,12 +331,12 @@ export function InvoiceForm({
             <div className="space-y-2">
               <Label>Tipo de comprobante</Label>
               <Select
-                value={form.watch("invoiceType")}
+                value={watchedInvoiceType}
                 onValueChange={(v) =>
                   form.setValue("invoiceType", v, { shouldValidate: true })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className={missingGlow(watchedInvoiceType)}>
                   <SelectValue placeholder="Seleccionar tipo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -340,7 +361,8 @@ export function InvoiceForm({
                 type="text"
                 inputMode="numeric"
                 placeholder="200.000"
-                value={formatArgNumber(form.watch("amount"))}
+                className={missingGlow(watchedAmount)}
+                value={formatArgNumber(watchedAmount)}
                 onChange={(e) => {
                   const raw = unformatArgNumber(e.target.value);
                   form.setValue("amount", raw, { shouldValidate: true });
@@ -356,21 +378,33 @@ export function InvoiceForm({
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="invoiceNumber">Numero de comprobante (opcional)</Label>
+              <Label htmlFor="invoiceNumber">Numero de comprobante</Label>
               <Input
                 id="invoiceNumber"
                 placeholder="00001-00012345"
+                className={missingGlow(watchedInvoiceNumber)}
                 {...form.register("invoiceNumber")}
               />
+              {form.formState.errors.invoiceNumber && (
+                <p className="text-sm text-destructive">
+                  {form.formState.errors.invoiceNumber.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="invoiceDate">Fecha del comprobante (opcional)</Label>
+              <Label htmlFor="invoiceDate">Fecha del comprobante</Label>
               <Input
                 id="invoiceDate"
                 type="date"
+                className={missingGlow(watchedInvoiceDate)}
                 {...form.register("invoiceDate")}
               />
+              {form.formState.errors.invoiceDate && (
+                <p className="text-sm text-destructive">
+                  {form.formState.errors.invoiceDate.message}
+                </p>
+              )}
             </div>
           </div>
 
