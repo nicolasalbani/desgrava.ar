@@ -23,16 +23,27 @@ const INVOICE_TYPE_PATTERNS: [RegExp, string][] = [
   [/\bB\b\s+FACTURA/i, "FACTURA_B"],
   [/\bC\b\s+FACTURA/i, "FACTURA_C"],
   // Standard layout: FACTURA followed by type letter (with or without surrounding quotes)
-  // Letter is required (no trailing ?) to avoid matching plain "FACTURA" as FACTURA_A
-  [/FACTURA\s*"?A"/i, "FACTURA_A"],
-  [/FACTURA\s*"?B"/i, "FACTURA_B"],
-  [/FACTURA\s*"?C"/i, "FACTURA_C"],
+  // \b after the letter prevents matching "FACTURA COD." (C from COD) or similar
+  [/FACTURA\s*"?A\b"?/i, "FACTURA_A"],
+  [/FACTURA\s*"?B\b"?/i, "FACTURA_B"],
+  [/FACTURA\s*"?C\b"?/i, "FACTURA_C"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?A"?/i, "NOTA_CREDITO_A"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?B"?/i, "NOTA_CREDITO_B"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?C"?/i, "NOTA_CREDITO_C"],
   [/NOTA\s+DE?\s*D[ÉE]BITO\s*"?A"?/i, "NOTA_DEBITO_A"],
   [/NOTA\s+DE?\s*D[ÉE]BITO\s*"?B"?/i, "NOTA_DEBITO_B"],
   [/NOTA\s+DE?\s*D[ÉE]BITO\s*"?C"?/i, "NOTA_DEBITO_C"],
+  // ARCA fallback: detect type from comprobante code (COD. 011 = Factura C, etc.)
+  // Reliable for ARCA-generated PDFs where the type letter and "FACTURA" end up on different lines
+  [/COD\.\s*001\b/i, "FACTURA_A"],
+  [/COD\.\s*002\b/i, "NOTA_DEBITO_A"],
+  [/COD\.\s*003\b/i, "NOTA_CREDITO_A"],
+  [/COD\.\s*006\b/i, "FACTURA_B"],
+  [/COD\.\s*007\b/i, "NOTA_DEBITO_B"],
+  [/COD\.\s*008\b/i, "NOTA_CREDITO_B"],
+  [/COD\.\s*011\b/i, "FACTURA_C"],
+  [/COD\.\s*012\b/i, "NOTA_DEBITO_C"],
+  [/COD\.\s*013\b/i, "NOTA_CREDITO_C"],
   [/RECIBO/i, "RECIBO"],
   [/TICKET/i, "TICKET"],
 ];
