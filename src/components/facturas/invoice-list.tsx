@@ -37,7 +37,16 @@ import {
   Search,
   X,
   ListFilter,
+  Pencil,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { InvoiceForm } from "./invoice-form";
+import { formatCuit } from "@/lib/validators/cuit";
 import {
   DEDUCTION_CATEGORIES,
   DEDUCTION_CATEGORY_LABELS,
@@ -111,6 +120,7 @@ export function InvoiceList() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<Invoice | null>(null);
 
   useEffect(() => {
     fetchInvoices();
@@ -758,6 +768,14 @@ export function InvoiceList() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditTarget(inv)}
+                            title="Editar"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           {inv.hasFile && (
                             <Button
                               variant="ghost"
@@ -824,6 +842,35 @@ export function InvoiceList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar comprobante</DialogTitle>
+          </DialogHeader>
+          {editTarget && (
+            <InvoiceForm
+              invoiceId={editTarget.id}
+              defaultValues={{
+                deductionCategory: editTarget.deductionCategory,
+                providerCuit: formatCuit(editTarget.providerCuit),
+                providerName: editTarget.providerName ?? undefined,
+                invoiceType: editTarget.invoiceType,
+                invoiceNumber: editTarget.invoiceNumber ?? undefined,
+                invoiceDate: editTarget.invoiceDate ?? undefined,
+                amount: parseFloat(editTarget.amount),
+                fiscalYear: editTarget.fiscalYear,
+                fiscalMonth: editTarget.fiscalMonth,
+              }}
+              onSaved={() => {
+                setEditTarget(null);
+                fetchInvoices();
+              }}
+              onCancel={() => setEditTarget(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

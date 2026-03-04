@@ -81,12 +81,14 @@ const months = [
 ];
 
 export function InvoiceForm({
+  invoiceId,
   defaultValues,
   fileData,
   invoiceRawText,
   onSaved,
   onCancel,
 }: {
+  invoiceId?: string;
   defaultValues?: Partial<{
     providerCuit: string;
     providerName: string;
@@ -177,27 +179,40 @@ export function InvoiceForm({
   async function onSubmit(data: FormData) {
     setSaving(true);
     try {
-      const res = await fetch("/api/facturas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deductionCategory: data.deductionCategory,
-          providerCuit: data.providerCuit.replace(/-/g, ""),
-          providerName: data.providerName,
-          invoiceType: data.invoiceType,
-          invoiceNumber: data.invoiceNumber || undefined,
-          invoiceDate: data.invoiceDate || undefined,
-          amount: parseFloat(unformatArgNumber(data.amount)),
-          fiscalYear: parseInt(data.fiscalYear),
-          fiscalMonth: parseInt(data.fiscalMonth),
-          description: data.description,
-          ...(fileData?.fileBase64 ? {
-            fileBase64: fileData.fileBase64,
-            fileMimeType: fileData.fileMimeType,
-            originalFilename: fileData.originalFilename,
-          } : {}),
-        }),
-      });
+      const payload: Record<string, unknown> = {
+        deductionCategory: data.deductionCategory,
+        providerCuit: data.providerCuit.replace(/-/g, ""),
+        providerName: data.providerName,
+        invoiceType: data.invoiceType,
+        invoiceNumber: data.invoiceNumber || undefined,
+        invoiceDate: data.invoiceDate || undefined,
+        amount: parseFloat(unformatArgNumber(data.amount)),
+        fiscalYear: parseInt(data.fiscalYear),
+        fiscalMonth: parseInt(data.fiscalMonth),
+        description: data.description,
+      };
+
+      const res = await fetch(
+        invoiceId ? `/api/facturas/${invoiceId}` : "/api/facturas",
+        {
+          method: invoiceId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            invoiceId
+              ? payload
+              : {
+                  ...payload,
+                  ...(fileData?.fileBase64
+                    ? {
+                        fileBase64: fileData.fileBase64,
+                        fileMimeType: fileData.fileMimeType,
+                        originalFilename: fileData.originalFilename,
+                      }
+                    : {}),
+                }
+          ),
+        }
+      );
 
       if (!res.ok) {
         const err = await res.json();
@@ -205,7 +220,7 @@ export function InvoiceForm({
         return;
       }
 
-      toast.success("Factura cargada correctamente");
+      toast.success(invoiceId ? "Factura actualizada" : "Factura cargada correctamente");
       if (onSaved) {
         onSaved();
       } else {
@@ -417,7 +432,7 @@ export function InvoiceForm({
           <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar factura
+              {invoiceId ? "Guardar cambios" : "Guardar factura"}
             </Button>
             <Button
               type="button"
