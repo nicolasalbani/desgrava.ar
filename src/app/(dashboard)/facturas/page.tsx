@@ -50,7 +50,7 @@ export default function FacturasPage() {
 
       {/* Upload dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden [grid-template-rows:auto_1fr]">
           <DialogHeader>
             <DialogTitle>Subir comprobante</DialogTitle>
             <DialogDescription>
@@ -58,23 +58,27 @@ export default function FacturasPage() {
               automaticamente.
             </DialogDescription>
           </DialogHeader>
-          <FileUploader onInvoiceSaved={handleSaved} />
+          <div className="overflow-y-auto min-h-0">
+            <FileUploader onInvoiceSaved={handleSaved} />
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Manual entry dialog */}
       <Dialog open={manualOpen} onOpenChange={setManualOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden [grid-template-rows:auto_1fr]">
           <DialogHeader>
             <DialogTitle>Carga manual</DialogTitle>
             <DialogDescription>
               Ingresa los datos del comprobante manualmente.
             </DialogDescription>
           </DialogHeader>
-          <InvoiceForm
-            onSaved={handleSaved}
-            onCancel={() => setManualOpen(false)}
-          />
+          <div className="overflow-y-auto min-h-0">
+            <InvoiceForm
+              onSaved={handleSaved}
+              onCancel={() => setManualOpen(false)}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -142,9 +142,6 @@ export function FileUploader({
               <FileText className="h-3.5 w-3.5 text-muted-foreground/60" />
               <p className="text-sm font-medium truncate">{filename}</p>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {confidencePercent}% confianza &middot; {method}
-            </p>
           </div>
           <Button
             variant="ghost"
