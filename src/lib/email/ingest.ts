@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { simpleParser } from "mailparser";
 import { prisma } from "@/lib/prisma";
 import { processDocument } from "@/lib/ocr/pipeline";
 import { classifyCategory } from "@/lib/ocr/category-classifier";
@@ -25,6 +26,13 @@ function getResend(): Resend {
 interface IngestResult {
   invoicesCreated: number;
   errors: string[];
+}
+
+interface NormalizedAttachment {
+  filename: string | null;
+  contentType: string;
+  size: number;
+  getBuffer: () => Promise<Buffer>;
 }
 
 export async function processInboundEmail(
@@ -113,27 +121,60 @@ export async function processInboundEmail(
   });
 
   try {
-    // 5. Fetch attachments from Resend API
+    // 5. Fetch attachments — try Resend API first, fall back to raw MIME for forwarded emails
     const resend = getResend();
     const { data: attachmentList } = await resend.emails.receiving.attachments.list({
       emailId,
     });
 
-    const attachments = attachmentList?.data ?? [];
-    const validAttachments = attachments.filter(
-      (att) =>
-        ALLOWED_TYPES.includes(att.content_type) && att.size <= MAX_FILE_SIZE
-    );
+    const resendAttachments = attachmentList?.data ?? [];
+    let normalized: NormalizedAttachment[] = resendAttachments
+      .filter((att) => ALLOWED_TYPES.includes(att.content_type) && att.size <= MAX_FILE_SIZE)
+      .map((att) => ({
+        filename: att.filename ?? null,
+        contentType: att.content_type,
+        size: att.size,
+        getBuffer: async () => {
+          const res = await fetch(att.download_url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return Buffer.from(await res.arrayBuffer());
+        },
+      }));
 
-    if (validAttachments.length === 0) {
+    // Fallback: parse raw MIME to find attachments nested inside forwarded messages
+    if (normalized.length === 0) {
+      const { data: emailData } = await resend.emails.receiving.get(emailId);
+      const rawUrl = emailData?.raw?.download_url;
+      if (rawUrl) {
+        const mimeRes = await fetch(rawUrl);
+        if (mimeRes.ok) {
+          const parsed = await simpleParser(Buffer.from(await mimeRes.arrayBuffer()));
+          normalized = (parsed.attachments ?? [])
+            .filter(
+              (att) =>
+                ALLOWED_TYPES.includes(att.contentType) &&
+                att.size <= MAX_FILE_SIZE
+            )
+            .map((att) => ({
+              filename: att.filename ?? null,
+              contentType: att.contentType,
+              size: att.size,
+              getBuffer: async () => att.content,
+            }));
+        }
+      }
+    }
+
+    if (normalized.length === 0) {
       await prisma.emailIngestLog.update({
         where: { id: log.id },
         data: {
           status: "FAILED",
-          attachmentCount: attachments.length,
-          errorMessage: attachments.length === 0
-            ? "No attachments found"
-            : "No valid attachments (must be PDF/JPEG/PNG/WebP, max 10MB)",
+          attachmentCount: resendAttachments.length,
+          errorMessage:
+            resendAttachments.length === 0
+              ? "No attachments found"
+              : "No valid attachments (must be PDF/JPEG/PNG/WebP, max 10MB)",
         },
       });
       return result;
@@ -141,26 +182,16 @@ export async function processInboundEmail(
 
     await prisma.emailIngestLog.update({
       where: { id: log.id },
-      data: { attachmentCount: validAttachments.length },
+      data: { attachmentCount: normalized.length },
     });
 
     // 6. Process each valid attachment
-    for (const attachment of validAttachments) {
+    for (const attachment of normalized) {
       try {
-        // Download the attachment
-        const response = await fetch(attachment.download_url);
-        if (!response.ok) {
-          result.errors.push(
-            `Failed to download ${attachment.filename}: HTTP ${response.status}`
-          );
-          continue;
-        }
-
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        const buffer = await attachment.getBuffer();
 
         // Run OCR pipeline
-        const ocrResult = await processDocument(buffer, attachment.content_type);
+        const ocrResult = await processDocument(buffer, attachment.contentType);
 
         // Run AI category classification
         const categoryStr = await classifyCategory(ocrResult.text);
@@ -228,8 +259,8 @@ export async function processInboundEmail(
             source: "EMAIL",
             ocrConfidence: ocrResult.fields.confidence,
             originalFilename: attachment.filename || `email-attachment-${emailId}`,
-            fileData: buffer,
-            fileMimeType: attachment.content_type,
+            fileData: Buffer.from(buffer),
+            fileMimeType: attachment.contentType,
           },
         });
 
@@ -247,7 +278,7 @@ export async function processInboundEmail(
     const finalStatus =
       result.invoicesCreated === 0
         ? "FAILED"
-        : result.invoicesCreated < validAttachments.length
+        : result.invoicesCreated < normalized.length
           ? "PARTIAL"
           : "COMPLETED";
 
