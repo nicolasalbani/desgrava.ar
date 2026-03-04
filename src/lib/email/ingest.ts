@@ -43,12 +43,15 @@ export async function processInboundEmail(
 ): Promise<IngestResult> {
   const result: IngestResult = { invoicesCreated: 0, errors: [] };
 
+  console.log(`[EMAIL_INGEST] processInboundEmail start email_id=${emailId} from=${fromAddress} to=${JSON.stringify(toAddresses)}`);
+
   // 1. Extract token from recipient address
   let token: string | null = null;
   for (const addr of toAddresses) {
     token = extractTokenFromEmail(addr);
     if (token) break;
   }
+  console.log(`[EMAIL_INGEST] token extraction: token=${token ? token.slice(0, 8) + "…" : "null"}`);
 
   if (!token) {
     await prisma.emailIngestLog.create({
@@ -69,6 +72,8 @@ export async function processInboundEmail(
     where: { ingestToken: token },
     select: { id: true },
   });
+
+  console.log(`[EMAIL_INGEST] user lookup: found=${!!user}`);
 
   if (!user) {
     await prisma.emailIngestLog.create({
@@ -128,6 +133,7 @@ export async function processInboundEmail(
     });
 
     const resendAttachments = attachmentList?.data ?? [];
+    console.log(`[EMAIL_INGEST] attachments.list returned ${resendAttachments.length} items: ${JSON.stringify(resendAttachments.map(a => ({ filename: a.filename, content_type: a.content_type, size: a.size })))}`);
     let normalized: NormalizedAttachment[] = resendAttachments
       .filter((att) => ALLOWED_TYPES.includes(att.content_type) && att.size <= MAX_FILE_SIZE)
       .map((att) => ({
@@ -143,12 +149,16 @@ export async function processInboundEmail(
 
     // Fallback: parse raw MIME to find attachments nested inside forwarded messages
     if (normalized.length === 0) {
-      const { data: emailData } = await resend.emails.receiving.get(emailId);
+      console.log(`[EMAIL_INGEST] no valid attachments from API, trying raw MIME fallback`);
+      const { data: emailData, error: emailError } = await resend.emails.receiving.get(emailId);
+      console.log(`[EMAIL_INGEST] receiving.get: hasRaw=${!!emailData?.raw?.download_url} error=${JSON.stringify(emailError)}`);
       const rawUrl = emailData?.raw?.download_url;
       if (rawUrl) {
         const mimeRes = await fetch(rawUrl);
+        console.log(`[EMAIL_INGEST] raw MIME download: status=${mimeRes.status}`);
         if (mimeRes.ok) {
           const parsed = await simpleParser(Buffer.from(await mimeRes.arrayBuffer()));
+          console.log(`[EMAIL_INGEST] mailparser found ${parsed.attachments?.length ?? 0} attachments: ${JSON.stringify(parsed.attachments?.map(a => ({ filename: a.filename, contentType: a.contentType, size: a.size })))}`);
           normalized = (parsed.attachments ?? [])
             .filter(
               (att) =>
@@ -161,6 +171,7 @@ export async function processInboundEmail(
               size: att.size,
               getBuffer: async () => att.content,
             }));
+          console.log(`[EMAIL_INGEST] after type/size filter: ${normalized.length} processable attachments`);
         }
       }
     }

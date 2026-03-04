@@ -45,18 +45,22 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Only process email.received events
+  console.log(`[EMAIL_INBOUND] event.type=${event.type}`);
   if (event.type !== "email.received") {
     return NextResponse.json({ received: true });
   }
 
   // 4. Respond immediately, process in background
   const { email_id, from, to, subject } = event.data;
+  console.log(`[EMAIL_INBOUND] received email_id=${email_id} from=${from} to=${JSON.stringify(to)} subject=${subject}`);
 
   after(async () => {
+    console.log(`[EMAIL_INGEST] starting background processing for email_id=${email_id}`);
     try {
-      await processInboundEmail(email_id, to, from, subject);
+      const result = await processInboundEmail(email_id, to, from, subject);
+      console.log(`[EMAIL_INGEST] done email_id=${email_id} invoicesCreated=${result.invoicesCreated} errors=${JSON.stringify(result.errors)}`);
     } catch (err) {
-      console.error("Error processing inbound email:", err);
+      console.error(`[EMAIL_INGEST] unhandled error for email_id=${email_id}:`, err);
     }
   });
 
