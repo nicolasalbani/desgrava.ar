@@ -154,9 +154,9 @@ function buildFailureHtml(
   errorMessage: string
 ): string {
   const suggestions: Record<string, string> = {
-    "No attachments found": "Asegurate de adjuntar el archivo PDF, JPG, PNG o WebP directamente al email (no como enlace).",
-    "No valid attachments": "El adjunto debe ser un archivo PDF, JPG, PNG o WebP de menos de 10 MB.",
-    "Rate limit exceeded": "Límite de procesamiento alcanzado. Podés enviar hasta 20 emails por hora.",
+    "No se encontraron adjuntos": "Asegurate de adjuntar el archivo PDF, JPG, PNG o WebP directamente al email (no como enlace).",
+    "Ningún adjunto válido": "El adjunto debe ser un archivo PDF, JPG, PNG o WebP de menos de 10 MB.",
+    "Límite de envíos alcanzado": "Podés enviar hasta 20 emails por hora. Intentá de nuevo más tarde.",
   };
   const suggestion = Object.entries(suggestions).find(([k]) => errorMessage.includes(k))?.[1];
 
@@ -308,7 +308,7 @@ export async function processInboundEmail(
         toAddress: toAddresses[0] || "",
         subject,
         status: "REJECTED",
-        errorMessage: "No matching ingest domain in recipient addresses",
+        errorMessage: "El destinatario no pertenece a un dominio de ingesta válido",
       },
     });
     return result;
@@ -330,7 +330,7 @@ export async function processInboundEmail(
         toAddress: toAddresses[0] || "",
         subject,
         status: "REJECTED",
-        errorMessage: "Invalid ingest token",
+        errorMessage: "Token de ingesta inválido",
       },
     });
     return result;
@@ -354,10 +354,10 @@ export async function processInboundEmail(
         toAddress: toAddresses[0] || "",
         subject,
         status: "REJECTED",
-        errorMessage: "Rate limit exceeded",
+        errorMessage: "Límite de envíos alcanzado",
       },
     });
-    await sendReplyEmail(fromAddress, subject, "FAILED", [], [], "Rate limit exceeded");
+    await sendReplyEmail(fromAddress, subject, "FAILED", [], [], "Límite de envíos alcanzado");
     return result;
   }
 
@@ -426,8 +426,8 @@ export async function processInboundEmail(
 
     if (normalized.length === 0) {
       const errorMessage = resendAttachments.length === 0
-        ? "No attachments found"
-        : "No valid attachments (must be PDF/JPEG/PNG/WebP, max 10MB)";
+        ? "No se encontraron adjuntos"
+        : "Ningún adjunto válido (debe ser PDF, JPG, PNG o WebP, máximo 10 MB)";
       await prisma.emailIngestLog.update({
         where: { id: log.id },
         data: {
@@ -540,9 +540,9 @@ export async function processInboundEmail(
         });
       } catch (err) {
         const msg =
-          err instanceof Error ? err.message : "Unknown processing error";
+          err instanceof Error ? err.message : "Error desconocido al procesar";
         result.errors.push(
-          `Error processing ${attachment.filename}: ${msg}`
+          `Error al procesar ${attachment.filename}: ${msg}`
         );
       }
     }
@@ -575,7 +575,7 @@ export async function processInboundEmail(
       result.errors.length > 0 ? result.errors.join("; ") : null
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
+    const msg = err instanceof Error ? err.message : "Error desconocido";
     await prisma.emailIngestLog.update({
       where: { id: log.id },
       data: {
