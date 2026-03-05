@@ -34,19 +34,19 @@ const features = [
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="flex min-h-screen flex-col bg-background">
       <Navbar />
 
       <main className="flex-1">
         {/* Hero */}
         <section className="py-16 md:py-20">
           <div className="max-w-5xl mx-auto px-4 md:px-6 space-y-6 text-center">
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">
               Recupera la plata
               <br />
               <span className="text-primary">que ganancias te saca</span>
             </h1>
-            <p className="text-base text-gray-500 max-w-xl mx-auto leading-relaxed">
+            <p className="text-base text-muted-foreground max-w-xl mx-auto leading-relaxed">
               Miles de pesos en deducciones se pierden cada ano porque cargarlas
               en SiRADIG es un dolor de cabeza. desgrava.ar lo hace por vos.
             </p>
@@ -65,20 +65,20 @@ export default function LandingPage() {
         </section>
 
         {/* Features */}
-        <section className="bg-gray-50 py-14 border-t border-gray-200">
+        <section className="bg-muted/50 py-14 border-t border-border">
           <div className="max-w-5xl mx-auto px-4 md:px-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               {features.map((feature) => {
                 const Icon = feature.icon;
                 return (
                   <div key={feature.title} className="space-y-3">
-                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                      <Icon className="h-5 w-5 text-gray-600" />
+                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                      <Icon className="h-5 w-5 text-muted-foreground" />
                     </div>
-                    <h3 className="font-medium text-gray-900">
+                    <h3 className="font-medium text-foreground">
                       {feature.title}
                     </h3>
-                    <p className="text-sm text-gray-500 leading-relaxed">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       {feature.description}
                     </p>
                   </div>
@@ -89,7 +89,7 @@ export default function LandingPage() {
         </section>
 
         {/* Reviews */}
-        <section className="py-14 border-t border-gray-200">
+        <section className="py-14 border-t border-border">
           <div className="max-w-5xl mx-auto px-4 md:px-6">
             <ReviewsCarousel />
           </div>

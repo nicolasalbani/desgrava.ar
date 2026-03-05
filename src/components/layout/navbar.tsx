@@ -12,7 +12,7 @@ export function Navbar() {
   const { data: session } = useSession();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="max-w-5xl mx-auto px-4 md:px-6 flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center gap-2 font-bold text-lg">
           <Calculator className="h-5 w-5" />
@@ -22,7 +22,7 @@ export function Navbar() {
         <nav className="hidden md:flex items-center gap-6">
           <Link
             href="/simulador"
-            className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Simulador
           </Link>
@@ -46,7 +46,7 @@ export function Navbar() {
               <Link
                 href="/simulador"
                 onClick={() => setOpen(false)}
-                className="text-base text-gray-600 hover:text-gray-900 transition-colors"
+                className="text-base text-muted-foreground hover:text-foreground transition-colors"
               >
                 Simulador
               </Link>
@@ -54,7 +54,7 @@ export function Navbar() {
                 <Link
                   href="/dashboard"
                   onClick={() => setOpen(false)}
-                  className="text-base text-gray-600 hover:text-gray-900 transition-colors"
+                  className="text-base text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Ir al panel
                 </Link>
@@ -62,7 +62,7 @@ export function Navbar() {
                 <Link
                   href="/login"
                   onClick={() => setOpen(false)}
-                  className="text-base text-gray-600 hover:text-gray-900 transition-colors"
+                  className="text-base text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Iniciar sesion
                 </Link>

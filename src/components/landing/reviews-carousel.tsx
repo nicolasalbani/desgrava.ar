@@ -66,15 +66,15 @@ export function ReviewsCarousel() {
             key={review.name}
             className="pl-6 basis-full md:basis-1/2 lg:basis-1/3"
           >
-            <div className="h-full flex flex-col justify-between rounded-lg border border-gray-200 bg-gray-50 px-5 py-4">
-              <p className="text-xs text-gray-600 leading-relaxed">
+            <div className="h-full flex flex-col justify-between rounded-lg border border-border bg-muted/50 px-5 py-4">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 &ldquo;{review.text}&rdquo;
               </p>
-              <div className="mt-3 pt-3 border-t border-gray-200">
-                <p className="text-xs font-medium text-gray-900">
+              <div className="mt-3 pt-3 border-t border-border">
+                <p className="text-xs font-medium text-foreground">
                   {review.name}
                 </p>
-                <p className="text-[11px] text-gray-400">{review.role}</p>
+                <p className="text-[11px] text-muted-foreground">{review.role}</p>
               </div>
             </div>
           </CarouselItem>

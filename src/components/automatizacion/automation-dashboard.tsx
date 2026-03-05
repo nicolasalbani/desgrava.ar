@@ -39,7 +39,6 @@ import { Bot, Loader2, Eye, Square, Trash2, Search, X, ListFilter, Mail, Upload 
 import {
   DEDUCTION_CATEGORIES,
   DEDUCTION_CATEGORY_LABELS,
-  INVOICE_TYPE_LABELS,
 } from "@/lib/validators/invoice";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -89,9 +88,12 @@ export function AutomationDashboard() {
   const [fechaHasta, setFechaHasta] = useState("");
   const [montoMin, setMontoMin] = useState("");
   const [montoMax, setMontoMax] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
     fetchJobs();
@@ -139,11 +141,54 @@ export function AutomationDashboard() {
 
     if (res.ok) {
       setJobs((prev) => prev.filter((j) => j.id !== jobId));
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(jobId); return next; });
       toast.success("Job eliminado");
     } else {
       const data = await res.json().catch(() => null);
       toast.error(data?.error ?? "Error al eliminar");
     }
+  }
+
+  async function handleBulkDelete() {
+    const deletableIds = jobs
+      .filter((j) => selectedIds.has(j.id) && DELETABLE_STATUSES.includes(j.status))
+      .map((j) => j.id);
+    if (deletableIds.length === 0) return;
+
+    setBulkDeleting(true);
+    setBulkDeleteOpen(false);
+
+    const results = await Promise.allSettled(
+      deletableIds.map((id) => fetch(`/api/automatizacion/${id}`, { method: "DELETE" }))
+    );
+
+    const deleted = deletableIds.filter((_, i) => {
+      const r = results[i];
+      return r.status === "fulfilled" && r.value.ok;
+    });
+
+    if (deleted.length > 0) {
+      setJobs((prev) => prev.filter((j) => !deleted.includes(j.id)));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        deleted.forEach((id) => next.delete(id));
+        return next;
+      });
+      toast.success(deleted.length === 1 ? "Job eliminado" : `${deleted.length} jobs eliminados`);
+    }
+    const failed = deletableIds.length - deleted.length;
+    if (failed > 0) toast.error(`${failed} job(s) no se pudieron eliminar`);
+
+    setBulkDeleting(false);
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   const filteredJobs = useMemo(() => {
@@ -206,6 +251,18 @@ export function AutomationDashboard() {
   const isFechaActive = fechaDesde !== "" || fechaHasta !== "";
   const isMontoActive = montoMin !== "" || montoMax !== "";
 
+  const selectableJobs = filteredJobs.filter((j) => DELETABLE_STATUSES.includes(j.status));
+  const allSelectableSelected =
+    selectableJobs.length > 0 && selectableJobs.every((j) => selectedIds.has(j.id));
+
+  function toggleSelectAll() {
+    if (allSelectableSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableJobs.map((j) => j.id)));
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -245,6 +302,38 @@ export function AutomationDashboard() {
         )}
       </div>
 
+      {/* Selection action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-5 py-3">
+          <span className="text-sm font-medium">
+            {selectedIds.size}{" "}
+            {selectedIds.size === 1 ? "seleccionado" : "seleccionados"}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => setBulkDeleteOpen(true)}
+            disabled={bulkDeleting}
+          >
+            {bulkDeleting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            Eliminar
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={bulkDeleting}
+          >
+            Cancelar
+          </Button>
+        </div>
+      )}
+
       {/* Content */}
       {jobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -258,10 +347,18 @@ export function AutomationDashboard() {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-gray-200 overflow-hidden">
+        <div className="rounded-lg border border-border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10 pl-4">
+                  <Checkbox
+                    checked={allSelectableSelected && selectableJobs.length > 0}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Seleccionar todos"
+                    disabled={selectableJobs.length === 0}
+                  />
+                </TableHead>
                 <TableHead>Proveedor</TableHead>
 
                 {/* Categoria filter */}
@@ -325,7 +422,6 @@ export function AutomationDashboard() {
                   </div>
                 </TableHead>
 
-                <TableHead>Tipo</TableHead>
                 <TableHead>Nro. Comprobante</TableHead>
 
                 {/* Fecha filter */}
@@ -388,8 +484,6 @@ export function AutomationDashboard() {
                     </Popover>
                   </div>
                 </TableHead>
-
-                <TableHead>CUIT</TableHead>
 
                 {/* Monto filter */}
                 <TableHead className="text-right">
@@ -525,7 +619,7 @@ export function AutomationDashboard() {
             <TableBody>
               {filteredJobs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-12">
+                  <TableCell colSpan={9} className="text-center py-12">
                     <p className="text-sm font-medium text-muted-foreground/70">
                       Sin resultados
                     </p>
@@ -550,6 +644,14 @@ export function AutomationDashboard() {
                   const isDeletable = DELETABLE_STATUSES.includes(job.status);
                   return (
                     <TableRow key={job.id}>
+                      <TableCell className="pl-4">
+                        <Checkbox
+                          checked={selectedIds.has(job.id)}
+                          onCheckedChange={() => toggleSelect(job.id)}
+                          disabled={!isDeletable}
+                          aria-label={`Seleccionar job ${job.id}`}
+                        />
+                      </TableCell>
                       <TableCell className="text-sm">
                         <div className="flex items-center gap-2">
                           {job.invoice?.source === "EMAIL" && (
@@ -559,10 +661,19 @@ export function AutomationDashboard() {
                           )}
                           {(job.invoice?.source === "PDF" || job.invoice?.source === "OCR") && (
                             <span title="Cargada por archivo">
-                              <Upload className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                              <Upload className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
                             </span>
                           )}
-                          <span>{job.invoice?.providerName ?? job.invoice?.providerCuit ?? "-"}</span>
+                          <div>
+                            <p className="text-sm font-medium">
+                              {job.invoice?.providerName ?? job.invoice?.providerCuit ?? "-"}
+                            </p>
+                            {job.invoice?.providerName && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {job.invoice.providerCuit}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[180px]">
@@ -576,20 +687,12 @@ export function AutomationDashboard() {
                         </span>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {job.invoice
-                          ? (INVOICE_TYPE_LABELS[job.invoice.invoiceType] ?? job.invoice.invoiceType)
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
                         {job.invoice?.invoiceNumber ?? "-"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {job.invoice?.invoiceDate
                           ? new Date(job.invoice.invoiceDate).toLocaleDateString("es-AR")
                           : "-"}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {job.invoice?.providerCuit ?? "-"}
                       </TableCell>
                       <TableCell className="text-sm text-right font-medium tabular-nums">
                         {job.invoice
@@ -677,6 +780,27 @@ export function AutomationDashboard() {
             <AlertDialogCancel>Volver</AlertDialogCancel>
             <AlertDialogAction onClick={handleCancel}>
               Detener
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Eliminar {selectedIds.size}{" "}
+              {selectedIds.size === 1 ? "job" : "jobs"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta accion no se puede deshacer. Se eliminaran permanentemente los
+              jobs seleccionados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete}>
+              Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

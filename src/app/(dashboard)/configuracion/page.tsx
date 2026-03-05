@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sun, Moon, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { EmailIngestCard } from "@/components/configuracion/email-ingest-card";
 
@@ -14,7 +15,14 @@ interface Preference {
   notifications: boolean;
 }
 
+const themeOptions = [
+  { value: "light", label: "Claro", icon: Sun },
+  { value: "dark", label: "Oscuro", icon: Moon },
+  { value: "system", label: "Sistema", icon: Monitor },
+] as const;
+
 export default function ConfiguracionPage() {
+  const { theme, setTheme } = useTheme();
   const [preference, setPreference] = useState<Preference>({
     defaultFiscalYear: new Date().getFullYear(),
     notifications: true,
@@ -66,6 +74,32 @@ export default function ConfiguracionPage() {
       </div>
 
       <div className="space-y-6">
+        {/* Apariencia */}
+        <div className="space-y-3">
+          <div>
+            <Label>Apariencia</Label>
+            <p className="text-xs text-muted-foreground/60 mt-0.5">
+              Elige el tema de la interfaz
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {themeOptions.map(({ value, label, icon: Icon }) => (
+              <Button
+                key={value}
+                variant={theme === value ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTheme(value)}
+                className="gap-2"
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-border" />
+
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label htmlFor="notifications">Notificaciones</Label>
@@ -82,7 +116,7 @@ export default function ConfiguracionPage() {
           />
         </div>
 
-        <div className="border-t border-gray-200" />
+        <div className="border-t border-border" />
 
         <div className="space-y-2">
           <Label htmlFor="fiscalYear">Periodo fiscal por defecto</Label>
@@ -111,7 +145,7 @@ export default function ConfiguracionPage() {
           </Button>
         </div>
 
-        <div className="border-t border-gray-200" />
+        <div className="border-t border-border" />
 
         <div className="space-y-2">
           <Label>Email para facturas</Label>

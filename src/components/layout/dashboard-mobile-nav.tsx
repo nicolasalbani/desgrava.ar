@@ -29,7 +29,7 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 items-center px-6 border-b border-gray-200">
+      <div className="flex h-16 items-center px-6 border-b border-border">
         <Link href="/" className="flex items-center gap-2 font-bold text-lg" onClick={onNavigate}>
           <Calculator className="h-5 w-5" />
           desgrava.ar
@@ -49,7 +49,7 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150",
                   isActive
                     ? "bg-primary text-primary-foreground font-medium"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -59,10 +59,10 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
           })}
         </nav>
       </ScrollArea>
-      <div className="border-t border-gray-200 p-3 mt-auto">
+      <div className="border-t border-border p-3 mt-auto">
         <Button
           variant="ghost"
-          className="w-full justify-start gap-3 text-sm text-gray-400 hover:text-red-500 hover:bg-transparent transition-colors duration-150"
+          className="w-full justify-start gap-3 text-sm text-muted-foreground hover:text-red-500 hover:bg-transparent transition-colors duration-150"
           onClick={() => signOut({ callbackUrl: "/" })}
         >
           <LogOut className="h-4 w-4" />
