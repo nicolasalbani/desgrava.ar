@@ -35,7 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Bot, Loader2, Eye, Square, Trash2, Search, X, ListFilter } from "lucide-react";
+import { Bot, Loader2, Eye, Square, Trash2, Search, X, ListFilter, Mail, Upload } from "lucide-react";
 import {
   DEDUCTION_CATEGORIES,
   DEDUCTION_CATEGORY_LABELS,
@@ -64,6 +64,7 @@ interface Job {
     invoiceDate: string | null;
     fiscalMonth: number;
     fiscalYear: number;
+    source: string;
   } | null;
 }
 
@@ -550,7 +551,19 @@ export function AutomationDashboard() {
                   return (
                     <TableRow key={job.id}>
                       <TableCell className="text-sm">
-                        {job.invoice?.providerName ?? job.invoice?.providerCuit ?? "-"}
+                        <div className="flex items-center gap-2">
+                          {job.invoice?.source === "EMAIL" && (
+                            <span title="Cargada por email">
+                              <Mail className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                            </span>
+                          )}
+                          {(job.invoice?.source === "PDF" || job.invoice?.source === "OCR") && (
+                            <span title="Cargada por archivo">
+                              <Upload className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                            </span>
+                          )}
+                          <span>{job.invoice?.providerName ?? job.invoice?.providerCuit ?? "-"}</span>
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-[180px]">
                         <span

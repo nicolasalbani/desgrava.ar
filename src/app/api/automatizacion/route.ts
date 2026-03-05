@@ -98,6 +98,7 @@ export async function GET() {
           invoiceDate: true,
           fiscalMonth: true,
           fiscalYear: true,
+          source: true,
         },
       },
     },

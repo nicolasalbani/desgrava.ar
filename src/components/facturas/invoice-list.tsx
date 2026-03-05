@@ -38,6 +38,8 @@ import {
   X,
   ListFilter,
   Pencil,
+  Mail,
+  Upload,
 } from "lucide-react";
 import {
   Dialog,
@@ -724,15 +726,27 @@ export function InvoiceList() {
                         />
                       </TableCell>
                       <TableCell>
-                        <div>
-                          <p className="text-sm font-medium">
-                            {inv.providerName || inv.providerCuit}
-                          </p>
-                          {inv.providerName && (
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {inv.providerCuit}
-                            </p>
+                        <div className="flex items-center gap-2">
+                          {inv.source === "EMAIL" && (
+                            <span title="Cargada por email">
+                              <Mail className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                            </span>
                           )}
+                          {(inv.source === "PDF" || inv.source === "OCR") && (
+                            <span title="Cargada por archivo">
+                              <Upload className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+                            </span>
+                          )}
+                          <div>
+                            <p className="text-sm font-medium">
+                              {inv.providerName || inv.providerCuit}
+                            </p>
+                            {inv.providerName && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {inv.providerCuit}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[180px]">
