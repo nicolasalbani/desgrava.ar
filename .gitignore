@@ -44,3 +44,7 @@ next-env.d.ts
 
 # automation artifacts (screenshots, videos)
 /.automation-data
+
+# local PostgreSQL data
+/.pgdata
+/.pgdata.log

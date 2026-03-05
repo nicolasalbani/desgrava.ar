@@ -19,7 +19,13 @@
       "Bash(rg:*)",
       "Bash(lsof:*)",
       "Bash(find:*)",
-      "Bash(dig:*)"
+      "Bash(dig:*)",
+      "Bash(pg_ctl --version)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(brew list)",
+      "Read(//Applications/Postgres.app/Contents/**)",
+      "Read(//opt/homebrew/**)",
+      "Read(//Applications/**)"
     ],
     "deny": [
       "Bash(git push --force*)",
