@@ -16,7 +16,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -75,27 +74,14 @@ interface Invoice {
   _count: { automationJobs: number };
 }
 
-const STATUS_VARIANTS: Record<
-  string,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  PENDING: "secondary",
-  QUEUED: "outline",
-  PROCESSING: "outline",
-  PREVIEW_READY: "outline",
-  CONFIRMED: "default",
-  SUBMITTED: "default",
-  FAILED: "destructive",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: "Pendiente",
-  QUEUED: "En cola",
-  PROCESSING: "Procesando",
-  PREVIEW_READY: "Preview listo",
-  CONFIRMED: "Confirmado",
-  SUBMITTED: "Enviado",
-  FAILED: "Error",
+const STATUS_CONFIG: Record<string, { label: string; dot: string; animate?: boolean }> = {
+  PENDING:       { label: "Pendiente",     dot: "bg-foreground/25" },
+  QUEUED:        { label: "En cola",       dot: "bg-blue-400/50",    animate: true },
+  PROCESSING:    { label: "Procesando",    dot: "bg-blue-400/70",    animate: true },
+  PREVIEW_READY: { label: "Preview listo", dot: "bg-amber-400/70" },
+  CONFIRMED:     { label: "Confirmado",    dot: "bg-emerald-400/60" },
+  SUBMITTED:     { label: "Enviado",       dot: "bg-emerald-400/80" },
+  FAILED:        { label: "Error",         dot: "bg-rose-400/80" },
 };
 
 const SELECTABLE_STATUSES = ["PENDING", "FAILED"];
@@ -720,8 +706,8 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                             )}
                           </div>
                           <div className="space-y-1">
-                            {Object.entries(STATUS_LABELS).map(
-                              ([key, label]) => (
+                            {Object.entries(STATUS_CONFIG).map(
+                              ([key, cfg]) => (
                                 <label
                                   key={key}
                                   className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors"
@@ -740,7 +726,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                                       });
                                     }}
                                   />
-                                  <span className="text-xs">{label}</span>
+                                  <span className="text-xs">{cfg.label}</span>
                                 </label>
                               )
                             )}
@@ -842,14 +828,15 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                         ${parseFloat(inv.amount).toLocaleString("es-AR")}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            STATUS_VARIANTS[inv.siradiqStatus] ?? "secondary"
-                          }
-                        >
-                          {STATUS_LABELS[inv.siradiqStatus] ??
-                            inv.siradiqStatus}
-                        </Badge>
+                        {(() => {
+                          const cfg = STATUS_CONFIG[inv.siradiqStatus];
+                          return (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", cfg?.dot ?? "bg-foreground/25", cfg?.animate && "animate-pulse")} />
+                              <span className="text-xs font-medium text-foreground/70">{cfg?.label ?? inv.siradiqStatus}</span>
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1 justify-end">
