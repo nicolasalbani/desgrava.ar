@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { TrendingDown, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { SimulationResult } from "@/lib/simulador/calculator";
-import { SimuladorChart } from "./simulador-chart";
 
 type ViewMode = "mensual" | "anual";
 
@@ -103,8 +102,6 @@ export function SimuladorResults({ result }: { result: SimulationResult }) {
           </div>
         </CardContent>
       </Card>
-
-      {ahorro > 0 && <SimuladorChart result={result} viewMode={viewMode} />}
 
       <Card>
         <CardHeader>
