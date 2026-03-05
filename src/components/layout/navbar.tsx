@@ -5,15 +5,18 @@ import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, Calculator, Sun, Moon, Monitor } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 
 const themeIcons = { light: Sun, dark: Moon, system: Monitor } as const;
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
+
+  useEffect(() => setMounted(true), []);
 
   function cycleTheme() {
     const order = ["light", "dark", "system"] as const;
@@ -22,7 +25,9 @@ export function Navbar() {
     setTheme(next);
   }
 
-  const ThemeIcon = themeIcons[(theme as keyof typeof themeIcons) ?? "system"] ?? Monitor;
+  const ThemeIcon = mounted
+    ? (themeIcons[(theme as keyof typeof themeIcons)] ?? Monitor)
+    : Monitor;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">

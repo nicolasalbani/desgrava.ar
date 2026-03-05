@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Menu, Sun, Moon, Monitor } from "lucide-react";
 import { DashboardMobileNav } from "./dashboard-mobile-nav";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const themeIcons = { light: Sun, dark: Moon, system: Monitor } as const;
 
@@ -15,6 +15,9 @@ export function DashboardHeader() {
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   function cycleTheme() {
     const order = ["light", "dark", "system"] as const;
@@ -23,7 +26,9 @@ export function DashboardHeader() {
     setTheme(next);
   }
 
-  const ThemeIcon = themeIcons[(theme as keyof typeof themeIcons) ?? "system"] ?? Monitor;
+  const ThemeIcon = mounted
+    ? (themeIcons[(theme as keyof typeof themeIcons)] ?? Monitor)
+    : Monitor;
 
   return (
     <header className="flex items-center gap-4 border-b border-border bg-background py-4 px-6">
