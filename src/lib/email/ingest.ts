@@ -5,6 +5,7 @@ import { processDocument } from "@/lib/ocr/pipeline";
 import { classifyCategory } from "@/lib/ocr/category-classifier";
 import { extractTokenFromEmail } from "@/lib/email/token";
 import { Prisma, DeductionCategory, InvoiceType } from "@/generated/prisma/client";
+import { DEDUCTION_CATEGORY_LABELS as CATEGORY_LABELS, INVOICE_TYPE_LABELS } from "@/lib/validators/invoice";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -14,27 +15,6 @@ const ALLOWED_TYPES = [
   "image/webp",
 ];
 const RATE_LIMIT_PER_HOUR = 20;
-
-const CATEGORY_LABELS: Record<string, string> = {
-  MEDICINA_PREPAGA: "Medicina prepaga",
-  HONORARIOS_MEDICOS: "Honorarios médicos",
-  SEGURO_VIDA: "Seguro de vida",
-  SERVICIOS_DOMESTICOS: "Servicios domésticos",
-  ALQUILERES: "Alquileres",
-  HIPOTECA: "Hipoteca",
-  DONACIONES: "Donaciones",
-  HERRAMIENTAS_DE_TRABAJO: "Herramientas de trabajo",
-  OTRAS_DEDUCCIONES: "Otras deducciones",
-};
-
-const INVOICE_TYPE_LABELS: Record<string, string> = {
-  FACTURA_A: "Factura A",
-  FACTURA_B: "Factura B",
-  FACTURA_C: "Factura C",
-  FACTURA_E: "Factura E",
-  RECIBO: "Recibo",
-  TICKET: "Ticket",
-};
 
 let _resend: Resend | null = null;
 function getResend(): Resend {
