@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Upload, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,13 +16,27 @@ import { InvoiceForm } from "@/components/facturas/invoice-form";
 import { InvoiceList } from "@/components/facturas/invoice-list";
 
 export default function FacturasPage() {
+  const router = useRouter();
+  const hadZeroInvoices = useRef(false);
+  const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
 
+  function handleInitialLoad(count: number) {
+    if (!firstLoadDone.current) {
+      firstLoadDone.current = true;
+      hadZeroInvoices.current = count === 0;
+    }
+  }
+
   function handleSaved() {
     setUploadOpen(false);
     setManualOpen(false);
+    if (hadZeroInvoices.current) {
+      router.push("/dashboard");
+      return;
+    }
     setRefreshKey((k) => k + 1);
   }
 
@@ -46,7 +61,7 @@ export default function FacturasPage() {
         </div>
       </div>
 
-      <InvoiceList key={refreshKey} />
+      <InvoiceList key={refreshKey} onInitialLoad={handleInitialLoad} />
 
       {/* Upload dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>

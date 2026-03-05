@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -57,6 +58,7 @@ interface Credential {
 }
 
 export function CredentialsForm() {
+  const router = useRouter();
   const [credential, setCredential] = useState<Credential | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -87,6 +89,7 @@ export function CredentialsForm() {
   }
 
   async function onSubmit(data: FormData) {
+    const isFirstSave = credential === null;
     setSaving(true);
     try {
       const res = await fetch("/api/credenciales", {
@@ -117,6 +120,10 @@ export function CredentialsForm() {
       setCredential(saved);
       form.setValue("clave", "");
       toast.success("Credenciales guardadas correctamente");
+      if (isFirstSave) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        router.push("/dashboard");
+      }
     } finally {
       setSaving(false);
     }

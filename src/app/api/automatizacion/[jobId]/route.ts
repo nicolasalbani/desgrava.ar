@@ -99,6 +99,36 @@ export async function PUT(
     return NextResponse.json({ success: true, message: "Job cancelado" });
   }
 
+  if (action === "retry") {
+    if (job.status !== "FAILED") {
+      return NextResponse.json(
+        { error: "Solo se pueden reintentar jobs fallidos" },
+        { status: 409 }
+      );
+    }
+
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "PENDING",
+        attempts: 0,
+        errorMessage: null,
+        startedAt: null,
+        completedAt: null,
+        logs: [],
+      },
+    });
+
+    if (job.invoiceId) {
+      await prisma.invoice.update({
+        where: { id: job.invoiceId },
+        data: { siradiqStatus: "QUEUED" },
+      });
+    }
+
+    return NextResponse.json({ success: true, message: "Job reintentado" });
+  }
+
   return NextResponse.json({ error: "Accion invalida" }, { status: 400 });
 }
 

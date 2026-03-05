@@ -1,11 +1,14 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
-CREATE TYPE "DeductionCategory" AS ENUM ('ALQUILER_VIVIENDA', 'CUOTAS_MEDICO_ASISTENCIALES', 'GASTOS_MEDICOS', 'PRIMAS_SEGURO_MUERTE', 'DONACIONES', 'SERVICIO_DOMESTICO', 'INTERESES_HIPOTECARIOS', 'HONORARIOS_ASISTENCIA_SANITARIA', 'GASTOS_EDUCATIVOS', 'GASTOS_SEPELIO', 'INDUMENTARIA_EQUIPAMIENTO', 'VEHICULO', 'VIANDAS_TRANSPORTE', 'HERRAMIENTAS_EDUCATIVAS');
+CREATE TYPE "DeductionCategory" AS ENUM ('CUOTAS_MEDICO_ASISTENCIALES', 'PRIMAS_SEGURO_MUERTE', 'PRIMAS_AHORRO_SEGUROS_MIXTOS', 'APORTES_RETIRO_PRIVADO', 'DONACIONES', 'INTERESES_HIPOTECARIOS', 'GASTOS_SEPELIO', 'GASTOS_MEDICOS', 'GASTOS_INDUMENTARIA_TRABAJO', 'ALQUILER_VIVIENDA', 'SERVICIO_DOMESTICO', 'APORTE_SGR', 'VEHICULOS_CORREDORES', 'INTERESES_CORREDORES', 'GASTOS_EDUCATIVOS', 'OTRAS_DEDUCCIONES');
 
 -- CreateEnum
 CREATE TYPE "InvoiceType" AS ENUM ('FACTURA_A', 'FACTURA_B', 'FACTURA_C', 'NOTA_DEBITO_A', 'NOTA_DEBITO_B', 'NOTA_DEBITO_C', 'NOTA_CREDITO_A', 'NOTA_CREDITO_B', 'NOTA_CREDITO_C', 'RECIBO', 'TICKET');
 
 -- CreateEnum
-CREATE TYPE "InvoiceSource" AS ENUM ('MANUAL', 'PDF', 'OCR');
+CREATE TYPE "InvoiceSource" AS ENUM ('MANUAL', 'PDF', 'OCR', 'EMAIL');
 
 -- CreateEnum
 CREATE TYPE "SiradiqStatus" AS ENUM ('PENDING', 'QUEUED', 'PROCESSING', 'PREVIEW_READY', 'CONFIRMED', 'SUBMITTED', 'FAILED');
@@ -14,7 +17,10 @@ CREATE TYPE "SiradiqStatus" AS ENUM ('PENDING', 'QUEUED', 'PROCESSING', 'PREVIEW
 CREATE TYPE "JobType" AS ENUM ('VALIDATE_CREDENTIALS', 'SUBMIT_INVOICE', 'BULK_SUBMIT');
 
 -- CreateEnum
-CREATE TYPE "JobStatus" AS ENUM ('PENDING', 'RUNNING', 'WAITING_CONFIRMATION', 'COMPLETED', 'FAILED', 'CANCELLED');
+CREATE TYPE "JobStatus" AS ENUM ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "EmailIngestStatus" AS ENUM ('RECEIVED', 'PROCESSING', 'COMPLETED', 'PARTIAL', 'FAILED', 'REJECTED');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -23,6 +29,7 @@ CREATE TABLE "User" (
     "email" TEXT,
     "emailVerified" TIMESTAMP(3),
     "image" TEXT,
+    "ingestToken" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -87,6 +94,8 @@ CREATE TABLE "Invoice" (
     "providerCuit" TEXT NOT NULL,
     "providerName" TEXT,
     "invoiceType" "InvoiceType" NOT NULL,
+    "invoiceNumber" TEXT,
+    "invoiceDate" TIMESTAMP(3),
     "amount" DECIMAL(12,2) NOT NULL,
     "fiscalYear" INTEGER NOT NULL,
     "fiscalMonth" INTEGER NOT NULL,
@@ -95,7 +104,8 @@ CREATE TABLE "Invoice" (
     "ocrConfidence" DOUBLE PRECISION,
     "siradiqStatus" "SiradiqStatus" NOT NULL DEFAULT 'PENDING',
     "originalFilename" TEXT,
-    "fileUrl" TEXT,
+    "fileData" BYTEA,
+    "fileMimeType" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -126,15 +136,34 @@ CREATE TABLE "AutomationJob" (
 CREATE TABLE "UserPreference" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "autoMode" BOOLEAN NOT NULL DEFAULT false,
     "defaultFiscalYear" INTEGER,
     "notifications" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "UserPreference_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "EmailIngestLog" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT,
+    "emailId" TEXT NOT NULL,
+    "fromAddress" TEXT NOT NULL,
+    "toAddress" TEXT NOT NULL,
+    "subject" TEXT,
+    "status" "EmailIngestStatus" NOT NULL DEFAULT 'RECEIVED',
+    "attachmentCount" INTEGER NOT NULL DEFAULT 0,
+    "invoicesCreated" INTEGER NOT NULL DEFAULT 0,
+    "errorMessage" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmailIngestLog_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_ingestToken_key" ON "User"("ingestToken");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Account_provider_providerAccountId_key" ON "Account"("provider", "providerAccountId");
@@ -163,6 +192,12 @@ CREATE INDEX "AutomationJob_userId_status_idx" ON "AutomationJob"("userId", "sta
 -- CreateIndex
 CREATE UNIQUE INDEX "UserPreference_userId_key" ON "UserPreference"("userId");
 
+-- CreateIndex
+CREATE INDEX "EmailIngestLog_userId_createdAt_idx" ON "EmailIngestLog"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "EmailIngestLog_emailId_idx" ON "EmailIngestLog"("emailId");
+
 -- AddForeignKey
 ALTER TABLE "Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -183,3 +218,6 @@ ALTER TABLE "AutomationJob" ADD CONSTRAINT "AutomationJob_invoiceId_fkey" FOREIG
 
 -- AddForeignKey
 ALTER TABLE "UserPreference" ADD CONSTRAINT "UserPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmailIngestLog" ADD CONSTRAINT "EmailIngestLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;

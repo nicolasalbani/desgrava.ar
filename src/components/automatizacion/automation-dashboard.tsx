@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -15,7 +15,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -35,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Bot, Loader2, Eye, Square, Trash2, Search, X, ListFilter, Mail, Upload } from "lucide-react";
+import { Bot, Loader2, Eye, Square, Trash2, Search, X, ListFilter, Mail, Upload, RotateCcw } from "lucide-react";
 import {
   DEDUCTION_CATEGORIES,
   DEDUCTION_CATEGORY_LABELS,
@@ -43,6 +42,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { JobDetail } from "./job-detail";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Job {
   id: string;
@@ -67,18 +67,28 @@ interface Job {
   } | null;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  PENDING: { label: "Pendiente", variant: "secondary" },
-  RUNNING: { label: "Ejecutando", variant: "outline" },
-  COMPLETED: { label: "Completado", variant: "default" },
-  FAILED: { label: "Error", variant: "destructive" },
-  CANCELLED: { label: "Cancelado", variant: "secondary" },
+const STATUS_CONFIG: Record<string, { label: string; dot: string; animate?: boolean }> = {
+  PENDING:   { label: "Pendiente",  dot: "bg-foreground/25" },
+  RUNNING:   { label: "Ejecutando", dot: "bg-blue-400/70",    animate: true },
+  COMPLETED: { label: "Completado", dot: "bg-emerald-400/80" },
+  FAILED:    { label: "Error",      dot: "bg-rose-400/80" },
+  CANCELLED: { label: "Cancelado",  dot: "bg-foreground/20" },
 };
 
 const CANCELLABLE_STATUSES = ["PENDING", "RUNNING"];
 const DELETABLE_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
 
-export function AutomationDashboard() {
+export function AutomationDashboard({
+  onRegisterRefresh,
+  onFirstJobCompleted,
+  onJobDeleted,
+}: {
+  onRegisterRefresh?: (fn: () => void) => void;
+  onFirstJobCompleted?: () => void;
+  onJobDeleted?: () => void;
+} = {}) {
+  const hadCompletedJobOnLoad = useRef<boolean | null>(null);
+  const celebrationFired = useRef(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -101,13 +111,46 @@ export function AutomationDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    onRegisterRefresh?.(fetchJobs);
+  }, [onRegisterRefresh]);
+
   async function fetchJobs() {
     try {
       const res = await fetch("/api/automatizacion");
       const data = await res.json();
-      setJobs(data.jobs || []);
+      const fetched: Job[] = data.jobs || [];
+      const hasCompleted = fetched.some((j) => j.status === "COMPLETED");
+
+      if (hadCompletedJobOnLoad.current === null) {
+        hadCompletedJobOnLoad.current = hasCompleted;
+      } else if (
+        !hadCompletedJobOnLoad.current &&
+        hasCompleted &&
+        !celebrationFired.current
+      ) {
+        celebrationFired.current = true;
+        onFirstJobCompleted?.();
+      }
+
+      setJobs(fetched);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRetry(jobId: string) {
+    const res = await fetch(`/api/automatizacion/${jobId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "retry" }),
+    });
+
+    if (res.ok) {
+      toast.success("Job reintentado");
+      fetchJobs();
+    } else {
+      toast.error("Error al reintentar");
     }
   }
 
@@ -143,6 +186,7 @@ export function AutomationDashboard() {
       setJobs((prev) => prev.filter((j) => j.id !== jobId));
       setSelectedIds((prev) => { const next = new Set(prev); next.delete(jobId); return next; });
       toast.success("Job eliminado");
+      onJobDeleted?.();
     } else {
       const data = await res.json().catch(() => null);
       toast.error(data?.error ?? "Error al eliminar");
@@ -175,6 +219,7 @@ export function AutomationDashboard() {
         return next;
       });
       toast.success(deleted.length === 1 ? "Job eliminado" : `${deleted.length} jobs eliminados`);
+      onJobDeleted?.();
     }
     const failed = deletableIds.length - deleted.length;
     if (failed > 0) toast.error(`${failed} job(s) no se pudieron eliminar`);
@@ -700,13 +745,25 @@ export function AutomationDashboard() {
                           : "-"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={statusConfig.variant}>
-                          {statusConfig.label}
-                        </Badge>
-                        {job.errorMessage && (
-                          <p className="text-xs text-destructive mt-1 max-w-48 truncate" title={job.errorMessage}>
-                            {job.errorMessage}
-                          </p>
+                        {job.status === "FAILED" && job.errorMessage ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center gap-1.5 cursor-default">
+                                  <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusConfig.dot)} />
+                                  <span className="text-xs font-medium text-foreground/70">{statusConfig.label}</span>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-72">
+                                {job.errorMessage}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusConfig.dot, statusConfig.animate && "animate-pulse")} />
+                            <span className="text-xs font-medium text-foreground/70">{statusConfig.label}</span>
+                          </span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -729,6 +786,17 @@ export function AutomationDashboard() {
                               className="text-muted-foreground hover:text-destructive"
                             >
                               <Square className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {job.status === "FAILED" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRetry(job.id)}
+                              title="Reintentar"
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <RotateCcw className="h-4 w-4" />
                             </Button>
                           )}
                           {isDeletable && (

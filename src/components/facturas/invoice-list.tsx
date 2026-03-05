@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -109,7 +110,9 @@ function isFutureMonth(inv: Invoice): boolean {
   );
 }
 
-export function InvoiceList() {
+export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number) => void } = {}) {
+  const router = useRouter();
+  const isFirstAutomation = useRef(true);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -135,7 +138,12 @@ export function InvoiceList() {
     try {
       const res = await fetch("/api/facturas");
       const data = await res.json();
-      setInvoices(data.invoices || []);
+      const loaded: Invoice[] = data.invoices || [];
+      setInvoices(loaded);
+      onInitialLoad?.(loaded.length);
+      if (loaded.some((inv) => inv._count.automationJobs > 0)) {
+        isFirstAutomation.current = false;
+      }
     } finally {
       setLoading(false);
     }
@@ -331,6 +339,10 @@ export function InvoiceList() {
       toast.success(
         `${successCount} factura(s) enviada(s) a la cola de SiRADIG`
       );
+      if (isFirstAutomation.current) {
+        router.push("/dashboard");
+        return;
+      }
     }
     if (failCount > 0) {
       toast.error(`${failCount} factura(s) no se pudieron enviar`);
