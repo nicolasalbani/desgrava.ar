@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Write(/**)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(git:*)",
+      "Bash(mv:/**)",
+      "Bash(echo:*)",
+      "Bash(sed:*)",
+      "Bash(source:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(touch:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(rg:*)",
+      "Bash(lsof:*)",
+      "Bash(find:*)",
+      "Bash(dig:*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)"
+    ]
+  }
+}
