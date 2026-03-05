@@ -57,13 +57,13 @@ export function PdfUploadDropzone({
         onDragLeave={handleDragLeave}
         onClick={() => !isUploading && inputRef.current?.click()}
         className={cn(
-          "border-2 border-dashed rounded-lg px-4 py-6 text-center transition-all duration-150 min-h-[100px]",
+          "border-2 border-dashed rounded-xl px-4 py-8 text-center transition-all duration-200",
           isUploading
-            ? "border-gray-300 cursor-default"
-            : "cursor-pointer hover:border-blue-400 hover:bg-blue-50",
+            ? "border-border cursor-default"
+            : "cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/20",
           isDragOver
-            ? "border-blue-400 bg-blue-50"
-            : "border-gray-300"
+            ? "border-blue-400 bg-blue-50/50 dark:bg-blue-950/20"
+            : "border-border"
         )}
       >
         <input
@@ -76,23 +76,18 @@ export function PdfUploadDropzone({
         />
         {isUploading ? (
           <>
-            <Loader2 className="h-6 w-6 mx-auto mb-1.5 text-gray-400 animate-spin" />
-            <p className="text-sm font-medium">Procesando facturas...</p>
+            <Loader2 className="h-5 w-5 mx-auto mb-2 text-muted-foreground/50 animate-spin" />
+            <p className="text-sm text-muted-foreground">Procesando facturas...</p>
           </>
         ) : (
           <>
-            <Upload className="h-6 w-6 mx-auto mb-1.5 text-gray-400" />
-            <p className="text-sm font-medium text-gray-600">
+            <Upload className="h-5 w-5 mx-auto mb-2 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">
               Arrastra facturas aqui o hace click para seleccionar
             </p>
-            <p className="text-xs text-gray-400 mt-1">
-              PDF, JPG, PNG o WebP. Maximo 10MB por archivo.
+            <p className="text-xs text-muted-foreground/50 mt-1">
+              PDF, JPG o PNG
             </p>
-            {isEmpty && (
-              <p className="text-xs text-gray-400 mt-1">
-                No hay deducciones agregadas. Subi facturas o usa &quot;Agregar&quot;.
-              </p>
-            )}
           </>
         )}
       </div>

@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -16,13 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Calculator, Plus, Trash2, Loader2, FileText } from "lucide-react";
 import { CATEGORY_LABELS, type SimuladorCategory } from "@/lib/simulador/deduction-rules";
 import { SimuladorResults } from "./simulador-results";
@@ -61,8 +53,7 @@ const formSchema = z.object({
         ),
         _sourceFilename: z.string().optional(),
       })
-    )
-    ,
+    ),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -82,8 +73,6 @@ function unformatArgNumber(value: string): string {
 export function SimuladorForm() {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(false);
-
-  // PDF upload state
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -115,20 +104,16 @@ export function SimuladorForm() {
 
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i];
-
       try {
         const formData = new FormData();
         formData.append("file", file);
-
         const res = await fetch("/api/simulador/upload", {
           method: "POST",
           body: formData,
         });
-
         if (res.ok) {
           const data = await res.json();
           const amount = data.extractedFields?.amount ?? null;
-
           append({
             category: "",
             monthlyAmount: amount != null ? amount.toString() : "",
@@ -138,7 +123,6 @@ export function SimuladorForm() {
       } catch {
         // skip failed files silently
       }
-
       setUploadProgress((i + 1) / validFiles.length);
     }
 
@@ -177,140 +161,133 @@ export function SimuladorForm() {
   }
 
   return (
-    <div className="space-y-8">
-      <Card className="border-gray-200">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <Calculator className="h-6 w-6 text-primary" />
-            <div>
-              <CardTitle className="text-lg text-gray-900">Datos de tu sueldo</CardTitle>
-              <CardDescription className="text-sm text-gray-500">
-                Ingresa tu salario bruto mensual y tu situacion familiar
-              </CardDescription>
-            </div>
+    <div className="space-y-12">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-10">
+
+        {/* Salary */}
+        <div className="space-y-2">
+          <Label htmlFor="salario" className="text-sm text-muted-foreground">
+            Salario bruto mensual
+          </Label>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/60 text-lg select-none">$</span>
+            <Input
+              id="salario"
+              type="text"
+              inputMode="numeric"
+              placeholder="2.000.000"
+              value={formatArgNumber(form.watch("salarioBrutoMensual"))}
+              onChange={(e) => {
+                const raw = unformatArgNumber(e.target.value);
+                form.setValue("salarioBrutoMensual", raw, { shouldValidate: true });
+              }}
+              className="pl-8 h-14 text-xl font-medium tracking-tight"
+            />
           </div>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="salario" className="text-sm font-medium text-gray-700">Salario bruto mensual ($)</Label>
-                <Input
-                  id="salario"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="2.000.000"
-                  value={formatArgNumber(form.watch("salarioBrutoMensual"))}
-                  onChange={(e) => {
-                    const raw = unformatArgNumber(e.target.value);
-                    form.setValue("salarioBrutoMensual", raw, { shouldValidate: true });
-                  }}
-                />
-                {form.formState.errors.salarioBrutoMensual && (
-                  <p className="text-sm text-destructive">
-                    {form.formState.errors.salarioBrutoMensual.message}
-                  </p>
-                )}
-              </div>
+          {form.formState.errors.salarioBrutoMensual && (
+            <p className="text-sm text-destructive">
+              {form.formState.errors.salarioBrutoMensual.message}
+            </p>
+          )}
+        </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="hijos" className="text-sm font-medium text-gray-700">Hijos a cargo</Label>
-                <Input
-                  id="hijos"
-                  type="number"
-                  min="0"
-                  max="20"
-                  {...form.register("tieneHijos")}
-                />
-              </div>
+        {/* Family situation */}
+        <div className="flex flex-wrap gap-x-8 gap-y-4 py-5 border-y border-border">
+          <div className="space-y-1">
+            <Label htmlFor="hijos" className="text-sm text-muted-foreground">Hijos a cargo</Label>
+            <Input
+              id="hijos"
+              type="number"
+              min="0"
+              max="20"
+              {...form.register("tieneHijos")}
+              className="w-24 h-9"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 self-end pb-0.5">
+            <Switch
+              id="conyuge"
+              checked={form.watch("tieneConyuge")}
+              onCheckedChange={(v) => form.setValue("tieneConyuge", v)}
+            />
+            <Label htmlFor="conyuge" className="cursor-pointer text-sm">Conyuge a cargo</Label>
+          </div>
+
+          <div className="flex items-center gap-3 self-end pb-0.5">
+            <Switch
+              id="sindicato"
+              checked={form.watch("incluyeSindicato")}
+              onCheckedChange={(v) => form.setValue("incluyeSindicato", v)}
+            />
+            <Label htmlFor="sindicato" className="cursor-pointer text-sm">Aporte sindical (2%)</Label>
+          </div>
+        </div>
+
+        {/* Deductions */}
+        <div className="space-y-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-medium text-foreground">Deducciones por comprobantes</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Subi facturas para cargarlas automaticamente, o agrega manualmente
+              </p>
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => append({ category: "", monthlyAmount: "" })}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Agregar
+            </Button>
+          </div>
 
-            <div className="flex flex-col sm:flex-row gap-6 bg-gray-50 rounded-lg px-4 py-3 mt-4">
-              <div className="flex items-center gap-3">
-                <Switch
-                  id="conyuge"
-                  checked={form.watch("tieneConyuge")}
-                  onCheckedChange={(v) => form.setValue("tieneConyuge", v)}
-                />
-                <Label htmlFor="conyuge" className="cursor-pointer">Conyuge a cargo</Label>
-              </div>
+          <PdfUploadDropzone
+            isUploading={isUploading}
+            progress={uploadProgress}
+            onFilesSelected={handleFilesSelected}
+            isEmpty={fields.length === 0}
+          />
 
-              <div className="flex items-center gap-3">
-                <Switch
-                  id="sindicato"
-                  checked={form.watch("incluyeSindicato")}
-                  onCheckedChange={(v) => form.setValue("incluyeSindicato", v)}
-                />
-                <Label htmlFor="sindicato" className="cursor-pointer">Aporte sindical (2%)</Label>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 my-6 pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Deducciones por comprobantes</h3>
-                  <p className="text-sm text-gray-500">
-                    Subi tus facturas para cargar automaticamente o agrega deducciones manualmente
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="border-gray-300 text-gray-600 rounded-lg font-medium hover:bg-gray-50 hover:border-gray-400 transition-colors duration-150 shrink-0"
-                  onClick={() => append({ category: "", monthlyAmount: "" })}
+          {fields.length > 0 && (
+            <div className="space-y-3 pt-1">
+              {fields.map((field, index) => (
+                <div
+                  key={field.id}
+                  className="flex flex-col sm:flex-row gap-3 items-start sm:items-end"
                 >
-                  <Plus className="h-4 w-4 mr-1 text-blue-500" />
-                  Agregar
-                </Button>
-              </div>
+                  <div className="flex-1 min-w-0 space-y-1 w-full">
+                    {index === 0 && (
+                      <Label className="text-xs text-muted-foreground">Categoria</Label>
+                    )}
+                    <Select
+                      value={form.watch(`deducciones.${index}.category`)}
+                      onValueChange={(v) =>
+                        form.setValue(`deducciones.${index}.category`, v)
+                      }
+                    >
+                      <SelectTrigger className="w-full overflow-hidden">
+                        <SelectValue placeholder="Seleccionar categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="mb-4">
-                <PdfUploadDropzone
-                  isUploading={isUploading}
-                  progress={uploadProgress}
-                  onFilesSelected={handleFilesSelected}
-                  isEmpty={fields.length === 0}
-                />
-              </div>
-
-              <div className="space-y-3">
-                {fields.map((field, index) => (
-                  <div
-                    key={field.id}
-                    className="flex flex-col sm:flex-row gap-3 items-start sm:items-end"
-                  >
-                    <div className="flex-1 min-w-0 space-y-1 w-full">
-                      {index === 0 && (
-                        <Label className="text-xs text-muted-foreground">
-                          Categoria
-                        </Label>
-                      )}
-                      <Select
-                        value={form.watch(`deducciones.${index}.category`)}
-                        onValueChange={(v) =>
-                          form.setValue(`deducciones.${index}.category`, v)
-                        }
-                      >
-                        <SelectTrigger className="w-full overflow-hidden">
-                          <SelectValue placeholder="Seleccionar categoria" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="w-full sm:w-48 sm:shrink-0 space-y-1">
-                      {index === 0 && (
-                        <Label className="text-xs text-muted-foreground">
-                          Monto mensual ($)
-                        </Label>
-                      )}
+                  <div className="w-full sm:w-44 sm:shrink-0 space-y-1">
+                    {index === 0 && (
+                      <Label className="text-xs text-muted-foreground">Monto mensual</Label>
+                    )}
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 text-sm select-none">$</span>
                       <Input
                         type="text"
                         inputMode="numeric"
@@ -320,48 +297,48 @@ export function SimuladorForm() {
                           const raw = unformatArgNumber(e.target.value);
                           form.setValue(`deducciones.${index}.monthlyAmount`, raw, { shouldValidate: true });
                         }}
+                        className="pl-6"
                       />
                     </div>
-
-                    {form.watch(`deducciones.${index}._sourceFilename`) && (
-                      <Badge variant="outline" className="shrink-0 text-xs max-w-32 truncate hidden sm:flex">
-                        <FileText className="h-3 w-3 mr-1 shrink-0" />
-                        {form.watch(`deducciones.${index}._sourceFilename`)}
-                      </Badge>
-                    )}
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => remove(index)}
-                      className="shrink-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
                   </div>
-                ))}
-              </div>
 
-              {fields.length > 0 &&
-                form.formState.errors.deducciones && (
-                  <p className="text-sm text-destructive mt-2">
-                    Completa todos los campos de las deducciones
-                  </p>
-                )}
-            </div>
+                  {form.watch(`deducciones.${index}._sourceFilename`) && (
+                    <div className="shrink-0 text-xs text-muted-foreground max-w-32 truncate hidden sm:flex items-center gap-1 pb-2">
+                      <FileText className="h-3 w-3 shrink-0" />
+                      {form.watch(`deducciones.${index}._sourceFilename`)}
+                    </div>
+                  )}
 
-            <Button type="submit" size="lg" className="w-full mt-6 rounded-xl shadow-md transition-all duration-150 hover:bg-blue-700 hover:shadow-lg active:scale-[0.98]" disabled={loading}>
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Calculator className="mr-2 h-4 w-4" />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => remove(index)}
+                    className="shrink-0 text-muted-foreground/60 hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+
+              {form.formState.errors.deducciones && (
+                <p className="text-sm text-destructive">
+                  Completa todos los campos de las deducciones
+                </p>
               )}
-              Calcular ahorro
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+            </div>
+          )}
+        </div>
+
+        <Button type="submit" size="lg" className="w-full" disabled={loading}>
+          {loading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Calculator className="mr-2 h-4 w-4" />
+          )}
+          Calcular ahorro
+        </Button>
+      </form>
 
       {result && <SimuladorResults result={result} />}
     </div>
