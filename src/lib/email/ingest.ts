@@ -287,11 +287,16 @@ async function sendReplyEmail(
     html = buildFailureHtml(subject, errorMessage ?? errors.join("; ") ?? "Error desconocido");
   }
 
+  console.log(`[EMAIL_INGEST] sending reply from=${from} to=${to} subject="${replySubject}"`);
   try {
-    await getResend().emails.send({ from, to, subject: replySubject, html });
-    console.log(`[EMAIL_INGEST] reply sent to=${to} status=${status}`);
+    const { data, error } = await getResend().emails.send({ from, to, subject: replySubject, html });
+    if (error) {
+      console.error(`[EMAIL_INGEST] reply send failed to=${to}:`, JSON.stringify(error));
+    } else {
+      console.log(`[EMAIL_INGEST] reply sent id=${data?.id} to=${to} status=${status}`);
+    }
   } catch (err) {
-    console.error(`[EMAIL_INGEST] failed to send reply to=${to}:`, err);
+    console.error(`[EMAIL_INGEST] reply send threw to=${to}:`, err);
   }
 }
 
