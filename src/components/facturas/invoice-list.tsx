@@ -122,6 +122,8 @@ export function InvoiceList() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [editTarget, setEditTarget] = useState<Invoice | null>(null);
 
   useEffect(() => {
@@ -157,6 +159,43 @@ export function InvoiceList() {
       const data = await res.json().catch(() => null);
       toast.error(data?.error ?? "Error al eliminar");
     }
+  }
+
+  async function handleBulkDelete() {
+    const deletableIds = invoices
+      .filter((inv) => selectedIds.has(inv.id) && inv._count.automationJobs === 0)
+      .map((inv) => inv.id);
+    if (deletableIds.length === 0) return;
+
+    setBulkDeleting(true);
+    setBulkDeleteOpen(false);
+
+    const results = await Promise.allSettled(
+      deletableIds.map((id) => fetch(`/api/facturas/${id}`, { method: "DELETE" }))
+    );
+
+    const deleted = deletableIds.filter((_, i) => {
+      const r = results[i];
+      return r.status === "fulfilled" && r.value.ok;
+    });
+
+    if (deleted.length > 0) {
+      setInvoices((prev) => prev.filter((inv) => !deleted.includes(inv.id)));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        deleted.forEach((id) => next.delete(id));
+        return next;
+      });
+      toast.success(
+        deleted.length === 1
+          ? "Factura eliminada"
+          : `${deleted.length} facturas eliminadas`
+      );
+    }
+    const failed = deletableIds.length - deleted.length;
+    if (failed > 0) toast.error(`${failed} factura(s) no se pudieron eliminar`);
+
+    setBulkDeleting(false);
   }
 
   function toggleSelect(id: string) {
@@ -241,6 +280,10 @@ export function InvoiceList() {
   const allEligibleSelected =
     eligibleInvoices.length > 0 &&
     eligibleInvoices.every((inv) => selectedIds.has(inv.id));
+
+  const deletableSelectedCount = invoices.filter(
+    (inv) => selectedIds.has(inv.id) && inv._count.automationJobs === 0
+  ).length;
 
   function toggleSelectAll() {
     if (allEligibleSelected) {
@@ -355,11 +398,27 @@ export function InvoiceList() {
             )}
             Enviar a SiRADIG
           </Button>
+          {deletableSelectedCount > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={submitting || bulkDeleting}
+            >
+              {bulkDeleting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Eliminar{deletableSelectedCount < selectedIds.size ? ` (${deletableSelectedCount})` : ""}
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
             onClick={() => setSelectedIds(new Set())}
-            disabled={submitting}
+            disabled={submitting || bulkDeleting}
           >
             Cancelar
           </Button>
@@ -851,6 +910,33 @@ export function InvoiceList() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete}>
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Eliminar {deletableSelectedCount}{" "}
+              {deletableSelectedCount === 1 ? "factura" : "facturas"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta accion no se puede deshacer. Se eliminaran permanentemente
+              las facturas seleccionadas.
+              {deletableSelectedCount < selectedIds.size && (
+                <span className="block mt-1">
+                  Nota: {selectedIds.size - deletableSelectedCount} factura(s)
+                  con automatizaciones vinculadas no se pueden eliminar.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete}>
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
