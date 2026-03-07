@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   KeyRound,
   FileText,
-  Bot,
+  Send,
   Settings,
   Calculator,
   LogOut,
@@ -20,7 +20,7 @@ const navItems = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/credenciales", label: "Credenciales ARCA", icon: KeyRound },
   { href: "/facturas", label: "Facturas", icon: FileText },
-  { href: "/automatizacion", label: "Automatizacion", icon: Bot },
+  { href: "/automatizacion", label: "Enviar a SiRADIG", icon: Send },
   { href: "/configuracion", label: "Configuracion", icon: Settings },
 ];
 

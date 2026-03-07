@@ -34,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Bot, Loader2, Eye, Square, Trash2, Search, X, ListFilter, Mail, Upload, RotateCcw } from "lucide-react";
+import { Send, Loader2, Eye, Square, Trash2, Search, X, ListFilter, Mail, Upload, RotateCcw } from "lucide-react";
 import {
   DEDUCTION_CATEGORIES,
   DEDUCTION_CATEGORY_LABELS,
@@ -385,9 +385,9 @@ export function AutomationDashboard({
       {/* Content */}
       {jobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Bot className="h-8 w-8 text-muted-foreground/30 mb-3" />
+          <Send className="h-8 w-8 text-muted-foreground/30 mb-3" />
           <p className="text-sm text-muted-foreground/70">
-            No hay trabajos de automatizacion
+            Sin envios a SiRADIG
           </p>
           <p className="text-xs text-muted-foreground/50 mt-1">
             Selecciona facturas pendientes y envialas a SiRADIG desde la pagina
@@ -830,9 +830,9 @@ export function AutomationDashboard({
       >
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalle del trabajo</DialogTitle>
+            <DialogTitle>Detalle del envio</DialogTitle>
             <DialogDescription>
-              Logs y estado del job de automatizacion
+              Logs y estado del envio a SiRADIG
             </DialogDescription>
           </DialogHeader>
           {selectedJob && <JobDetail jobId={selectedJob} />}
@@ -842,9 +842,9 @@ export function AutomationDashboard({
       <AlertDialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Detener automatizacion</AlertDialogTitle>
+            <AlertDialogTitle>Detener envio</AlertDialogTitle>
             <AlertDialogDescription>
-              Se cancelara el job de automatizacion. Si estaba en ejecucion, se detendra el proceso.
+              Se cancelara el envio a SiRADIG. Si estaba en ejecucion, se detendra el proceso.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -861,11 +861,11 @@ export function AutomationDashboard({
           <AlertDialogHeader>
             <AlertDialogTitle>
               Eliminar {selectedIds.size}{" "}
-              {selectedIds.size === 1 ? "job" : "jobs"}
+              {selectedIds.size === 1 ? "envio" : "envios"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               Esta accion no se puede deshacer. Se eliminaran permanentemente los
-              jobs seleccionados.
+              envios seleccionados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -880,9 +880,9 @@ export function AutomationDashboard({
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar automatizacion</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar envio</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminara el registro de este job permanentemente.
+              Se eliminara el registro de este envio permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

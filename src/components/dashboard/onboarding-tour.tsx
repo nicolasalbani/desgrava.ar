@@ -4,7 +4,7 @@ import {
   Check,
   KeyRound,
   FileText,
-  Bot,
+  Send,
   ArrowRight,
   Sparkles,
   CalendarDays,
@@ -61,12 +61,12 @@ function getSteps(fiscalYear: number): StepDef[] {
     },
     {
       id: "automation",
-      title: "Automatizar",
+      title: "Enviar a SiRADIG",
       description: "Envia tus deducciones a SiRADIG",
-      completedDescription: "Automatizacion activa",
-      icon: Bot,
+      completedDescription: "Envios activos",
+      icon: Send,
       href: "/automatizacion",
-      activeLabel: "Automatizar",
+      activeLabel: "Enviar",
     },
   ];
 }

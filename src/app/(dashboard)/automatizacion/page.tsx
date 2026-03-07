@@ -71,9 +71,9 @@ export default function AutomatizacionPage() {
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Automatizacion</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Enviar a SiRADIG</h1>
         <p className="text-sm text-muted-foreground/70 mt-1">
-          Carga automatica de deducciones en SiRADIG
+          Carga tus deducciones directamente en SiRADIG
         </p>
       </div>
 
@@ -91,7 +91,7 @@ export default function AutomatizacionPage() {
 
       <div className="space-y-2">
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          Trabajos de automatizacion
+          Envios a SiRADIG
         </h2>
         <AutomationDashboard
           onRegisterRefresh={(fn) => { dashboardRefreshRef.current = fn; }}
