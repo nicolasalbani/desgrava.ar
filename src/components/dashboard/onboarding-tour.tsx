@@ -85,7 +85,7 @@ interface OnboardingTourProps {
 export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProps) {
   const { fiscalYear, setFiscalYear } = useFiscalYear();
   const router = useRouter();
-  const steps = getSteps(fiscalYear);
+  const steps = getSteps(fiscalYear ?? CURRENT_YEAR);
   const completedCount = completedSteps.filter(Boolean).length;
   const progressPercent = Math.round((completedCount / 4) * 100);
   const allDone = completedCount === 4;
