@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
@@ -17,7 +16,6 @@ export default function ConfiguracionPage() {
     notifications: true,
   });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetch("/api/configuracion")
@@ -26,20 +24,18 @@ export default function ConfiguracionPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleSave() {
-    setSaving(true);
+  async function handleNotificationsChange(checked: boolean) {
+    setPreference((prev) => ({ ...prev, notifications: checked }));
     try {
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(preference),
+        body: JSON.stringify({ notifications: checked }),
       });
       if (!res.ok) throw new Error();
-      toast.success("Configuracion guardada");
     } catch {
+      setPreference((prev) => ({ ...prev, notifications: !checked }));
       toast.error("Error al guardar la configuracion");
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -73,17 +69,8 @@ export default function ConfiguracionPage() {
           <Switch
             id="notifications"
             checked={preference.notifications}
-            onCheckedChange={(checked) =>
-              setPreference((prev) => ({ ...prev, notifications: checked }))
-            }
+            onCheckedChange={handleNotificationsChange}
           />
-        </div>
-
-        <div className="pt-1">
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar cambios
-          </Button>
         </div>
 
         <div className="border-t border-border" />
