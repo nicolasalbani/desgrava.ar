@@ -71,7 +71,17 @@ const formSchema = z.object({
   fiscalYear: z.string(),
   fiscalMonth: z.string(),
   description: z.string().optional(),
-});
+}).refine(
+  (data) => {
+    if (!data.invoiceDate) return true;
+    const invoiceYear = parseInt(data.invoiceDate.split("-")[0]);
+    return invoiceYear === parseInt(data.fiscalYear);
+  },
+  {
+    message: "La fecha del comprobante no corresponde al año fiscal seleccionado",
+    path: ["invoiceDate"],
+  }
+);
 
 type FormData = z.infer<typeof formSchema>;
 
