@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { JobDetail } from "./job-detail";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useFiscalYear } from "@/contexts/fiscal-year";
 
 interface Job {
   id: string;
@@ -87,6 +88,7 @@ export function AutomationDashboard({
   onFirstJobCompleted?: () => void;
   onJobDeleted?: () => void;
 } = {}) {
+  const { fiscalYear } = useFiscalYear();
   const hadCompletedJobOnLoad = useRef<boolean | null>(null);
   const celebrationFired = useRef(false);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -238,6 +240,7 @@ export function AutomationDashboard({
 
   const filteredJobs = useMemo(() => {
     return jobs.filter((job) => {
+      if (fiscalYear !== null && job.invoice?.fiscalYear !== fiscalYear) return false;
       if (categories.size > 0) {
         const cat = job.invoice?.deductionCategory;
         if (!cat || !categories.has(cat)) return false;
@@ -270,7 +273,7 @@ export function AutomationDashboard({
       }
       return true;
     });
-  }, [jobs, categories, statuses, fechaDesde, fechaHasta, montoMin, montoMax, search]);
+  }, [jobs, fiscalYear, categories, statuses, fechaDesde, fechaHasta, montoMin, montoMax, search]);
 
   const hasClientFilters =
     search !== "" ||

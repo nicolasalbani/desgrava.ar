@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { DEDUCTION_CATEGORY_LABELS } from "@/lib/validators/invoice";
 import { toast } from "sonner";
+import { useFiscalYear } from "@/contexts/fiscal-year";
 
 interface PendingInvoice {
   id: string;
@@ -42,24 +43,30 @@ interface PendingInvoicesPanelProps {
 }
 
 export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: PendingInvoicesPanelProps) {
+  const { fiscalYear } = useFiscalYear();
   const [invoices, setInvoices] = useState<PendingInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
   const fetchInvoices = useCallback(async () => {
+    if (fiscalYear === null) {
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/facturas");
       const data = await res.json();
       const all: PendingInvoice[] = data.invoices || [];
       const pending = all.filter((inv) =>
-        ["PENDING", "FAILED"].includes(inv.siradiqStatus)
+        ["PENDING", "FAILED"].includes(inv.siradiqStatus) &&
+        inv.fiscalYear === fiscalYear
       );
       setInvoices(pending);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fiscalYear]);
 
   useEffect(() => {
     fetchInvoices();
@@ -99,6 +106,15 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
     let failCount = 0;
 
     for (const invoiceId of selectedIds) {
+      const inv = invoices.find((i) => i.id === invoiceId);
+      if (inv && inv.fiscalYear !== fiscalYear) {
+        toast.error(
+          `"${inv.providerName || inv.providerCuit}" es del año ${inv.fiscalYear}, pero el año fiscal activo es ${fiscalYear}.`,
+          { duration: 6000 }
+        );
+        failCount++;
+        continue;
+      }
       try {
         const res = await fetch("/api/automatizacion", {
           method: "POST",
@@ -128,6 +144,20 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
     }
   }
 
+  if (fiscalYear === null) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed border-border">
+        <div className="rounded-full bg-muted/40 p-3 mb-3">
+          <FileText className="h-5 w-5 text-muted-foreground/30" />
+        </div>
+        <p className="text-sm text-muted-foreground/70">Seleccioná un año fiscal</p>
+        <p className="text-xs text-muted-foreground/50 mt-1">
+          Elegí el período fiscal desde el menú superior para ver las facturas pendientes
+        </p>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-10">
@@ -142,9 +172,9 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
         <div className="rounded-full bg-muted/40 p-3 mb-3">
           <FileText className="h-5 w-5 text-muted-foreground/30" />
         </div>
-        <p className="text-sm text-muted-foreground/70">Sin facturas pendientes</p>
+        <p className="text-sm text-muted-foreground/70">Sin facturas pendientes para {fiscalYear}</p>
         <p className="text-xs text-muted-foreground/50 mt-1">
-          Todas las facturas ya fueron enviadas a SiRADIG
+          Todas las facturas de {fiscalYear} ya fueron enviadas a SiRADIG
         </p>
       </div>
     );

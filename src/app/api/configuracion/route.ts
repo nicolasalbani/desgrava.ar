@@ -15,7 +15,7 @@ export async function GET() {
 
   return NextResponse.json({
     preference: preference ?? {
-      defaultFiscalYear: new Date().getFullYear(),
+      defaultFiscalYear: null,
       notifications: true,
     },
   });
@@ -35,7 +35,7 @@ export async function PUT(req: NextRequest) {
     update: { defaultFiscalYear, notifications },
     create: {
       userId: session.user.id,
-      defaultFiscalYear: defaultFiscalYear ?? new Date().getFullYear(),
+      defaultFiscalYear: defaultFiscalYear ?? null,
       notifications: notifications ?? true,
     },
   });

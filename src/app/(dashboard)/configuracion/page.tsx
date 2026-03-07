@@ -4,19 +4,16 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmailIngestCard } from "@/components/configuracion/email-ingest-card";
 
 interface Preference {
-  defaultFiscalYear: number;
   notifications: boolean;
 }
 
 export default function ConfiguracionPage() {
   const [preference, setPreference] = useState<Preference>({
-    defaultFiscalYear: new Date().getFullYear(),
     notifications: true,
   });
   const [loading, setLoading] = useState(true);
@@ -25,7 +22,7 @@ export default function ConfiguracionPage() {
   useEffect(() => {
     fetch("/api/configuracion")
       .then((res) => res.json())
-      .then((data) => setPreference(data.preference))
+      .then((data) => setPreference({ notifications: data.preference?.notifications ?? true }))
       .finally(() => setLoading(false));
   }, []);
 
@@ -79,28 +76,6 @@ export default function ConfiguracionPage() {
             onCheckedChange={(checked) =>
               setPreference((prev) => ({ ...prev, notifications: checked }))
             }
-          />
-        </div>
-
-        <div className="border-t border-border" />
-
-        <div className="space-y-2">
-          <Label htmlFor="fiscalYear">Periodo fiscal por defecto</Label>
-          <p className="text-xs text-muted-foreground/60">
-            Ano fiscal que se usara al cargar nuevas deducciones
-          </p>
-          <Input
-            id="fiscalYear"
-            type="number"
-            value={preference.defaultFiscalYear}
-            onChange={(e) =>
-              setPreference((prev) => ({
-                ...prev,
-                defaultFiscalYear:
-                  parseInt(e.target.value) || new Date().getFullYear(),
-              }))
-            }
-            className="w-32"
           />
         </div>
 

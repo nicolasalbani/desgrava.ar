@@ -8,14 +8,16 @@ export default async function DashboardPage() {
   const userId = session!.user!.id;
   const firstName = session?.user?.name?.split(" ")[0] ?? "usuario";
 
-  const [credentialCount, invoiceCount, completedJobCount] = await Promise.all([
+  const [credentialCount, invoiceCount, completedJobCount, userPreference] = await Promise.all([
     prisma.arcaCredential.count({ where: { userId } }),
     prisma.invoice.count({ where: { userId } }),
     prisma.automationJob.count({ where: { userId, status: "COMPLETED" } }),
+    prisma.userPreference.findUnique({ where: { userId }, select: { defaultFiscalYear: true } }),
   ]);
 
-  const completedSteps: [boolean, boolean, boolean] = [
+  const completedSteps: [boolean, boolean, boolean, boolean] = [
     credentialCount > 0,
+    userPreference?.defaultFiscalYear != null,
     invoiceCount > 0,
     completedJobCount > 0,
   ];

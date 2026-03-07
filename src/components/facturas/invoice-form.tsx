@@ -32,6 +32,7 @@ import {
 import { formatCuit, validateCuit } from "@/lib/validators/cuit";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useFiscalYear } from "@/contexts/fiscal-year";
 
 function formatArgNumber(value: string): string {
   const digits = value.replace(/\D/g, "");
@@ -112,6 +113,9 @@ export function InvoiceForm({
   onCancel?: () => void;
 }) {
   const router = useRouter();
+  const { fiscalYear: contextFiscalYear } = useFiscalYear();
+  const isNew = !invoiceId;
+  const lockedYear = isNew && contextFiscalYear !== null ? contextFiscalYear : null;
   const [saving, setSaving] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const lastLookedUpCuit = useRef("");
@@ -126,7 +130,7 @@ export function InvoiceForm({
       invoiceNumber: defaultValues?.invoiceNumber ?? "",
       invoiceDate: defaultValues?.invoiceDate ?? "",
       amount: defaultValues?.amount != null ? String(Math.round(defaultValues.amount)) : "",
-      fiscalYear: String(defaultValues?.fiscalYear ?? currentYear),
+      fiscalYear: String(lockedYear ?? defaultValues?.fiscalYear ?? currentYear),
       fiscalMonth: String(defaultValues?.fiscalMonth ?? currentMonth),
       description: defaultValues?.description ?? "",
     },
@@ -411,25 +415,31 @@ export function InvoiceForm({
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Año fiscal</Label>
-              <Select
-                value={form.watch("fiscalYear")}
-                onValueChange={(v) =>
-                  form.setValue("fiscalYear", v, { shouldValidate: true })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 5 }, (_, i) => currentYear - i).map(
-                    (y) => (
-                      <SelectItem key={y} value={String(y)}>
-                        {y}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
+              {lockedYear !== null ? (
+                <div className="h-9 px-3 flex items-center text-sm rounded-md border border-border bg-muted/30 text-muted-foreground">
+                  {lockedYear}
+                </div>
+              ) : (
+                <Select
+                  value={form.watch("fiscalYear")}
+                  onValueChange={(v) =>
+                    form.setValue("fiscalYear", v, { shouldValidate: true })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }, (_, i) => currentYear - i).map(
+                      (y) => (
+                        <SelectItem key={y} value={String(y)}>
+                          {y}
+                        </SelectItem>
+                      )
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="space-y-2">

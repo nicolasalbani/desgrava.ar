@@ -55,6 +55,7 @@ import {
 } from "@/lib/validators/invoice";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useFiscalYear } from "@/contexts/fiscal-year";
 
 interface Invoice {
   id: string;
@@ -98,6 +99,7 @@ function isFutureMonth(inv: Invoice): boolean {
 
 export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number) => void } = {}) {
   const router = useRouter();
+  const { fiscalYear } = useFiscalYear();
   const isFirstAutomation = useRef(true);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -206,6 +208,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {
+      if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) return false;
       if (categories.size > 0 && !categories.has(inv.deductionCategory))
         return false;
       if (statuses.size > 0 && !statuses.has(inv.siradiqStatus))
@@ -239,6 +242,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
     });
   }, [
     invoices,
+    fiscalYear,
     categories,
     statuses,
     fechaDesde,
@@ -289,6 +293,10 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
 
   async function handleSubmitToSiradig() {
     if (selectedIds.size === 0) return;
+    if (fiscalYear === null) {
+      toast.error("Seleccioná un año fiscal antes de enviar facturas a SiRADIG", { duration: 5000 });
+      return;
+    }
     setSubmitting(true);
 
     let successCount = 0;
@@ -296,6 +304,16 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
     const failedIds = new Set<string>();
 
     for (const invoiceId of selectedIds) {
+      const inv = invoices.find((i) => i.id === invoiceId);
+      if (inv && inv.fiscalYear !== fiscalYear) {
+        toast.error(
+          `"${inv.providerName || inv.providerCuit}" es del año ${inv.fiscalYear}, pero el año fiscal activo es ${fiscalYear}. Cambiá el año o deseleccioná la factura.`,
+          { duration: 6000 }
+        );
+        failedIds.add(invoiceId);
+        failCount++;
+        continue;
+      }
       try {
         const res = await fetch("/api/automatizacion", {
           method: "POST",
@@ -428,7 +446,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
         <div className="flex justify-center py-16">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
         </div>
-      ) : invoices.length === 0 ? (
+      ) : filteredInvoices.length === 0 && !hasClientFilters ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="rounded-full bg-muted/40 p-4 mb-4">
             <FileText className="h-6 w-6 text-muted-foreground/30" />
@@ -437,7 +455,9 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
             Sin comprobantes
           </p>
           <p className="text-xs text-muted-foreground/50 mt-1.5 max-w-xs">
-            No hay facturas cargadas
+            {fiscalYear !== null
+              ? `No hay facturas cargadas para ${fiscalYear}`
+              : "No hay facturas cargadas"}
           </p>
         </div>
       ) : (
