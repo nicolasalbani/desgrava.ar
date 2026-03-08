@@ -963,10 +963,11 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
       </AlertDialog>
 
       <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden [grid-template-rows:auto_1fr]">
           <DialogHeader>
             <DialogTitle>Editar comprobante</DialogTitle>
           </DialogHeader>
+          <div className="overflow-y-auto min-h-0">
           {editTarget && (
             <InvoiceForm
               invoiceId={editTarget.id}
@@ -976,7 +977,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                 providerName: editTarget.providerName ?? undefined,
                 invoiceType: editTarget.invoiceType,
                 invoiceNumber: editTarget.invoiceNumber ?? undefined,
-                invoiceDate: editTarget.invoiceDate ?? undefined,
+                invoiceDate: editTarget.invoiceDate ? editTarget.invoiceDate.slice(0, 10) : undefined,
                 amount: parseFloat(editTarget.amount),
                 fiscalYear: editTarget.fiscalYear,
                 fiscalMonth: editTarget.fiscalMonth,
@@ -988,6 +989,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
               onCancel={() => setEditTarget(null)}
             />
           )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

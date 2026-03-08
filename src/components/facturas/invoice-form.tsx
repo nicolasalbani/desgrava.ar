@@ -282,7 +282,7 @@ export function InvoiceForm({
                 }
                 disabled={classifying}
               >
-                <SelectTrigger className={cn("w-full overflow-hidden relative z-10", missingGlow(watchedCategory))}>
+                <SelectTrigger className={cn("w-full overflow-hidden relative z-10 [&>span]:truncate", missingGlow(watchedCategory))}>
                   {classifying ? (
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <Sparkles className="h-4 w-4 animate-pulse text-primary" />
