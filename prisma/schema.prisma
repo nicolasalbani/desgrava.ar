@@ -96,6 +96,8 @@ model Invoice {
   fiscalYear        Int
   fiscalMonth       Int // 1-12
   description       String?
+  contractStartDate DateTime? // For ALQUILER_VIVIENDA: lease contract start date (Vigencia Desde)
+  contractEndDate   DateTime? // For ALQUILER_VIVIENDA: lease contract end date (Vigencia Hasta)
   source            InvoiceSource     @default(MANUAL)
   ocrConfidence     Float? // 0-1 for OCR-sourced
   siradiqStatus     SiradiqStatus     @default(PENDING)

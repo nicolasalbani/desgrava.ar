@@ -78,6 +78,8 @@ export const createInvoiceSchema = z.object({
   fiscalYear: z.coerce.number().int().min(2020).max(2030),
   fiscalMonth: z.coerce.number().int().min(1).max(12),
   description: z.string().optional(),
+  contractStartDate: z.coerce.date().optional(),
+  contractEndDate: z.coerce.date().optional(),
 });
 
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;

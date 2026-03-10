@@ -6,6 +6,9 @@ export interface ExtractedFields {
   date: string | null;
   providerName: string | null;
   confidence: number;
+  // For rental invoices (ALQUILER_VIVIENDA): billing/contract period dates
+  contractStartDate: string | null; // ISO YYYY-MM-DD
+  contractEndDate: string | null;   // ISO YYYY-MM-DD
 }
 
 const CUIT_PATTERN = /\b(20|23|24|27|30|33|34)-?\d{8}-?\d\b/g;
@@ -14,6 +17,8 @@ const AMOUNT_PATTERNS = [
   /TOTAL\s+A\s+PAGAR\s*:?\s*\$?\s*([\d.,]+)/i,
   /IMP\.\s*TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
   /NETO\s+GRAVADO\s*:?\s*\$?\s*([\d.,]+)/i,
+  // USD invoices: ARS equivalent stated as "asciende a : $ 10173750,00"
+  /asciende\s+a\s*:?\s*\$\s*([\d.,]+)/i,
   /(?<!SUB)TOTAL\s*:?\s*\$?\s*([\d.,]+)/i,
 ];
 
@@ -23,10 +28,10 @@ const INVOICE_TYPE_PATTERNS: [RegExp, string][] = [
   [/\bB\b\s+FACTURA/i, "FACTURA_B"],
   [/\bC\b\s+FACTURA/i, "FACTURA_C"],
   // Standard layout: FACTURA followed by type letter (with or without surrounding quotes)
-  // \b after the letter prevents matching "FACTURA COD." (C from COD) or similar
-  [/FACTURA\s*"?A\b"?/i, "FACTURA_A"],
-  [/FACTURA\s*"?B\b"?/i, "FACTURA_B"],
-  [/FACTURA\s*"?C\b"?/i, "FACTURA_C"],
+  // Use negative lookahead instead of \b to also exclude accented chars (e.g. "FACTURA CÓD" should not match C)
+  [/FACTURA\s*"?A(?![A-Za-zÁÉÍÓÚáéíóúÑñ])/i, "FACTURA_A"],
+  [/FACTURA\s*"?B(?![A-Za-zÁÉÍÓÚáéíóúÑñ])/i, "FACTURA_B"],
+  [/FACTURA\s*"?C(?![A-Za-zÁÉÍÓÚáéíóúÑñ])/i, "FACTURA_C"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?A"?/i, "NOTA_CREDITO_A"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?B"?/i, "NOTA_CREDITO_B"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?C"?/i, "NOTA_CREDITO_C"],
@@ -35,15 +40,16 @@ const INVOICE_TYPE_PATTERNS: [RegExp, string][] = [
   [/NOTA\s+DE?\s*D[ÉE]BITO\s*"?C"?/i, "NOTA_DEBITO_C"],
   // ARCA fallback: detect type from comprobante code (COD. 011 = Factura C, etc.)
   // Reliable for ARCA-generated PDFs where the type letter and "FACTURA" end up on different lines
-  [/COD\.\s*001\b/i, "FACTURA_A"],
-  [/COD\.\s*002\b/i, "NOTA_DEBITO_A"],
-  [/COD\.\s*003\b/i, "NOTA_CREDITO_A"],
-  [/COD\.\s*006\b/i, "FACTURA_B"],
-  [/COD\.\s*007\b/i, "NOTA_DEBITO_B"],
-  [/COD\.\s*008\b/i, "NOTA_CREDITO_B"],
-  [/COD\.\s*011\b/i, "FACTURA_C"],
-  [/COD\.\s*012\b/i, "NOTA_DEBITO_C"],
-  [/COD\.\s*013\b/i, "NOTA_CREDITO_C"],
+  // Both COD and CÓD (accented) variants are handled
+  [/C[OÓ]D\.\s*001\b/i, "FACTURA_A"],
+  [/C[OÓ]D\.\s*002\b/i, "NOTA_DEBITO_A"],
+  [/C[OÓ]D\.\s*003\b/i, "NOTA_CREDITO_A"],
+  [/C[OÓ]D\.\s*006\b/i, "FACTURA_B"],
+  [/C[OÓ]D\.\s*007\b/i, "NOTA_DEBITO_B"],
+  [/C[OÓ]D\.\s*008\b/i, "NOTA_CREDITO_B"],
+  [/C[OÓ]D\.\s*011\b/i, "FACTURA_C"],
+  [/C[OÓ]D\.\s*012\b/i, "NOTA_DEBITO_C"],
+  [/C[OÓ]D\.\s*013\b/i, "NOTA_CREDITO_C"],
   [/RECIBO/i, "RECIBO"],
   [/TICKET/i, "TICKET"],
 ];
@@ -66,6 +72,13 @@ const INVOICE_NUMBER_PATTERNS = [
 // end up on different lines due to absolute text positioning
 const COMP_NRO_FALLBACK = /N[ºº°]?\s*\.?\s*:?\s*(\d{8})\b/i;
 const PTO_VENTA_FALLBACK = /\b(\d{4,5})\s+[ABC]\s+cod\./i;
+
+function parseArgentineDate(ddmmyyyy: string): string | null {
+  const parts = ddmmyyyy.split("/");
+  if (parts.length !== 3) return null;
+  const [day, month, year] = parts;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
 
 function parseArgentineAmount(raw: string): number | null {
   const cleaned = raw.replace(/\./g, "").replace(",", ".");
@@ -162,7 +175,18 @@ export function extractFields(text: string): ExtractedFields {
     }
   }
 
+  // Extract billing/contract period dates (rental invoices: "Período Facturado Desde: DD/MM/YYYY Hasta: DD/MM/YYYY")
+  let contractStartDate: string | null = null;
+  let contractEndDate: string | null = null;
+  const periodMatch = text.match(
+    /Per[ií]odo\s+Facturado\s+Desde:\s*(\d{1,2}\/\d{1,2}\/\d{4})\s+Hasta:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i
+  );
+  if (periodMatch) {
+    contractStartDate = parseArgentineDate(periodMatch[1]);
+    contractEndDate = parseArgentineDate(periodMatch[2]);
+  }
+
   const confidence = fieldsFound / totalFields;
 
-  return { cuit, invoiceType, invoiceNumber, amount, date, providerName, confidence };
+  return { cuit, invoiceType, invoiceNumber, amount, date, providerName, confidence, contractStartDate, contractEndDate };
 }

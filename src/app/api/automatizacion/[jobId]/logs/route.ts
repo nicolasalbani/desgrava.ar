@@ -40,7 +40,21 @@ export async function GET(
     async start(controller) {
       const enqueue = (data: string) => {
         if (closed) return;
-        controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+        try {
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+        } catch {
+          closed = true;
+        }
+      };
+
+      const closeStream = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
       };
 
       const sendUpdates = () => {
@@ -77,6 +91,12 @@ export async function GET(
         }
       };
 
+      // Abort when client disconnects
+      req.signal.addEventListener("abort", () => {
+        clearInterval(interval);
+        closeStream();
+      });
+
       // Poll for new logs, screenshots, and status
       const interval = setInterval(() => {
         if (closed) {
@@ -103,8 +123,7 @@ export async function GET(
 
           enqueue(JSON.stringify(terminalData));
           clearInterval(interval);
-          closed = true;
-          controller.close();
+          closeStream();
         }
       }, 1000);
 

@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
       siradiqStatus: true,
       originalFilename: true,
       fileMimeType: true,
+      contractStartDate: true,
+      contractEndDate: true,
       createdAt: true,
       _count: { select: { automationJobs: true } },
     },

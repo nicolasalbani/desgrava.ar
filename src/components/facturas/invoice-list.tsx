@@ -72,6 +72,8 @@ interface Invoice {
   siradiqStatus: string;
   hasFile: boolean;
   createdAt: string;
+  contractStartDate: string | null;
+  contractEndDate: string | null;
   _count: { automationJobs: number };
 }
 
@@ -981,6 +983,8 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                 amount: parseFloat(editTarget.amount),
                 fiscalYear: editTarget.fiscalYear,
                 fiscalMonth: editTarget.fiscalMonth,
+                contractStartDate: editTarget.contractStartDate ? editTarget.contractStartDate.slice(0, 10) : undefined,
+                contractEndDate: editTarget.contractEndDate ? editTarget.contractEndDate.slice(0, 10) : undefined,
               }}
               onSaved={() => {
                 setEditTarget(null);

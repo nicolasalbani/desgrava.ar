@@ -22,6 +22,8 @@ interface ExtractedFields {
   date: string | null;
   providerName: string | null;
   confidence: number;
+  contractStartDate: string | null;
+  contractEndDate: string | null;
 }
 
 export function FileUploader({
@@ -116,6 +118,8 @@ export function FileUploader({
         fiscalMonth: extracted.date
           ? parseInt(extracted.date.split("-")[1])
           : new Date().getMonth() + 1,
+        contractStartDate: extracted.contractStartDate ?? "",
+        contractEndDate: extracted.contractEndDate ?? "",
       }
     : undefined;
 

@@ -211,6 +211,8 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               invoiceDate: job.invoice.invoiceDate?.toISOString() ?? undefined,
               amount: job.invoice.amount.toString(),
               fiscalMonth: job.invoice.fiscalMonth,
+              contractStartDate: job.invoice.contractStartDate?.toISOString() ?? undefined,
+              contractEndDate: job.invoice.contractEndDate?.toISOString() ?? undefined,
             },
             (msg) => appendLog(jobId, msg, onLog),
             onScreenshot

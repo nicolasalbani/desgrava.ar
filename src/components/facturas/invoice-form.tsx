@@ -71,6 +71,8 @@ const formSchema = z.object({
   fiscalYear: z.string(),
   fiscalMonth: z.string(),
   description: z.string().optional(),
+  contractStartDate: z.string().optional(),
+  contractEndDate: z.string().optional(),
 }).refine(
   (data) => {
     if (!data.invoiceDate) return true;
@@ -112,6 +114,8 @@ export function InvoiceForm({
     fiscalMonth: number;
     deductionCategory: string;
     description: string;
+    contractStartDate: string;
+    contractEndDate: string;
   }>;
   fileData?: {
     fileBase64: string;
@@ -143,6 +147,8 @@ export function InvoiceForm({
       fiscalYear: String(lockedYear ?? defaultValues?.fiscalYear ?? currentYear),
       fiscalMonth: String(defaultValues?.fiscalMonth ?? currentMonth),
       description: defaultValues?.description ?? "",
+      contractStartDate: defaultValues?.contractStartDate ?? "",
+      contractEndDate: defaultValues?.contractEndDate ?? "",
     },
   });
 
@@ -205,6 +211,8 @@ export function InvoiceForm({
         fiscalYear: parseInt(data.fiscalYear),
         fiscalMonth: parseInt(data.fiscalMonth),
         description: data.description,
+        contractStartDate: data.contractStartDate || undefined,
+        contractEndDate: data.contractEndDate || undefined,
       };
 
       const res = await fetch(
@@ -260,6 +268,8 @@ export function InvoiceForm({
   const watchedAmount = form.watch("amount");
   const watchedInvoiceNumber = form.watch("invoiceNumber");
   const watchedInvoiceDate = form.watch("invoiceDate");
+  const watchedContractStartDate = form.watch("contractStartDate");
+  const watchedContractEndDate = form.watch("contractEndDate");
 
   function missingGlow(value: string | undefined) {
     return fromFile && !value ? "border-amber-300 bg-amber-50/50" : "";
@@ -421,6 +431,32 @@ export function InvoiceForm({
               )}
             </div>
           </div>
+
+          {watchedCategory === "ALQUILER_VIVIENDA" && (
+            <div className="space-y-2">
+              <Label>Vigencia del contrato</Label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground/60">Desde</p>
+                  <Input
+                    id="contractStartDate"
+                    type="date"
+                    className={missingGlow(watchedContractStartDate)}
+                    {...form.register("contractStartDate")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground/60">Hasta</p>
+                  <Input
+                    id="contractEndDate"
+                    type="date"
+                    className={missingGlow(watchedContractEndDate)}
+                    {...form.register("contractEndDate")}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">

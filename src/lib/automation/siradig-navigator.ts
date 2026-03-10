@@ -18,6 +18,9 @@ export interface InvoiceData {
   invoiceDate?: string; // ISO date string
   amount: string;
   fiscalMonth: number;
+  // For ALQUILER_VIVIENDA: lease contract validity period
+  contractStartDate?: string; // ISO date string
+  contractEndDate?: string;   // ISO date string
 }
 
 export interface FillResult {
@@ -178,6 +181,212 @@ export async function navigateToDeductionSection(
     }
     return { success: false, error: msg };
   }
+}
+
+/**
+ * Fill the "Beneficios para Locatarios (Inquilinos) - 40%" form in SiRADIG.
+ * This form has a completely different structure from other deduction forms:
+ * - Locador CUIT + optional second landlord + optional inmobiliaria
+ * - Contract validity dates (Vigencia del Contrato)
+ * - "No titular de inmueble" declaration checkbox
+ * - Monthly detail rows + per-row comprobante upload
+ */
+async function fillAlquilerLocatarioForm(
+  page: Page,
+  invoice: InvoiceData,
+  log: (msg: string) => void,
+  capture: (buffer: Buffer, slug: string, label: string) => Promise<void>
+): Promise<void> {
+  // Wait for form to be ready (CUIT + razonSocial already filled by the common flow)
+  await page.waitForTimeout(500);
+  await page.locator("#locadorAdicional").waitFor({ state: "visible", timeout: 10000 });
+
+  // Locador Adicional: No — use jQuery to trigger its change handler
+  log("Seleccionando Locador Adicional: No");
+  await page.evaluate(() => {
+    (window as any).$("#locadorAdicional").val("N").trigger("change");
+  });
+  await page.waitForTimeout(800);
+
+  // Inmobiliaria: No — use jQuery to trigger its change handler
+  log("Seleccionando Inmobiliaria: No");
+  await page.evaluate(() => {
+    (window as any).$("#inmobiliaria").val("N").trigger("change");
+  });
+  await page.waitForTimeout(800);
+
+  // Contract validity dates — use jQuery to set value + trigger for jQuery UI datepicker
+  if (invoice.contractStartDate) {
+    const startStr = formatDateDDMMYYYY(invoice.contractStartDate);
+    log(`Ingresando fecha de inicio del contrato: ${startStr}`);
+    await page.evaluate((d: string) => {
+      (window as any).$("#fechaVigenciaDesde").val(d).trigger("change");
+    }, startStr);
+    await page.waitForTimeout(300);
+  } else {
+    log("ADVERTENCIA: Fecha de inicio del contrato no disponible — completar manualmente");
+  }
+
+  if (invoice.contractEndDate) {
+    const endStr = formatDateDDMMYYYY(invoice.contractEndDate);
+    log(`Ingresando fecha de fin del contrato: ${endStr}`);
+    await page.evaluate((d: string) => {
+      (window as any).$("#fechaVigenciaHasta").val(d).trigger("change");
+    }, endStr);
+    await page.waitForTimeout(300);
+  } else {
+    log("ADVERTENCIA: Fecha de fin del contrato no disponible — completar manualmente");
+  }
+
+  // Check "no titular de inmueble" declaration — use jQuery click handler
+  log("Marcando declaracion de no titular de inmueble");
+  await page.evaluate(() => {
+    const $cb = (window as any).$("#noTitular");
+    if (!$cb.prop("checked")) {
+      $cb.trigger("click");
+    }
+  });
+  await page.waitForTimeout(300);
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "alquiler-header-filled",
+    "Datos del locador y contrato completados"
+  );
+
+  // Open "Agregar Mes Individual" dialog — use jQuery trigger to open the dialog
+  log("Agregando mes individual...");
+  await page.evaluate(() => {
+    (window as any).$("#btn_alta_mes").trigger("click");
+  });
+  await page.waitForTimeout(1000);
+
+  // Select month and fill rent amount
+  const monthValue = String(invoice.fiscalMonth);
+  log(`Seleccionando mes: ${monthValue}`);
+  await page.evaluate((v: string) => {
+    (window as any).$("#detalleIndividualMes").val(v).trigger("change");
+  }, monthValue);
+  await page.waitForTimeout(300);
+
+  // Type amount character-by-character so jQuery Validate marks the field as touched,
+  // then Tab away to trigger blur → Monto Tope auto-calculation
+  log(`Ingresando monto de alquiler: $${invoice.amount}`);
+  const montoField = page.locator("#detalleIndividualMontoRealMensual");
+  await montoField.click();
+  await montoField.fill(""); // clear any previous value
+  await montoField.pressSequentially(invoice.amount, { delay: 30 });
+  await montoField.press("Tab"); // Tab to next field triggers blur → Monto Tope calculation
+  await page.waitForTimeout(800);
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "alquiler-mes-dialog",
+    "Dialogo de mes individual completado"
+  );
+
+  // Click "Agregar" in the mes dialog
+  // Use filter({ has }) instead of `:visible` which is jQuery-only, not valid CSS for Playwright
+  log("Confirmando mes individual...");
+  const mesDialog = page.locator(".ui-dialog").filter({ has: page.locator("#dialog_alta_mes") });
+  const mesAgregarBtn = mesDialog.locator(".ui-dialog-buttonset button").first();
+  await mesAgregarBtn.waitFor({ state: "visible", timeout: 5000 });
+  await mesAgregarBtn.click();
+  await page.waitForTimeout(1500);
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "alquiler-mes-added",
+    "Mes individual agregado"
+  );
+
+  // Add comprobante — non-fatal: if this fails, we still proceed to Guardar
+  try {
+    log("Abriendo dialogo de comprobante para el mes...");
+    const lastMesRow = page.locator("#tabla_meses tbody tr").last();
+    const cmpCellLink = lastMesRow.locator("td").nth(3).locator("a, button").first();
+
+    const cmpOpened = await cmpCellLink.isVisible().catch(() => false);
+    if (cmpOpened) {
+      await cmpCellLink.click();
+    } else {
+      log("Usando boton global de alta de comprobante...");
+      await page.locator("#btn_alta_comprobante").click();
+    }
+    await page.waitForTimeout(1000);
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "alquiler-cmp-dialog",
+      "Dialogo de comprobante abierto"
+    );
+
+    // Fill comprobante fields via jQuery to trigger form handlers
+    if (invoice.invoiceDate) {
+      const dateStr = formatDateDDMMYYYY(invoice.invoiceDate);
+      log(`Ingresando fecha del comprobante: ${dateStr}`);
+      await page.evaluate((d: string) => {
+        (window as any).$("#cmpFechaEmision").val(d).trigger("change");
+      }, dateStr);
+      await page.waitForTimeout(300);
+    }
+
+    const invoiceTypeText = getSiradigInvoiceTypeText(invoice.invoiceType);
+    log(`Seleccionando tipo: ${invoiceTypeText}`);
+    await page.evaluate((label: string) => {
+      const $sel = (window as any).$("#cmpTipo");
+      const $opt = $sel.find("option").filter(function (this: HTMLOptionElement) {
+        return (window as any).$(this).text().trim() === label;
+      });
+      if ($opt.length > 0) {
+        $sel.val($opt.val()).trigger("change");
+      }
+    }, invoiceTypeText);
+    await page.waitForTimeout(300);
+
+    if (invoice.invoiceNumber) {
+      const parts = invoice.invoiceNumber.split("-");
+      if (parts.length === 2) {
+        log(`Ingresando numero de comprobante: ${invoice.invoiceNumber}`);
+        await page.evaluate(([pv, num]: string[]) => {
+          (window as any).$("#cmpPuntoVenta").val(pv).trigger("change");
+          (window as any).$("#cmpNumero").val(num).trigger("change");
+        }, [parts[0], parts[1]]);
+      } else {
+        await page.evaluate((num: string) => {
+          (window as any).$("#cmpNumero").val(num).trigger("change");
+        }, invoice.invoiceNumber);
+      }
+      await page.waitForTimeout(300);
+    }
+
+    log(`Ingresando monto: $${invoice.amount}`);
+    await page.evaluate((v: string) => {
+      (window as any).$("#cmpMontoFacturado").val(v).trigger("change");
+    }, invoice.amount);
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "alquiler-cmp-filled",
+      "Comprobante completado"
+    );
+
+    // Click "Agregar" in the comprobante dialog
+    log("Agregando comprobante...");
+    const cmpDialog = page.locator(".ui-dialog").filter({ has: page.locator("#dialog_alta_comprobante") });
+    const cmpAgregarBtn = cmpDialog.locator(".ui-dialog-buttonset button").first();
+    await cmpAgregarBtn.waitFor({ state: "visible", timeout: 5000 });
+    await cmpAgregarBtn.click();
+    await page.waitForTimeout(1500);
+  } catch (err) {
+    log(`Advertencia: no se pudo agregar el comprobante (${err instanceof Error ? err.message : err}). Continuando con Guardar...`);
+  }
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "alquiler-form-done",
+    "Formulario de alquiler completado"
+  );
 }
 
 /**
@@ -367,11 +576,14 @@ export async function fillDeductionForm(
       }
 
       // Step 10: Select Período (month) from #mesDesde
+      // Skip for ALQUILER_VIVIENDA — that form uses #btn_alta_mes instead
       const monthValue = String(invoice.fiscalMonth);
-      log(
-        `Seleccionando periodo: ${monthName || monthValue}`
-      );
-      await page.selectOption("#mesDesde", monthValue);
+      if (invoice.deductionCategory !== "ALQUILER_VIVIENDA") {
+        log(
+          `Seleccionando periodo: ${monthName || monthValue}`
+        );
+        await page.selectOption("#mesDesde", monthValue);
+      }
 
       // Education-specific: Select Familiar from dialog
       // Must happen AFTER period selection because #mesDesde change clears familiar
@@ -404,6 +616,13 @@ export async function fillDeductionForm(
           "Familiar seleccionado"
         );
       }
+    }
+
+    // ALQUILER_VIVIENDA uses a completely different form structure
+    if (invoice.deductionCategory === "ALQUILER_VIVIENDA") {
+      await fillAlquilerLocatarioForm(page, invoice, log, capture);
+      const screenshotBuffer = await page.screenshot({ fullPage: true });
+      return { success: true, screenshotBuffer };
     }
 
     // Step 11: Click "Alta de Comprobante" to open the dialog
