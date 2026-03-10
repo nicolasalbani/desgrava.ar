@@ -147,7 +147,7 @@ export function EmailIngestCard() {
           <Input
             readOnly
             value={ingestEmail}
-            className="font-mono text-sm bg-gray-50"
+            className="font-mono text-sm bg-muted/40"
           />
           <Button
             variant="outline"
@@ -221,7 +221,7 @@ export function EmailIngestCard() {
               return (
                 <div
                   key={log.id}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-sm space-y-1"
+                  className="rounded-md border border-border px-3 py-2 text-sm space-y-1"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
