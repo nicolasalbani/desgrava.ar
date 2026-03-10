@@ -26,7 +26,8 @@
       "Read(//Applications/Postgres.app/Contents/**)",
       "Read(//opt/homebrew/**)",
       "Read(//Applications/**)",
-      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes\" npx prisma migrate reset --force)"
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes\" npx prisma migrate reset --force)",
+      "Bash(ls -la:*)"
     ],
     "deny": [
       "Bash(git push --force*)",

@@ -22,9 +22,16 @@ export function DashboardHeader() {
   const { theme, setTheme } = useTheme();
   const { fiscalYear, setFiscalYear } = useFiscalYear();
   const [open, setOpen] = useState(false);
+  const [fiscalYearOpen, setFiscalYearOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    function handler() { setFiscalYearOpen(true); }
+    window.addEventListener("open-fiscal-year-selector", handler);
+    return () => window.removeEventListener("open-fiscal-year-selector", handler);
+  }, []);
 
   function cycleTheme() {
     const order = ["light", "dark", "system"] as const;
@@ -53,7 +60,7 @@ export function DashboardHeader() {
       <div className="flex-1" />
 
       {/* Fiscal year selector */}
-      <Popover>
+      <Popover open={fiscalYearOpen} onOpenChange={setFiscalYearOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="ghost"

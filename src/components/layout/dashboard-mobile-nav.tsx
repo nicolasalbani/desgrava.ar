@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  KeyRound,
+  User,
   FileText,
   Send,
   Settings,
@@ -18,7 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 const navItems = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
-  { href: "/credenciales", label: "Credenciales ARCA", icon: KeyRound },
+  { href: "/perfil", label: "Perfil", icon: User },
   { href: "/facturas", label: "Facturas", icon: FileText },
   { href: "/automatizacion", label: "Enviar a SiRADIG", icon: Send },
   { href: "/configuracion", label: "Configuracion", icon: Settings },

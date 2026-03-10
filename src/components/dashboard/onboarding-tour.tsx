@@ -2,7 +2,7 @@
 
 import {
   Check,
-  KeyRound,
+  User,
   FileText,
   Send,
   ArrowRight,
@@ -10,7 +10,6 @@ import {
   CalendarDays,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useFiscalYear } from "@/contexts/fiscal-year";
@@ -18,7 +17,6 @@ import { useFiscalYear } from "@/contexts/fiscal-year";
 type StepState = "completed" | "active" | "pending";
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_OPTIONS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
 
 interface StepDef {
   id: string;
@@ -34,11 +32,11 @@ function getSteps(fiscalYear: number): StepDef[] {
   return [
     {
       id: "credentials",
-      title: "Credenciales ARCA",
-      description: "Configura tu CUIT y clave fiscal",
+      title: "Perfil",
+      description: "Configura tu CUIT y clave fiscal de ARCA",
       completedDescription: "Credenciales configuradas",
-      icon: KeyRound,
-      href: "/credenciales",
+      icon: User,
+      href: "/perfil",
       activeLabel: "Configurar",
     },
     {
@@ -48,7 +46,7 @@ function getSteps(fiscalYear: number): StepDef[] {
       completedDescription: `Año ${fiscalYear} seleccionado`,
       icon: CalendarDays,
       href: null,
-      activeLabel: null,
+      activeLabel: "Seleccionar",
     },
     {
       id: "invoices",
@@ -83,18 +81,15 @@ interface OnboardingTourProps {
 }
 
 export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProps) {
-  const { fiscalYear, setFiscalYear } = useFiscalYear();
-  const router = useRouter();
+  const { fiscalYear } = useFiscalYear();
   const steps = getSteps(fiscalYear ?? CURRENT_YEAR);
   const completedCount = completedSteps.filter(Boolean).length;
   const progressPercent = Math.round((completedCount / 4) * 100);
   const allDone = completedCount === 4;
 
-  async function handleFiscalYearSelect(year: number) {
-    setFiscalYear(year);
-    // Allow the API write to settle, then re-evaluate server-side completion
-    await new Promise((r) => setTimeout(r, 400));
-    router.refresh();
+  function openFiscalYearSelector() {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.dispatchEvent(new CustomEvent("open-fiscal-year-selector"));
   }
 
   return (
@@ -143,7 +138,7 @@ export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProp
             step={step}
             state={getStepState(index, completedSteps)}
             index={index}
-            onFiscalYearSelect={handleFiscalYearSelect}
+            onClick={step.id === "fiscal-year" ? openFiscalYearSelector : undefined}
           />
         ))}
       </div>
@@ -174,18 +169,17 @@ function StepCard({
   step,
   state,
   index,
-  onFiscalYearSelect,
+  onClick,
 }: {
   step: StepDef;
   state: StepState;
   index: number;
-  onFiscalYearSelect: (year: number) => void;
+  onClick?: () => void;
 }) {
   const Icon = step.icon;
   const isCompleted = state === "completed";
   const isActive = state === "active";
   const isPending = state === "pending";
-  const isFiscalYearStep = step.id === "fiscal-year";
 
   const baseDelay = 150 + index * 100;
 
@@ -202,7 +196,7 @@ function StepCard({
         ],
         isActive && [
           "bg-white dark:bg-card border border-border shadow-md",
-          !isFiscalYearStep && "hover:shadow-lg hover:-translate-y-0.5",
+          "hover:shadow-lg hover:-translate-y-0.5",
         ],
         isPending && [
           "bg-transparent border border-transparent",
@@ -237,7 +231,7 @@ function StepCard({
           </div>
         )}
 
-        {isActive && !isFiscalYearStep && (
+        {isActive && (
           <span className="text-[11px] font-medium text-primary/70 tracking-wide uppercase">
             Siguiente
           </span>
@@ -266,23 +260,8 @@ function StepCard({
         {isCompleted ? step.completedDescription : step.description}
       </p>
 
-      {/* Fiscal year picker (active) */}
-      {isActive && isFiscalYearStep && (
-        <div className="mt-auto pt-4 flex gap-2">
-          {YEAR_OPTIONS.map((year) => (
-            <button
-              key={year}
-              onClick={() => onFiscalYearSelect(year)}
-              className="flex-1 rounded-xl border border-border py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/30 hover:text-primary hover:bg-primary/[0.04] transition-all duration-200"
-            >
-              {year}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Navigation CTA (active, non-fiscal-year) */}
-      {isActive && !isFiscalYearStep && (
+      {/* Navigation CTA (active) */}
+      {isActive && step.activeLabel && (
         <div className="mt-auto pt-3 flex items-center text-xs font-medium text-primary group-hover:gap-1.5 gap-1 transition-all duration-300">
           {step.activeLabel}
           <ArrowRight className="h-3 w-3" />
@@ -296,6 +275,14 @@ function StepCard({
       <Link href={step.href} className="h-full">
         {inner}
       </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button className="h-full text-left" onClick={onClick}>
+        {inner}
+      </button>
     );
   }
 
