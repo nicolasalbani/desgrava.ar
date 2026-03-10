@@ -9,32 +9,39 @@ import { EmailIngestCard } from "@/components/configuracion/email-ingest-card";
 
 interface Preference {
   notifications: boolean;
+  ownsProperty: boolean;
 }
 
 export default function ConfiguracionPage() {
   const [preference, setPreference] = useState<Preference>({
     notifications: true,
+    ownsProperty: false,
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/configuracion")
       .then((res) => res.json())
-      .then((data) => setPreference({ notifications: data.preference?.notifications ?? true }))
+      .then((data) =>
+        setPreference({
+          notifications: data.preference?.notifications ?? true,
+          ownsProperty: data.preference?.ownsProperty ?? false,
+        })
+      )
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleNotificationsChange(checked: boolean) {
-    setPreference((prev) => ({ ...prev, notifications: checked }));
+  async function handleToggle(field: keyof Preference, checked: boolean) {
+    setPreference((prev) => ({ ...prev, [field]: checked }));
     try {
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notifications: checked }),
+        body: JSON.stringify({ [field]: checked }),
       });
       if (!res.ok) throw new Error();
     } catch {
-      setPreference((prev) => ({ ...prev, notifications: !checked }));
+      setPreference((prev) => ({ ...prev, [field]: !checked }));
       toast.error("Error al guardar la configuracion");
     }
   }
@@ -61,6 +68,22 @@ export default function ConfiguracionPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
+            <Label htmlFor="ownsProperty">Soy titular de un inmueble</Label>
+            <p className="text-xs text-muted-foreground/60">
+              Activar si sos propietario de un inmueble en cualquier proporcion. Determina el beneficio de alquiler aplicable (10% Art. 85 inc. k vs. 40% Art. 85 inc. h).
+            </p>
+          </div>
+          <Switch
+            id="ownsProperty"
+            checked={preference.ownsProperty}
+            onCheckedChange={(checked) => handleToggle("ownsProperty", checked)}
+          />
+        </div>
+
+        <div className="border-t border-border" />
+
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
             <Label htmlFor="notifications">Notificaciones</Label>
             <p className="text-xs text-muted-foreground/60">
               Recibir notificaciones sobre el estado de las cargas
@@ -69,7 +92,7 @@ export default function ConfiguracionPage() {
           <Switch
             id="notifications"
             checked={preference.notifications}
-            onCheckedChange={handleNotificationsChange}
+            onCheckedChange={(checked) => handleToggle("notifications", checked)}
           />
         </div>
 

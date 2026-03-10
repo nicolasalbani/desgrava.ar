@@ -141,10 +141,11 @@ model AutomationJob {
 // ─── User Preferences ──────────────────────────────────────────
 
 model UserPreference {
-  id             String  @id @default(cuid())
-  userId         String  @unique
+  id                String  @id @default(cuid())
+  userId            String  @unique
   defaultFiscalYear Int?
-  notifications  Boolean @default(true)
+  notifications     Boolean @default(true)
+  ownsProperty      Boolean @default(false) // true = Beneficio 10% (Art. 85 inc. k), false = Beneficio 40% (Art. 85 inc. h)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

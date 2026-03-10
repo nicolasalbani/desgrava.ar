@@ -78,6 +78,20 @@ export function isAlquilerCategory(linkId: string): boolean {
   return ALQUILER_LINK_IDS.has(linkId);
 }
 
+/**
+ * Returns the SiRADIG link ID for the alquiler deduction based on user ownership.
+ * - ownsProperty = true  → Beneficio 10% (Art. 85 inc. k)
+ * - ownsProperty = false → Beneficio 40% inquilinos no propietarios (Art. 85 inc. h)
+ */
+export function getAlquilerLinkId(ownsProperty: boolean): string {
+  // inq_o = Beneficio 40% inquilinos NO propietarios (Art. 85 inc. h)
+  // inq_n = Beneficio 10% inquilinos propietarios (Art. 85 inc. k)
+  // prop  = Locadores (propietarios que alquilan) — NOT for tenants
+  return ownsProperty
+    ? "link_agregar_alquiler_inmuebles_inq_n"
+    : "link_agregar_alquiler_inmuebles_inq_o";
+}
+
 export function isEducationCategory(category: string): boolean {
   return category === "GASTOS_EDUCATIVOS";
 }

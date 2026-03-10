@@ -17,6 +17,7 @@ export async function GET() {
     preference: preference ?? {
       defaultFiscalYear: null,
       notifications: true,
+      ownsProperty: false,
     },
   });
 }
@@ -28,15 +29,16 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { defaultFiscalYear, notifications } = body;
+  const { defaultFiscalYear, notifications, ownsProperty } = body;
 
   const preference = await prisma.userPreference.upsert({
     where: { userId: session.user.id },
-    update: { defaultFiscalYear, notifications },
+    update: { defaultFiscalYear, notifications, ownsProperty },
     create: {
       userId: session.user.id,
       defaultFiscalYear: defaultFiscalYear ?? null,
       notifications: notifications ?? true,
+      ownsProperty: ownsProperty ?? false,
     },
   });
 

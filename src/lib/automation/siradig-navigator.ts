@@ -3,6 +3,7 @@ import {
   getSiradigCategoryText,
   getSiradigInvoiceTypeText,
   getSiradigCategoryLinkId,
+  getAlquilerLinkId,
   isAlquilerCategory,
   isEducationCategory,
   isIndumentariaTrabajoCategory,
@@ -21,6 +22,8 @@ export interface InvoiceData {
   // For ALQUILER_VIVIENDA: lease contract validity period
   contractStartDate?: string; // ISO date string
   contractEndDate?: string;   // ISO date string
+  // User preference: affects which alquiler benefit applies
+  ownsProperty?: boolean; // true = 10% (Art. 85 inc. k), false = 40% (Art. 85 inc. h)
 }
 
 export interface FillResult {
@@ -238,15 +241,17 @@ async function fillAlquilerLocatarioForm(
     log("ADVERTENCIA: Fecha de fin del contrato no disponible — completar manualmente");
   }
 
-  // Check "no titular de inmueble" declaration — use jQuery click handler
-  log("Marcando declaracion de no titular de inmueble");
-  await page.evaluate(() => {
-    const $cb = (window as any).$("#noTitular");
-    if (!$cb.prop("checked")) {
-      $cb.trigger("click");
-    }
-  });
-  await page.waitForTimeout(300);
+  // Check "no titular de inmueble" declaration — only for non-property-owners (40% form)
+  if (!invoice.ownsProperty) {
+    log("Marcando declaracion de no titular de inmueble");
+    await page.evaluate(() => {
+      const $cb = (window as any).$("#noTitular");
+      if (!$cb.prop("checked")) {
+        $cb.trigger("click");
+      }
+    });
+    await page.waitForTimeout(300);
+  }
 
   await capture(
     await page.screenshot({ fullPage: true }),
@@ -495,7 +500,14 @@ export async function fillDeductionForm(
       );
 
       // Step 8: Select the specific deduction category by its link ID
-      const linkId = getSiradigCategoryLinkId(invoice.deductionCategory);
+      // For ALQUILER_VIVIENDA, pick the right sub-category based on user ownership
+      let linkId = getSiradigCategoryLinkId(invoice.deductionCategory);
+      if (invoice.deductionCategory === "ALQUILER_VIVIENDA") {
+        linkId = getAlquilerLinkId(invoice.ownsProperty ?? false);
+        log(invoice.ownsProperty
+          ? "Usando Beneficio 10% (Art. 85 inc. k) — titular de inmueble"
+          : "Usando Beneficio 40% inquilinos (Art. 85 inc. h) — no propietario");
+      }
       log(`Seleccionando categoria: ${categoryText}`);
 
       if (linkId) {
