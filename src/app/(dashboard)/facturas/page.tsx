@@ -247,7 +247,10 @@ function FacturasInner() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div
+        className="flex items-center justify-between animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationFillMode: "backwards" }}
+      >
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Facturas</h1>
           <p className="text-sm text-muted-foreground/70 mt-1">
@@ -284,7 +287,12 @@ function FacturasInner() {
         />
       )}
 
-      <InvoiceList key={refreshKey} onInitialLoad={handleInitialLoad} />
+      <div
+        className="animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
+      >
+        <InvoiceList key={refreshKey} onInitialLoad={handleInitialLoad} />
+      </div>
 
       <EmailIngestDialog open={emailOpen} onOpenChange={setEmailOpen} />
 

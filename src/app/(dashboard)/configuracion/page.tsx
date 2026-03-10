@@ -43,7 +43,10 @@ export default function ConfiguracionPage() {
 
   return (
     <div className="space-y-10 max-w-xl">
-      <div>
+      <div
+        className="animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationFillMode: "backwards" }}
+      >
         <h1 className="text-2xl font-semibold tracking-tight">
           Configuracion
         </h1>
@@ -52,7 +55,10 @@ export default function ConfiguracionPage() {
         </p>
       </div>
 
-      <div className="space-y-6">
+      <div
+        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
+      >
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label htmlFor="notifications">Notificaciones</Label>

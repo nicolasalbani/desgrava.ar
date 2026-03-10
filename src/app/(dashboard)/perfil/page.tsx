@@ -38,7 +38,10 @@ export default function PerfilPage() {
 
   return (
     <div className="space-y-10 max-w-xl">
-      <div>
+      <div
+        className="animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationFillMode: "backwards" }}
+      >
         <h1 className="text-2xl font-semibold tracking-tight">Perfil</h1>
         <p className="text-sm text-muted-foreground/70 mt-1">
           Tu cuenta y configuracion personal
@@ -46,7 +49,10 @@ export default function PerfilPage() {
       </div>
 
       {/* User info */}
-      <div className="flex items-center gap-4">
+      <div
+        className="flex items-center gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationDelay: "80ms", animationFillMode: "backwards" }}
+      >
         <Avatar className="h-14 w-14 ring-2 ring-border">
           <AvatarImage src={session?.user?.image ?? undefined} />
           <AvatarFallback className="text-lg">
@@ -61,10 +67,16 @@ export default function PerfilPage() {
         </div>
       </div>
 
-      <div className="border-t border-border" />
+      <div
+        className="border-t border-border animate-in fade-in duration-500"
+        style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
+      />
 
       {/* ARCA credentials */}
-      <div className="space-y-6">
+      <div
+        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
+      >
         <div>
           <h2 className="text-base font-semibold">Credenciales ARCA</h2>
           <p className="text-sm text-muted-foreground/70 mt-0.5">
@@ -74,10 +86,16 @@ export default function PerfilPage() {
         <CredentialsForm />
       </div>
 
-      <div className="border-t border-border" />
+      <div
+        className="border-t border-border animate-in fade-in duration-500"
+        style={{ animationDelay: "240ms", animationFillMode: "backwards" }}
+      />
 
       {/* Preferences */}
-      <div className="space-y-6">
+      <div
+        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationDelay: "240ms", animationFillMode: "backwards" }}
+      >
         <div>
           <h2 className="text-base font-semibold">Preferencias</h2>
           <p className="text-sm text-muted-foreground/70 mt-0.5">

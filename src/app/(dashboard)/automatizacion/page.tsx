@@ -70,7 +70,10 @@ export default function AutomatizacionPage() {
 
   return (
     <div className="space-y-10">
-      <div>
+      <div
+        className="animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationFillMode: "backwards" }}
+      >
         <h1 className="text-2xl font-semibold tracking-tight">Enviar a SiRADIG</h1>
         <p className="text-sm text-muted-foreground/70 mt-1">
           Carga tus deducciones directamente en SiRADIG
@@ -79,7 +82,10 @@ export default function AutomatizacionPage() {
 
       {showCelebration && <CelebrationBanner />}
 
-      <div className="space-y-2">
+      <div
+        className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationDelay: "80ms", animationFillMode: "backwards" }}
+      >
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
           Facturas pendientes
         </h2>
@@ -89,7 +95,10 @@ export default function AutomatizacionPage() {
         />
       </div>
 
-      <div className="space-y-2">
+      <div
+        className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
+      >
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
           Envios a SiRADIG
         </h2>
