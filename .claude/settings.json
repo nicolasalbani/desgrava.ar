@@ -27,12 +27,16 @@
       "Read(//opt/homebrew/**)",
       "Read(//Applications/**)",
       "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes\" npx prisma migrate reset --force)",
-      "Bash(ls -la:*)"
+      "Bash(ls -la:*)",
+      "Bash(PRISMA_NONINTERACTIVE=1 npx prisma migrate dev --name add_fiscal_year_to_profile --create-only)"
     ],
     "deny": [
       "Bash(git push --force*)",
       "Bash(git reset --hard*)",
       "Bash(git clean -f*)"
+    ],
+    "additionalDirectories": [
+      "/Users/nicolasalbani/Github/desgrava.ar/src/app/api/cargas-familia"
     ]
   }
 }

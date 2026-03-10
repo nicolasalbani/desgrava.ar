@@ -73,7 +73,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
     const job = await prisma.automationJob.findUnique({
       where: { id: jobId },
       include: {
-        user: { include: { arcaCredential: true, preference: true } },
+        user: { include: { arcaCredential: true, yearPreferences: true } },
         invoice: true,
       },
     });
@@ -213,7 +213,9 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               fiscalMonth: job.invoice.fiscalMonth,
               contractStartDate: job.invoice.contractStartDate?.toISOString() ?? undefined,
               contractEndDate: job.invoice.contractEndDate?.toISOString() ?? undefined,
-              ownsProperty: job.user.preference?.ownsProperty ?? false,
+              ownsProperty: job.user.yearPreferences.find(
+                (p) => p.fiscalYear === job.invoice!.fiscalYear
+              )?.ownsProperty ?? false,
             },
             (msg) => appendLog(jobId, msg, onLog),
             onScreenshot

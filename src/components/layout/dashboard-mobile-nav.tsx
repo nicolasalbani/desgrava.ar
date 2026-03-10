@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   User,
+  KeyRound,
   FileText,
   Send,
   Settings,
@@ -18,7 +19,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 const navItems = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
-  { href: "/perfil", label: "Perfil", icon: User },
+  { href: "/credenciales", label: "Credenciales ARCA", icon: KeyRound },
+  { href: "/perfil", label: "Perfil impositivo", icon: User },
   { href: "/facturas", label: "Facturas", icon: FileText },
   { href: "/automatizacion", label: "Enviar a SiRADIG", icon: Send },
   { href: "/configuracion", label: "Configuracion", icon: Settings },

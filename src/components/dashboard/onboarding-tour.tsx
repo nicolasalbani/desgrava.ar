@@ -3,6 +3,7 @@
 import {
   Check,
   User,
+  KeyRound,
   FileText,
   Send,
   ArrowRight,
@@ -32,11 +33,11 @@ function getSteps(fiscalYear: number): StepDef[] {
   return [
     {
       id: "credentials",
-      title: "Perfil",
+      title: "Credenciales ARCA",
       description: "Configura tu CUIT y clave fiscal de ARCA",
       completedDescription: "Credenciales configuradas",
-      icon: User,
-      href: "/perfil",
+      icon: KeyRound,
+      href: "/credenciales",
       activeLabel: "Configurar",
     },
     {
@@ -47,6 +48,15 @@ function getSteps(fiscalYear: number): StepDef[] {
       icon: CalendarDays,
       href: null,
       activeLabel: "Seleccionar",
+    },
+    {
+      id: "perfil",
+      title: "Perfil impositivo",
+      description: "Declara tus cargas de familia y preferencias",
+      completedDescription: "Perfil impositivo configurado",
+      icon: User,
+      href: "/perfil",
+      activeLabel: "Completar",
     },
     {
       id: "invoices",
@@ -76,7 +86,7 @@ function getStepState(index: number, completedSteps: boolean[]): StepState {
 }
 
 interface OnboardingTourProps {
-  completedSteps: [boolean, boolean, boolean, boolean];
+  completedSteps: [boolean, boolean, boolean, boolean, boolean];
   firstName: string;
 }
 
@@ -84,8 +94,8 @@ export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProp
   const { fiscalYear } = useFiscalYear();
   const steps = getSteps(fiscalYear ?? CURRENT_YEAR);
   const completedCount = completedSteps.filter(Boolean).length;
-  const progressPercent = Math.round((completedCount / 4) * 100);
-  const allDone = completedCount === 4;
+  const progressPercent = Math.round((completedCount / 5) * 100);
+  const allDone = completedCount === 5;
 
   function openFiscalYearSelector() {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -120,7 +130,7 @@ export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProp
               Progreso
             </p>
             <p className="text-xs tabular-nums text-muted-foreground">
-              {completedCount}/4
+              {completedCount}/5
             </p>
           </div>
           <Progress value={progressPercent} className="h-1.5" />
@@ -131,7 +141,7 @@ export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProp
       {allDone && <CelebrationBanner />}
 
       {/* Step cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {steps.map((step, index) => (
           <StepCard
             key={step.id}

@@ -1,33 +1,37 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { CredentialsForm } from "@/components/credenciales/credentials-form";
+import { FamilyDependentsSection } from "@/components/perfil/family-dependents";
+import { useFiscalYear } from "@/contexts/fiscal-year";
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 export default function PerfilPage() {
-  const { data: session } = useSession();
+  const { fiscalYear } = useFiscalYear();
+  const year = fiscalYear ?? CURRENT_YEAR;
+
   const [ownsProperty, setOwnsProperty] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/configuracion")
+    setLoading(true);
+    fetch(`/api/perfil-impositivo?year=${year}`)
       .then((res) => res.json())
-      .then((data) => setOwnsProperty(data.preference?.ownsProperty ?? false))
+      .then((data) => setOwnsProperty(data.ownsProperty ?? false))
       .finally(() => setLoading(false));
-  }, []);
+  }, [year]);
 
   async function handleOwnsPropertyToggle(checked: boolean) {
     setOwnsProperty(checked);
     try {
-      const res = await fetch("/api/configuracion", {
+      const res = await fetch("/api/perfil-impositivo", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ownsProperty: checked }),
+        body: JSON.stringify({ year, ownsProperty: checked }),
       });
       if (!res.ok) throw new Error();
     } catch {
@@ -42,67 +46,22 @@ export default function PerfilPage() {
         className="animate-in fade-in slide-in-from-bottom-2 duration-500"
         style={{ animationFillMode: "backwards" }}
       >
-        <h1 className="text-2xl font-semibold tracking-tight">Perfil</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Perfil impositivo</h1>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+            {year}
+          </span>
+        </div>
         <p className="text-sm text-muted-foreground/70 mt-1">
-          Tu cuenta y configuracion personal
+          Tu situacion personal y familiar para el calculo de deducciones
         </p>
       </div>
 
-      {/* User info */}
+      {/* Situacion personal */}
       <div
-        className="flex items-center gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
         style={{ animationDelay: "80ms", animationFillMode: "backwards" }}
       >
-        <Avatar className="h-14 w-14 ring-2 ring-border">
-          <AvatarImage src={session?.user?.image ?? undefined} />
-          <AvatarFallback className="text-lg">
-            {session?.user?.name?.charAt(0)?.toUpperCase() ?? "U"}
-          </AvatarFallback>
-        </Avatar>
-        <div>
-          <p className="font-medium">{session?.user?.name ?? "—"}</p>
-          <p className="text-sm text-muted-foreground/70">
-            {session?.user?.email ?? "—"}
-          </p>
-        </div>
-      </div>
-
-      <div
-        className="border-t border-border animate-in fade-in duration-500"
-        style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
-      />
-
-      {/* ARCA credentials */}
-      <div
-        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
-        style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
-      >
-        <div>
-          <h2 className="text-base font-semibold">Credenciales ARCA</h2>
-          <p className="text-sm text-muted-foreground/70 mt-0.5">
-            Tu CUIT y clave fiscal para automatizar la carga en SiRADIG
-          </p>
-        </div>
-        <CredentialsForm />
-      </div>
-
-      <div
-        className="border-t border-border animate-in fade-in duration-500"
-        style={{ animationDelay: "240ms", animationFillMode: "backwards" }}
-      />
-
-      {/* Preferences */}
-      <div
-        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
-        style={{ animationDelay: "240ms", animationFillMode: "backwards" }}
-      >
-        <div>
-          <h2 className="text-base font-semibold">Preferencias</h2>
-          <p className="text-sm text-muted-foreground/70 mt-0.5">
-            Opciones que afectan el calculo de tus deducciones
-          </p>
-        </div>
-
         {loading ? (
           <div className="flex justify-center py-6">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
@@ -122,6 +81,25 @@ export default function PerfilPage() {
             />
           </div>
         )}
+      </div>
+
+      <div
+        className="border-t border-border animate-in fade-in duration-500"
+        style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
+      />
+
+      {/* Cargas de Familia */}
+      <div
+        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
+      >
+        <div>
+          <h2 className="text-base font-semibold">Cargas de Familia</h2>
+          <p className="text-sm text-muted-foreground/70 mt-0.5">
+            Declara tus dependientes familiares para que se descuenten de tu base imponible
+          </p>
+        </div>
+        <FamilyDependentsSection fiscalYear={year} />
       </div>
     </div>
   );
