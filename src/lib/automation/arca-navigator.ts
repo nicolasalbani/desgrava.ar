@@ -26,7 +26,7 @@ export async function loginToArca(
 
   try {
     log("Navegando a la pagina de login de ARCA...");
-    await page.goto(sel.url, { waitUntil: "networkidle" });
+    await page.goto(sel.url, { waitUntil: "load" });
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -50,7 +50,7 @@ export async function loginToArca(
     log("Ingresando CUIT...");
     await page.fill(sel.cuitInput, cuit);
     await page.click(sel.cuitSubmit);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -62,7 +62,7 @@ export async function loginToArca(
     log("Ingresando clave fiscal...");
     await page.fill(sel.claveInput, clave);
     await page.click(sel.loginSubmit);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // Check for errors
     const errorEl = await page.$(sel.errorMessage);
@@ -113,7 +113,7 @@ export async function navigateToSiradig(
   try {
     log("Navegando al portal de servicios...");
     await page.goto(ARCA_SELECTORS.portal.servicesUrl, {
-      waitUntil: "networkidle",
+      waitUntil: "load",
     });
 
     await capture(
@@ -146,7 +146,7 @@ export async function navigateToSiradig(
       page.waitForEvent("popup"),
       siradigLink.click(),
     ]);
-    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForLoadState("load");
 
     await capture(
       await siradigPage.screenshot({ fullPage: true }),

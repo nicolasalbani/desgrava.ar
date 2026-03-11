@@ -66,14 +66,14 @@ export async function navigateToDeductionSection(
   try {
     // Step 2: Select person to represent
     log("Seleccionando persona a representar...");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // The person selection page uses <input type="button" class="btn_empresa">
     // elements with the person name in the value attribute
     const personButton = page.locator("input.btn_empresa").first();
     await personButton.waitFor({ timeout: 30000 });
     await personButton.click();
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -99,7 +99,7 @@ export async function navigateToDeductionSection(
     log("Haciendo click en Continuar...");
     const continueBtn = page.getByText("Continuar").first();
     await continueBtn.click();
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -144,7 +144,7 @@ export async function navigateToDeductionSection(
     const formLoadBtn = page.locator("#btn_carga");
     await formLoadBtn.waitFor({ state: "visible", timeout: 30000 });
     await formLoadBtn.click();
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -159,7 +159,7 @@ export async function navigateToDeductionSection(
       .first();
     await deductionsSection.waitFor({ timeout: 30000 });
     await deductionsSection.click();
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     await page.waitForTimeout(1000); // Wait for accordion animation
 
     await capture(
@@ -472,7 +472,7 @@ export async function fillDeductionForm(
           );
           const editBtn = row.locator(".act_editar");
           await editBtn.click();
-          await page.waitForLoadState("networkidle");
+          await page.waitForLoadState("load");
 
           await capture(
             await page.screenshot({ fullPage: true }),
@@ -530,7 +530,7 @@ export async function fillDeductionForm(
         await categoryLink.waitFor({ timeout: 10000 });
         await categoryLink.click();
       }
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
 
       await capture(
         await page.screenshot({ fullPage: true }),
@@ -752,7 +752,7 @@ export async function submitDeduction(
     // SiRADIG handlers often use setTimeout before AJAX calls,
     // so wait for the delayed request to fire and complete
     await page.waitForTimeout(500);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -817,7 +817,7 @@ export async function submitDeduction(
       await confirmButton.waitFor({ timeout: 3000 });
       log("Confirmando guardado...");
       await confirmButton.click();
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
 
       // After confirming, check again for errors
       const postConfirmError = await page
