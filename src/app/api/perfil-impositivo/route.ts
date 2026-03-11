@@ -14,11 +14,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
   }
 
-  const pref = await prisma.userYearPreference.findUnique({
+  const pref = await prisma.userYearPreference.upsert({
     where: { userId_fiscalYear: { userId: session.user.id, fiscalYear: year } },
+    update: {},
+    create: { userId: session.user.id, fiscalYear: year, ownsProperty: false },
   });
 
-  return NextResponse.json({ ownsProperty: pref?.ownsProperty ?? false });
+  return NextResponse.json({ ownsProperty: pref.ownsProperty });
 }
 
 export async function PUT(req: NextRequest) {

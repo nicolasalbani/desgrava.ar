@@ -15,16 +15,19 @@ export default async function DashboardPage() {
 
   const activeYear = userPreference?.defaultFiscalYear ?? new Date().getFullYear();
 
-  const [invoiceCount, completedJobCount, familyDependentCount] = await Promise.all([
+  const [invoiceCount, completedJobCount, yearPref] = await Promise.all([
     prisma.invoice.count({ where: { userId, fiscalYear: activeYear } }),
     prisma.automationJob.count({ where: { userId, status: "COMPLETED" } }),
-    prisma.familyDependent.count({ where: { userId, fiscalYear: activeYear } }),
+    prisma.userYearPreference.findUnique({
+      where: { userId_fiscalYear: { userId, fiscalYear: activeYear } },
+      select: { id: true },
+    }),
   ]);
 
   const completedSteps: [boolean, boolean, boolean, boolean, boolean] = [
     credentialCount > 0,
     userPreference?.defaultFiscalYear != null,
-    familyDependentCount > 0,
+    yearPref != null,
     invoiceCount > 0,
     completedJobCount > 0,
   ];
