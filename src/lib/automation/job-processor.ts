@@ -61,6 +61,7 @@ async function appendLog(jobId: string, message: string, onLog?: LogCallback) {
   logs.push(entry);
   jobLogs.set(jobId, logs);
 
+  console.log(`[job:${jobId.slice(0, 8)}] ${message}`);
   onLog?.(jobId, entry);
 
   // Also persist to DB
