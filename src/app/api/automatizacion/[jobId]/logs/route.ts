@@ -27,6 +27,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
     return new Response("Job no encontrado", { status: 404 });
   }
 
+  // If the job is already terminal (e.g. after server restart), respond immediately
+  if (TERMINAL_STATUSES.includes(job.status)) {
+    const terminalData = JSON.stringify({ done: true, status: job.status });
+    return new Response(`data: ${terminalData}\n\n`, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  }
+
   const encoder = new TextEncoder();
   let lastLogIndex = 0;
   let lastScreenshotIndex = 0;
@@ -97,7 +109,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
       });
 
       // Poll for new logs, screenshots, and status
-      const interval = setInterval(() => {
+      const interval = setInterval(async () => {
         if (closed) {
           clearInterval(interval);
           return;
@@ -105,7 +117,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
 
         sendUpdates();
 
-        const status = getJobStatus(jobId);
+        let status = getJobStatus(jobId);
+
+        // Fallback to DB when in-memory state is lost (e.g. after server restart)
+        if (!status) {
+          try {
+            const dbJob = await prisma.automationJob.findUnique({
+              where: { id: jobId },
+              select: { status: true },
+            });
+            if (dbJob) {
+              status = dbJob.status;
+            }
+          } catch {
+            // DB query failed, will retry next interval
+          }
+        }
+
         if (status && TERMINAL_STATUSES.includes(status)) {
           sendUpdates(); // Final flush
 

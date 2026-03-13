@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createInvoiceSchema } from "@/lib/validators/invoice";
 import { Prisma } from "@/generated/prisma/client";
+import { matchDependent, buildInvoiceText } from "@/lib/matching/dependent-matcher";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -43,6 +44,8 @@ export async function GET(req: NextRequest) {
       fileMimeType: true,
       contractStartDate: true,
       contractEndDate: true,
+      familyDependentId: true,
+      familyDependent: { select: { id: true, nombre: true, apellido: true } },
       createdAt: true,
       _count: { select: { automationJobs: true } },
     },
@@ -88,11 +91,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Auto-link education invoices to a family dependent
+    let familyDependentId: string | null = parsed.data.familyDependentId ?? null;
+    if (parsed.data.deductionCategory === "GASTOS_EDUCATIVOS" && !familyDependentId) {
+      const dependents = await prisma.familyDependent.findMany({
+        where: { userId: session.user.id, fiscalYear: parsed.data.fiscalYear },
+        select: { id: true, nombre: true, apellido: true },
+      });
+      const text = buildInvoiceText({
+        description: parsed.data.description,
+        providerName: parsed.data.providerName,
+      });
+      const result = matchDependent(text, dependents);
+      familyDependentId = result.dependentId;
+      if (result.reason !== "no_match") {
+        console.log(
+          `[auto-link] invoice match: ${result.reason}${result.matchedName ? ` (${result.matchedName})` : ""}`,
+        );
+      }
+    }
+
     const invoice = await prisma.invoice.create({
       data: {
         userId: session.user.id,
         ...parsed.data,
         amount: new Prisma.Decimal(parsed.data.amount),
+        familyDependentId,
         source: fileBase64 ? "PDF" : "MANUAL",
         ...(fileBase64
           ? {

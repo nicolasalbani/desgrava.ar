@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateInvoiceSchema } from "@/lib/validators/invoice";
 import { Prisma } from "@/generated/prisma/client";
+import { matchDependent, buildInvoiceText } from "@/lib/matching/dependent-matcher";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -54,6 +55,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const updateData: Record<string, unknown> = { ...parsed.data };
     if (parsed.data.amount !== undefined) {
       updateData.amount = new Prisma.Decimal(parsed.data.amount);
+    }
+
+    // Handle category change: clear dependent link if switching away from education
+    const newCategory = parsed.data.deductionCategory ?? existing.deductionCategory;
+    if (newCategory !== "GASTOS_EDUCATIVOS") {
+      updateData.familyDependentId = null;
+    } else if (
+      parsed.data.deductionCategory === "GASTOS_EDUCATIVOS" &&
+      existing.deductionCategory !== "GASTOS_EDUCATIVOS" &&
+      !parsed.data.familyDependentId
+    ) {
+      // Switching TO education: attempt auto-link
+      const dependents = await prisma.familyDependent.findMany({
+        where: {
+          userId: session.user.id,
+          fiscalYear: parsed.data.fiscalYear ?? existing.fiscalYear,
+        },
+        select: { id: true, nombre: true, apellido: true },
+      });
+      const text = buildInvoiceText({
+        description: parsed.data.description ?? existing.description,
+        providerName: parsed.data.providerName ?? existing.providerName,
+      });
+      const result = matchDependent(text, dependents);
+      updateData.familyDependentId = result.dependentId;
     }
 
     const invoice = await prisma.invoice.update({

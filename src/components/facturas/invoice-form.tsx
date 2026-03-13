@@ -122,6 +122,7 @@ export function InvoiceForm({
     description: string;
     contractStartDate: string;
     contractEndDate: string;
+    familyDependentId: string;
   }>;
   fileData?: {
     fileBase64: string;
@@ -140,6 +141,13 @@ export function InvoiceForm({
   const [classifying, setClassifying] = useState(false);
   const lastLookedUpCuit = useRef("");
 
+  const [familyDependentId, setFamilyDependentId] = useState<string>(
+    defaultValues?.familyDependentId ?? "",
+  );
+  const [dependents, setDependents] = useState<{ id: string; nombre: string; apellido: string }[]>(
+    [],
+  );
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -157,6 +165,18 @@ export function InvoiceForm({
       contractEndDate: defaultValues?.contractEndDate ?? "",
     },
   });
+
+  const watchedFiscalYear = form.watch("fiscalYear");
+
+  useEffect(() => {
+    const year = parseInt(watchedFiscalYear);
+    if (!isNaN(year)) {
+      fetch(`/api/cargas-familia?year=${year}`)
+        .then((res) => res.json())
+        .then((data) => setDependents(data.dependents || []))
+        .catch(() => setDependents([]));
+    }
+  }, [watchedFiscalYear]);
 
   const fetchLastCategory = useCallback(
     async (rawCuit: string) => {
@@ -222,6 +242,10 @@ export function InvoiceForm({
         description: data.description,
         contractStartDate: data.contractStartDate || undefined,
         contractEndDate: data.contractEndDate || undefined,
+        familyDependentId:
+          data.deductionCategory === "GASTOS_EDUCATIVOS" && familyDependentId
+            ? familyDependentId
+            : null,
       };
 
       const res = await fetch(invoiceId ? `/api/facturas/${invoiceId}` : "/api/facturas", {
@@ -500,6 +524,31 @@ export function InvoiceForm({
           </Select>
         </div>
       </div>
+
+      {watchedCategory === "GASTOS_EDUCATIVOS" && (
+        <div className="space-y-2">
+          <Label>Familiar vinculado</Label>
+          <Select
+            value={familyDependentId}
+            onValueChange={(v) => setFamilyDependentId(v === "_none" ? "" : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sin vincular" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">Sin vincular</SelectItem>
+              {dependents.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.apellido} {d.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">
+            Selecciona el familiar al que corresponde este gasto educativo
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="description">Descripcion (opcional)</Label>

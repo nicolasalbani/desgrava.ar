@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { mapSiradigTipoDoc } from "@/lib/automation/siradig-navigator";
+import { mapSiradigTipoDoc, filterValidDependents } from "@/lib/automation/siradig-navigator";
+import type { SiradigFamilyDependent } from "@/lib/automation/siradig-navigator";
 import { ARCA_SELECTORS } from "@/lib/automation/selectors";
 
 describe("mapSiradigTipoDoc", () => {
@@ -80,5 +81,63 @@ describe("cargasFamilia selectors", () => {
     for (const [key, value] of formFields) {
       expect(value, `${key} should start with #`).toMatch(/^#/);
     }
+  });
+});
+
+describe("filterValidDependents", () => {
+  const validDependent: SiradigFamilyDependent = {
+    tipoDoc: "CUIL",
+    numeroDoc: "20594910991",
+    apellido: "ALBANI SETTI",
+    nombre: "LUCA",
+    fechaNacimiento: "01/01/2020",
+    parentesco: "3",
+    fechaUnion: "",
+    porcentajeDed: "100",
+    cuitOtroDed: "",
+    familiaCargo: true,
+    residente: true,
+    tieneIngresos: false,
+    montoIngresos: "",
+    mesDesde: 1,
+    mesHasta: 12,
+    proximosPeriodos: true,
+  };
+
+  const phantomDependent: SiradigFamilyDependent = {
+    ...validDependent,
+    tipoDoc: "",
+    numeroDoc: "",
+    apellido: "",
+    nombre: "",
+    fechaNacimiento: "",
+    parentesco: "",
+  };
+
+  it("keeps valid dependents with a document number", () => {
+    const result = filterValidDependents([validDependent]);
+    expect(result).toHaveLength(1);
+    expect(result[0].numeroDoc).toBe("20594910991");
+  });
+
+  it("removes phantom rows with empty numeroDoc", () => {
+    const result = filterValidDependents([validDependent, phantomDependent]);
+    expect(result).toHaveLength(1);
+  });
+
+  it("removes rows with whitespace-only numeroDoc", () => {
+    const whitespaceDependent = { ...phantomDependent, numeroDoc: "   " };
+    const result = filterValidDependents([validDependent, whitespaceDependent]);
+    expect(result).toHaveLength(1);
+  });
+
+  it("returns empty array when all entries are phantom", () => {
+    const result = filterValidDependents([phantomDependent]);
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty array for empty input", () => {
+    const result = filterValidDependents([]);
+    expect(result).toHaveLength(0);
   });
 });

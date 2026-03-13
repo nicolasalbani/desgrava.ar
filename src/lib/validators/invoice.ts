@@ -81,6 +81,7 @@ export const createInvoiceSchema = z.object({
   description: z.string().optional(),
   contractStartDate: z.coerce.date().optional(),
   contractEndDate: z.coerce.date().optional(),
+  familyDependentId: z.string().nullable().optional(),
 });
 
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;

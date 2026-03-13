@@ -25,6 +25,12 @@ export interface InvoiceData {
   contractEndDate?: string; // ISO date string
   // User preference: affects which alquiler benefit applies
   ownsProperty?: boolean; // true = 10% (Art. 85 inc. k), false = 40% (Art. 85 inc. h)
+  // For GASTOS_EDUCATIVOS: linked family dependent
+  familyDependent?: {
+    numeroDoc: string;
+    apellido: string;
+    nombre: string;
+  };
 }
 
 export interface FillResult {
@@ -598,14 +604,59 @@ export async function fillDeductionForm(
       // Education-specific: Select Familiar from dialog
       // Must happen AFTER period selection because #mesDesde change clears familiar
       if (isEducationCategory(invoice.deductionCategory)) {
-        log("Seleccionando familiar...");
+        if (!invoice.familyDependent) {
+          return {
+            success: false,
+            error:
+              "Factura educativa sin familiar vinculado. Vincula un familiar en desgrava.ar antes de enviar.",
+          };
+        }
+
+        log(
+          `Seleccionando familiar: ${invoice.familyDependent.apellido} ${invoice.familyDependent.nombre}...`,
+        );
         await page.locator("#btn_seleccion_familiar").click();
         await page.waitForTimeout(1000); // Wait for dialog animation
 
-        // Select the first family member from the "Carga de Familia" table
-        const familiarRow = page.locator("#tabla_cargas_familia tbody tr").first();
-        await familiarRow.waitFor({ timeout: 5000 });
-        await familiarRow.locator("td").first().click();
+        // Find the matching row in the Carga de Familia table by document number or name
+        const rows = page.locator("#tabla_cargas_familia tbody tr");
+        await rows.first().waitFor({ timeout: 5000 });
+        const rowCount = await rows.count();
+        let matchedRowIndex = -1;
+
+        const targetDoc = invoice.familyDependent.numeroDoc.replace(/\D/g, "");
+        const targetName =
+          `${invoice.familyDependent.apellido} ${invoice.familyDependent.nombre}`.toLowerCase();
+
+        for (let i = 0; i < rowCount; i++) {
+          const rowText = (await rows.nth(i).textContent()) ?? "";
+          const normalizedRow = rowText.replace(/\s+/g, " ").toLowerCase();
+          // Match by document number (most reliable)
+          if (targetDoc && normalizedRow.includes(targetDoc)) {
+            matchedRowIndex = i;
+            break;
+          }
+          // Fallback: match by full name
+          if (normalizedRow.includes(targetName)) {
+            matchedRowIndex = i;
+            break;
+          }
+        }
+
+        if (matchedRowIndex === -1) {
+          await capture(
+            await page.screenshot({ fullPage: true }),
+            "familiar-not-found",
+            "Familiar no encontrado en SiRADIG",
+          );
+          return {
+            success: false,
+            error: `Familiar "${invoice.familyDependent.apellido} ${invoice.familyDependent.nombre}" no encontrado en la tabla de Cargas de Familia de SiRADIG`,
+          };
+        }
+
+        log(`Familiar encontrado en fila ${matchedRowIndex + 1} de ${rowCount}`);
+        await rows.nth(matchedRowIndex).locator("td").first().click();
         await page.waitForTimeout(500);
 
         // Click "Aceptar" in the familiar selection dialog
@@ -878,6 +929,15 @@ export interface SiradigFamilyDependent {
   proximosPeriodos: boolean;
 }
 
+/**
+ * Filter out phantom/empty dependents that have no document number.
+ */
+export function filterValidDependents(
+  dependents: SiradigFamilyDependent[],
+): SiradigFamilyDependent[] {
+  return dependents.filter((d) => d.numeroDoc && d.numeroDoc.trim().length > 0);
+}
+
 export interface ExtractCargasFamiliaResult {
   success: boolean;
   error?: string;
@@ -1019,28 +1079,33 @@ export async function extractCargasFamilia(
         `Carga de familia ${i + 1}: ${data.apellido}, ${data.nombre}`,
       );
 
-      dependents.push({
-        tipoDoc: mapSiradigTipoDoc(data.tipoDoc),
-        numeroDoc: data.numeroDoc,
-        apellido: data.apellido,
-        nombre: data.nombre,
-        fechaNacimiento: data.fechaNacimiento,
-        parentesco: data.parentesco,
-        fechaUnion: data.fechaCasamiento,
-        porcentajeDed: data.porcentajeDed,
-        cuitOtroDed: data.cuitOtroDed,
-        familiaCargo: data.familiaCargo === "S",
-        residente: data.residente === "S",
-        tieneIngresos: data.ingresos === "S",
-        montoIngresos: data.montoIngresos,
-        mesDesde: parseInt(data.mesDesde, 10) || 1,
-        mesHasta: parseInt(data.mesHasta, 10) || 12,
-        proximosPeriodos: data.proximosPeriodos,
-      });
+      // Skip empty/phantom rows that have no document number
+      if (!data.numeroDoc || !data.numeroDoc.trim()) {
+        log(`Fila ${i + 1} sin numero de documento, saltando...`);
+      } else {
+        dependents.push({
+          tipoDoc: mapSiradigTipoDoc(data.tipoDoc),
+          numeroDoc: data.numeroDoc,
+          apellido: data.apellido,
+          nombre: data.nombre,
+          fechaNacimiento: data.fechaNacimiento,
+          parentesco: data.parentesco,
+          fechaUnion: data.fechaCasamiento,
+          porcentajeDed: data.porcentajeDed,
+          cuitOtroDed: data.cuitOtroDed,
+          familiaCargo: data.familiaCargo === "S",
+          residente: data.residente === "S",
+          tieneIngresos: data.ingresos === "S",
+          montoIngresos: data.montoIngresos,
+          mesDesde: parseInt(data.mesDesde, 10) || 1,
+          mesHasta: parseInt(data.mesHasta, 10) || 12,
+          proximosPeriodos: data.proximosPeriodos,
+        });
 
-      log(
-        `Extraida: ${data.apellido}, ${data.nombre} (${mapSiradigTipoDoc(data.tipoDoc)} ${data.numeroDoc})`,
-      );
+        log(
+          `Extraida: ${data.apellido}, ${data.nombre} (${mapSiradigTipoDoc(data.tipoDoc)} ${data.numeroDoc})`,
+        );
+      }
 
       // Go back to the table view
       const volverBtn = page.getByText("Volver", { exact: true }).first();

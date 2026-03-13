@@ -45,6 +45,12 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 
+interface FamilyDependentRef {
+  id: string;
+  nombre: string;
+  apellido: string;
+}
+
 interface Invoice {
   id: string;
   deductionCategory: string;
@@ -62,6 +68,8 @@ interface Invoice {
   createdAt: string;
   contractStartDate: string | null;
   contractEndDate: string | null;
+  familyDependentId: string | null;
+  familyDependent: FamilyDependentRef | null;
   _count: { automationJobs: number };
 }
 
@@ -106,10 +114,20 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [editTarget, setEditTarget] = useState<Invoice | null>(null);
+  const [dependents, setDependents] = useState<FamilyDependentRef[]>([]);
 
   useEffect(() => {
     fetchInvoices();
   }, []);
+
+  useEffect(() => {
+    if (fiscalYear !== null) {
+      fetch(`/api/cargas-familia?year=${fiscalYear}`)
+        .then((res) => res.json())
+        .then((data) => setDependents(data.dependents || []))
+        .catch(() => setDependents([]));
+    }
+  }, [fiscalYear]);
 
   async function fetchInvoices() {
     setLoading(true);
@@ -124,6 +142,27 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleLinkDependent(invoiceId: string, dependentId: string | null) {
+    const res = await fetch(`/api/facturas/${invoiceId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ familyDependentId: dependentId }),
+    });
+    if (res.ok) {
+      const linked = dependentId ? (dependents.find((d) => d.id === dependentId) ?? null) : null;
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === invoiceId
+            ? { ...inv, familyDependentId: dependentId, familyDependent: linked }
+            : inv,
+        ),
+      );
+      toast.success(dependentId ? "Familiar vinculado" : "Vinculacion removida");
+    } else {
+      toast.error("Error al vincular familiar");
     }
   }
 
@@ -753,7 +792,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="max-w-[180px]">
+                      <TableCell className="max-w-[200px]">
                         <span
                           className="text-muted-foreground block truncate text-sm"
                           title={
@@ -764,6 +803,20 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                           {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
                             inv.deductionCategory}
                         </span>
+                        {inv.deductionCategory === "GASTOS_EDUCATIVOS" && (
+                          <select
+                            className="text-muted-foreground mt-0.5 max-w-full truncate border-none bg-transparent p-0 text-xs outline-none"
+                            value={inv.familyDependentId ?? ""}
+                            onChange={(e) => handleLinkDependent(inv.id, e.target.value || null)}
+                          >
+                            <option value="">Sin vincular</option>
+                            {dependents.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.apellido} {d.nombre}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {inv.invoiceNumber ?? "-"}
@@ -913,6 +966,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                   contractEndDate: editTarget.contractEndDate
                     ? editTarget.contractEndDate.slice(0, 10)
                     : undefined,
+                  familyDependentId: editTarget.familyDependentId ?? undefined,
                 }}
                 onSaved={() => {
                   setEditTarget(null);

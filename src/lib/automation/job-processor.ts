@@ -86,6 +86,11 @@ async function upsertFamilyDependents(
   let updated = 0;
 
   for (const dep of dependents) {
+    // Skip entries with no document number (phantom/empty table rows)
+    if (!dep.numeroDoc || !dep.numeroDoc.trim()) {
+      continue;
+    }
+
     const existing = await prisma.familyDependent.findFirst({
       where: { userId, fiscalYear, numeroDoc: dep.numeroDoc },
     });
@@ -224,7 +229,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
       where: { id: jobId },
       include: {
         user: { include: { arcaCredential: true, yearPreferences: true } },
-        invoice: true,
+        invoice: { include: { familyDependent: true } },
       },
     });
 
@@ -371,6 +376,13 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               ownsProperty:
                 job.user.yearPreferences.find((p) => p.fiscalYear === job.invoice!.fiscalYear)
                   ?.ownsProperty ?? false,
+              familyDependent: job.invoice.familyDependent
+                ? {
+                    numeroDoc: job.invoice.familyDependent.numeroDoc,
+                    apellido: job.invoice.familyDependent.apellido,
+                    nombre: job.invoice.familyDependent.nombre,
+                  }
+                : undefined,
             },
             (msg) => appendLog(jobId, msg, onLog),
             onScreenshot,
