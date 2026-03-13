@@ -116,8 +116,13 @@ export async function navigateToSiradig(
   try {
     log("Navegando al portal de servicios...");
     await page.goto(ARCA_SELECTORS.portal.servicesUrl, {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
     });
+    // Wait for the portal UI to render instead of networkidle (ARCA keeps persistent connections)
+    await page.waitForSelector(
+      `${ARCA_SELECTORS.portal.searchService}, ${ARCA_SELECTORS.portal.siradigLink}`,
+      { timeout: 30000 },
+    );
     log(`Portal cargado: ${page.url()}`);
 
     await capture(await page.screenshot({ fullPage: true }), "portal", "Portal de servicios ARCA");
@@ -148,7 +153,7 @@ export async function navigateToSiradig(
     // SiRADIG opens in a new tab — capture the popup
     log("Accediendo a SiRADIG - Trabajador...");
     const [siradigPage] = await Promise.all([page.waitForEvent("popup"), siradigLink.click()]);
-    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForLoadState("domcontentloaded");
     log(`SiRADIG URL: ${siradigPage.url()}`);
 
     await capture(
