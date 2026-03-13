@@ -66,7 +66,7 @@ export async function navigateToDeductionSection(
 
   try {
     // Step 2: Select person to represent
-    log("Seleccionando persona a representar...");
+    log(`Seleccionando persona a representar... (URL: ${page.url()})`);
     await page.waitForLoadState("networkidle");
 
     // The person selection page uses <input type="button" class="btn_empresa">
@@ -75,6 +75,7 @@ export async function navigateToDeductionSection(
     await personButton.waitFor({ timeout: 30000 });
     await personButton.click();
     await page.waitForLoadState("networkidle");
+    log(`Persona seleccionada. URL: ${page.url()}`);
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -101,6 +102,7 @@ export async function navigateToDeductionSection(
     const continueBtn = page.getByText("Continuar").first();
     await continueBtn.click();
     await page.waitForLoadState("networkidle");
+    log(`Despues de Continuar. URL: ${page.url()}`);
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -142,6 +144,7 @@ export async function navigateToDeductionSection(
     await formLoadBtn.waitFor({ state: "visible", timeout: 30000 });
     await formLoadBtn.click();
     await page.waitForLoadState("networkidle");
+    log(`Formulario cargado. URL: ${page.url()}`);
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -167,7 +170,7 @@ export async function navigateToDeductionSection(
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
-    log(`Error navegando dentro de SiRADIG: ${msg}`);
+    log(`Error navegando dentro de SiRADIG: ${msg} | URL: ${page.url()}`);
     try {
       await capture(
         await page.screenshot({ fullPage: true }),
@@ -700,7 +703,7 @@ export async function fillDeductionForm(
     return { success: true, screenshotBuffer };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
-    log(`Error completando formulario: ${msg}`);
+    log(`Error completando formulario: ${msg} | URL: ${page.url()}`);
     try {
       await capture(
         await page.screenshot({ fullPage: true }),
@@ -823,7 +826,16 @@ export async function submitDeduction(
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
-    log(`Error guardando deduccion: ${msg}`);
+    log(`Error guardando deduccion: ${msg} | URL: ${page.url()}`);
+    try {
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "submit-error",
+        "Error guardando deduccion",
+      );
+    } catch {
+      /* screenshot may fail too */
+    }
     return { success: false, error: msg };
   }
 }
@@ -913,7 +925,16 @@ export async function navigateToCargasFamilia(
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
-    log(`Error abriendo seccion de cargas de familia: ${msg}`);
+    log(`Error abriendo seccion de cargas de familia: ${msg} | URL: ${page.url()}`);
+    try {
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "cargas-familia-error",
+        "Error abriendo cargas de familia",
+      );
+    } catch {
+      /* screenshot may fail too */
+    }
     return { success: false, error: msg };
   }
 }
@@ -1038,7 +1059,16 @@ export async function extractCargasFamilia(
     return { success: true, dependents };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
-    log(`Error extrayendo cargas de familia: ${msg}`);
+    log(`Error extrayendo cargas de familia: ${msg} | URL: ${page.url()}`);
+    try {
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "extraction-error",
+        "Error extrayendo cargas de familia",
+      );
+    } catch {
+      /* screenshot may fail too */
+    }
     return { success: false, error: msg, dependents: [] };
   }
 }

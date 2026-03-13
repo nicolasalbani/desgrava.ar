@@ -23,6 +23,7 @@ export async function loginToArca(
   try {
     log("Navegando a la pagina de login de ARCA...");
     await page.goto(sel.url, { waitUntil: "domcontentloaded" });
+    log(`URL cargada: ${page.url()}`);
     await page.locator(sel.cuitInput).waitFor({ state: "visible", timeout: 30_000 });
 
     await capture(await page.screenshot({ fullPage: true }), "login-page", "Pagina de login ARCA");
@@ -47,6 +48,7 @@ export async function loginToArca(
     // Wait for password field (CUIT submit may trigger full navigation or AJAX update)
     log("Esperando campo de clave fiscal...");
     await page.locator(sel.claveInput).waitFor({ state: "visible", timeout: 30_000 });
+    log(`URL despues de CUIT: ${page.url()}`);
 
     await capture(await page.screenshot({ fullPage: true }), "after-cuit", "CUIT ingresado");
 
@@ -62,8 +64,10 @@ export async function loginToArca(
       });
       await page.waitForLoadState("load");
     } catch {
-      // If URL didn't change, check for error messages below
+      log(`Redireccion post-login no detectada. URL actual: ${page.url()}`);
     }
+
+    log(`URL despues de login: ${page.url()}`);
 
     // Check for errors
     const errorEl = await page.$(sel.errorMessage);
@@ -80,7 +84,8 @@ export async function loginToArca(
     // Verify we're logged in (URL should change from login page)
     const currentUrl = page.url();
     if (currentUrl.includes("login")) {
-      log("Login fallido: sigue en la pagina de login");
+      await capture(await page.screenshot({ fullPage: true }), "login-stuck", "Login atascado");
+      log(`Login fallido: sigue en la pagina de login (${currentUrl})`);
       return { success: false, error: "Login fallido" };
     }
 
@@ -90,7 +95,12 @@ export async function loginToArca(
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
-    log(`Error durante login: ${msg}`);
+    log(`Error durante login: ${msg} | URL: ${page.url()}`);
+    try {
+      await capture(await page.screenshot({ fullPage: true }), "login-crash", "Error fatal login");
+    } catch {
+      /* screenshot may fail too */
+    }
     return { success: false, error: msg };
   }
 }
@@ -108,6 +118,7 @@ export async function navigateToSiradig(
     await page.goto(ARCA_SELECTORS.portal.servicesUrl, {
       waitUntil: "networkidle",
     });
+    log(`Portal cargado: ${page.url()}`);
 
     await capture(await page.screenshot({ fullPage: true }), "portal", "Portal de servicios ARCA");
 
@@ -125,7 +136,12 @@ export async function navigateToSiradig(
     }
 
     if (!siradigLink) {
-      log("No se encontro el acceso a SiRADIG");
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "no-siradig",
+        "SiRADIG no encontrado en portal",
+      );
+      log(`No se encontro el acceso a SiRADIG. URL: ${page.url()}`);
       return null;
     }
 
@@ -133,6 +149,7 @@ export async function navigateToSiradig(
     log("Accediendo a SiRADIG - Trabajador...");
     const [siradigPage] = await Promise.all([page.waitForEvent("popup"), siradigLink.click()]);
     await siradigPage.waitForLoadState("networkidle");
+    log(`SiRADIG URL: ${siradigPage.url()}`);
 
     await capture(
       await siradigPage.screenshot({ fullPage: true }),
@@ -144,7 +161,16 @@ export async function navigateToSiradig(
     return siradigPage;
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
-    log(`Error navegando a SiRADIG: ${msg}`);
+    log(`Error navegando a SiRADIG: ${msg} | URL: ${page.url()}`);
+    try {
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "siradig-error",
+        "Error navegando a SiRADIG",
+      );
+    } catch {
+      /* screenshot may fail too */
+    }
     return null;
   }
 }
