@@ -39,22 +39,22 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `ENCRYPTION_KEY` | 64-char hex key for AES-256-GCM credential encryption |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
-| `NEXTAUTH_SECRET` | NextAuth session secret |
-| `OPENAI_API_KEY` | OpenAI API key for invoice classification |
+| Variable               | Description                                           |
+| ---------------------- | ----------------------------------------------------- |
+| `DATABASE_URL`         | PostgreSQL connection string                          |
+| `ENCRYPTION_KEY`       | 64-char hex key for AES-256-GCM credential encryption |
+| `GOOGLE_CLIENT_ID`     | Google OAuth client ID                                |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret                            |
+| `NEXTAUTH_SECRET`      | NextAuth session secret                               |
+| `OPENAI_API_KEY`       | OpenAI API key for invoice classification             |
 
 ## Scripts
 
-| Command | Purpose |
-|---------|---------|
-| `npm run dev` | Start development server |
-| `npm run build` | Production build |
-| `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
+| Command                                | Purpose                   |
+| -------------------------------------- | ------------------------- |
+| `npm run dev`                          | Start development server  |
+| `npm run build`                        | Production build          |
+| `npm run start`                        | Start production server   |
+| `npm run lint`                         | Run ESLint                |
 | `npx prisma migrate dev --name <name>` | Create database migration |
-| `npx prisma generate` | Regenerate Prisma client |
+| `npx prisma generate`                  | Regenerate Prisma client  |

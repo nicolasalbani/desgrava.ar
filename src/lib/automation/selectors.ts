@@ -32,7 +32,8 @@ export const ARCA_SELECTORS = {
     amountInput: "input[name*='monto'], input[name*='importe']",
     periodFromSelect: "select[name*='periodoDesde'], select[name*='mesDesde'], select[name*='mes']",
     periodToSelect: "select[name*='periodoHasta'], select[name*='mesHasta']",
-    saveButton: "button[type='submit'][value*='Guardar'], input[type='submit'][value*='Guardar'], button:has-text('Guardar')",
+    saveButton:
+      "button[type='submit'][value*='Guardar'], input[type='submit'][value*='Guardar'], button:has-text('Guardar')",
 
     // Confirmation
     confirmButton: "button:has-text('Confirmar'), button:has-text('Aceptar')",

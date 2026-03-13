@@ -5,10 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { updateInvoiceSchema } from "@/lib/validators/invoice";
 import { Prisma } from "@/generated/prisma/client";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -27,10 +24,7 @@ export async function GET(
   return NextResponse.json({ invoice });
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -53,7 +47,7 @@ export async function PUT(
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Datos invalidos", details: parsed.error.flatten() },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -70,17 +64,11 @@ export async function PUT(
     return NextResponse.json({ invoice });
   } catch (error) {
     console.error("Error updating invoice:", error);
-    return NextResponse.json(
-      { error: "Error al actualizar factura" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al actualizar factura" }, { status: 500 });
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -99,8 +87,11 @@ export async function DELETE(
 
   if (existing._count.automationJobs > 0) {
     return NextResponse.json(
-      { error: "No se puede eliminar una factura con automatizaciones vinculadas. Elimina las automatizaciones primero." },
-      { status: 409 }
+      {
+        error:
+          "No se puede eliminar una factura con automatizaciones vinculadas. Elimina las automatizaciones primero.",
+      },
+      { status: 409 },
     );
   }
 

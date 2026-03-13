@@ -9,11 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,11 +30,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Send, Loader2, Eye, Square, Trash2, Search, X, ListFilter, Mail, Upload, RotateCcw } from "lucide-react";
 import {
-  DEDUCTION_CATEGORIES,
-  DEDUCTION_CATEGORY_LABELS,
-} from "@/lib/validators/invoice";
+  Send,
+  Loader2,
+  Eye,
+  Square,
+  Trash2,
+  Search,
+  X,
+  ListFilter,
+  Mail,
+  Upload,
+  RotateCcw,
+} from "lucide-react";
+import { DEDUCTION_CATEGORIES, DEDUCTION_CATEGORY_LABELS } from "@/lib/validators/invoice";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { JobDetail } from "./job-detail";
@@ -69,11 +74,11 @@ interface Job {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; animate?: boolean }> = {
-  PENDING:   { label: "Pendiente",  dot: "bg-foreground/25" },
-  RUNNING:   { label: "Ejecutando", dot: "bg-blue-400/70",    animate: true },
+  PENDING: { label: "Pendiente", dot: "bg-foreground/25" },
+  RUNNING: { label: "Ejecutando", dot: "bg-blue-400/70", animate: true },
   COMPLETED: { label: "Completado", dot: "bg-emerald-400/80" },
-  FAILED:    { label: "Error",      dot: "bg-rose-400/80" },
-  CANCELLED: { label: "Cancelado",  dot: "bg-foreground/20" },
+  FAILED: { label: "Error", dot: "bg-rose-400/80" },
+  CANCELLED: { label: "Cancelado", dot: "bg-foreground/20" },
 };
 
 const CANCELLABLE_STATUSES = ["PENDING", "RUNNING"];
@@ -126,11 +131,7 @@ export function AutomationDashboard({
 
       if (hadCompletedJobOnLoad.current === null) {
         hadCompletedJobOnLoad.current = hasCompleted;
-      } else if (
-        !hadCompletedJobOnLoad.current &&
-        hasCompleted &&
-        !celebrationFired.current
-      ) {
+      } else if (!hadCompletedJobOnLoad.current && hasCompleted && !celebrationFired.current) {
         celebrationFired.current = true;
         onFirstJobCompleted?.();
       }
@@ -186,7 +187,11 @@ export function AutomationDashboard({
 
     if (res.ok) {
       setJobs((prev) => prev.filter((j) => j.id !== jobId));
-      setSelectedIds((prev) => { const next = new Set(prev); next.delete(jobId); return next; });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
       toast.success("Job eliminado");
       onJobDeleted?.();
     } else {
@@ -205,7 +210,7 @@ export function AutomationDashboard({
     setBulkDeleteOpen(false);
 
     const results = await Promise.allSettled(
-      deletableIds.map((id) => fetch(`/api/automatizacion/${id}`, { method: "DELETE" }))
+      deletableIds.map((id) => fetch(`/api/automatizacion/${id}`, { method: "DELETE" })),
     );
 
     const deleted = deletableIds.filter((_, i) => {
@@ -314,7 +319,7 @@ export function AutomationDashboard({
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
+        <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
       </div>
     );
   }
@@ -324,7 +329,7 @@ export function AutomationDashboard({
       {/* Search + count */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+          <Search className="text-muted-foreground/40 absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <Input
             placeholder="Buscar por proveedor, CUIT o comprobante..."
             value={search}
@@ -334,17 +339,15 @@ export function AutomationDashboard({
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+              className="text-muted-foreground/40 hover:text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
         {jobs.length > 0 && (
-          <span className="text-sm text-muted-foreground tabular-nums shrink-0">
-            {hasClientFilters
-              ? `${filteredJobs.length} de ${jobs.length}`
-              : jobs.length}{" "}
+          <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
+            {hasClientFilters ? `${filteredJobs.length} de ${jobs.length}` : jobs.length}{" "}
             {jobs.length === 1 && !hasClientFilters ? "trabajo" : "trabajos"}
           </span>
         )}
@@ -352,10 +355,9 @@ export function AutomationDashboard({
 
       {/* Selection action bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-5 py-3">
+        <div className="bg-muted/40 flex items-center gap-3 rounded-xl px-5 py-3">
           <span className="text-sm font-medium">
-            {selectedIds.size}{" "}
-            {selectedIds.size === 1 ? "seleccionado" : "seleccionados"}
+            {selectedIds.size} {selectedIds.size === 1 ? "seleccionado" : "seleccionados"}
           </span>
           <Button
             size="sm"
@@ -385,17 +387,14 @@ export function AutomationDashboard({
       {/* Content */}
       {jobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Send className="h-8 w-8 text-muted-foreground/30 mb-3" />
-          <p className="text-sm text-muted-foreground/70">
-            Sin envios a SiRADIG
-          </p>
-          <p className="text-xs text-muted-foreground/50 mt-1">
-            Selecciona facturas pendientes y envialas a SiRADIG desde la pagina
-            de facturas.
+          <Send className="text-muted-foreground/30 mb-3 h-8 w-8" />
+          <p className="text-muted-foreground/70 text-sm">Sin envios a SiRADIG</p>
+          <p className="text-muted-foreground/50 mt-1 text-xs">
+            Selecciona facturas pendientes y envialas a SiRADIG desde la pagina de facturas.
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-border overflow-hidden">
+        <div className="border-border overflow-hidden rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -420,7 +419,7 @@ export function AutomationDashboard({
                             "rounded-md p-1 transition-colors",
                             isCategoryActive
                               ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <ListFilter className="h-3.5 w-3.5" />
@@ -429,23 +428,23 @@ export function AutomationDashboard({
                       <PopoverContent className="w-60 p-3" align="start">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium text-muted-foreground">
+                            <p className="text-muted-foreground text-xs font-medium">
                               Filtrar por categoria
                             </p>
                             {isCategoryActive && (
                               <button
                                 onClick={() => setCategories(new Set())}
-                                className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                                className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
                               >
                                 Limpiar
                               </button>
                             )}
                           </div>
-                          <div className="max-h-48 overflow-y-auto space-y-1">
+                          <div className="max-h-48 space-y-1 overflow-y-auto">
                             {DEDUCTION_CATEGORIES.map((cat) => (
                               <label
                                 key={cat}
-                                className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                                className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
                               >
                                 <Checkbox
                                   checked={categories.has(cat)}
@@ -458,9 +457,7 @@ export function AutomationDashboard({
                                     });
                                   }}
                                 />
-                                <span className="text-xs">
-                                  {DEDUCTION_CATEGORY_LABELS[cat]}
-                                </span>
+                                <span className="text-xs">{DEDUCTION_CATEGORY_LABELS[cat]}</span>
                               </label>
                             ))}
                           </div>
@@ -483,7 +480,7 @@ export function AutomationDashboard({
                             "rounded-md p-1 transition-colors",
                             isFechaActive
                               ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <ListFilter className="h-3.5 w-3.5" />
@@ -491,13 +488,11 @@ export function AutomationDashboard({
                       </PopoverTrigger>
                       <PopoverContent className="w-52 p-3" align="start">
                         <div className="space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">
+                          <p className="text-muted-foreground text-xs font-medium">
                             Rango de fecha
                           </p>
                           <div className="space-y-1.5">
-                            <label className="text-xs text-muted-foreground/70">
-                              Desde
-                            </label>
+                            <label className="text-muted-foreground/70 text-xs">Desde</label>
                             <Input
                               type="date"
                               value={fechaDesde}
@@ -506,9 +501,7 @@ export function AutomationDashboard({
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-xs text-muted-foreground/70">
-                              Hasta
-                            </label>
+                            <label className="text-muted-foreground/70 text-xs">Hasta</label>
                             <Input
                               type="date"
                               value={fechaHasta}
@@ -522,7 +515,7 @@ export function AutomationDashboard({
                                 setFechaDesde("");
                                 setFechaHasta("");
                               }}
-                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                              className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
                             >
                               Limpiar
                             </button>
@@ -544,7 +537,7 @@ export function AutomationDashboard({
                             "rounded-md p-1 transition-colors",
                             isMontoActive
                               ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <ListFilter className="h-3.5 w-3.5" />
@@ -552,36 +545,28 @@ export function AutomationDashboard({
                       </PopoverTrigger>
                       <PopoverContent className="w-44 p-3" align="end">
                         <div className="space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">
+                          <p className="text-muted-foreground text-xs font-medium">
                             Rango de monto
                           </p>
                           <div className="space-y-1.5">
-                            <label className="text-xs text-muted-foreground/70">
-                              Min $
-                            </label>
+                            <label className="text-muted-foreground/70 text-xs">Min $</label>
                             <Input
                               type="text"
                               inputMode="numeric"
                               placeholder="0"
                               value={montoMin}
-                              onChange={(e) =>
-                                setMontoMin(e.target.value.replace(/[^\d]/g, ""))
-                              }
+                              onChange={(e) => setMontoMin(e.target.value.replace(/[^\d]/g, ""))}
                               className="h-8 text-xs"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-xs text-muted-foreground/70">
-                              Max $
-                            </label>
+                            <label className="text-muted-foreground/70 text-xs">Max $</label>
                             <Input
                               type="text"
                               inputMode="numeric"
                               placeholder="999999"
                               value={montoMax}
-                              onChange={(e) =>
-                                setMontoMax(e.target.value.replace(/[^\d]/g, ""))
-                              }
+                              onChange={(e) => setMontoMax(e.target.value.replace(/[^\d]/g, ""))}
                               className="h-8 text-xs"
                             />
                           </div>
@@ -591,7 +576,7 @@ export function AutomationDashboard({
                                 setMontoMin("");
                                 setMontoMax("");
                               }}
-                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                              className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
                             >
                               Limpiar
                             </button>
@@ -613,7 +598,7 @@ export function AutomationDashboard({
                             "rounded-md p-1 transition-colors",
                             isStatusActive
                               ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <ListFilter className="h-3.5 w-3.5" />
@@ -622,13 +607,13 @@ export function AutomationDashboard({
                       <PopoverContent className="w-44 p-3" align="start">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium text-muted-foreground">
+                            <p className="text-muted-foreground text-xs font-medium">
                               Filtrar por estado
                             </p>
                             {isStatusActive && (
                               <button
                                 onClick={() => setStatuses(new Set())}
-                                className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                                className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
                               >
                                 Limpiar
                               </button>
@@ -638,7 +623,7 @@ export function AutomationDashboard({
                             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                               <label
                                 key={key}
-                                className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                                className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
                               >
                                 <Checkbox
                                   checked={statuses.has(key)}
@@ -667,16 +652,14 @@ export function AutomationDashboard({
             <TableBody>
               {filteredJobs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12">
-                    <p className="text-sm font-medium text-muted-foreground/70">
-                      Sin resultados
-                    </p>
-                    <p className="text-xs text-muted-foreground/50 mt-1">
+                  <TableCell colSpan={9} className="py-12 text-center">
+                    <p className="text-muted-foreground/70 text-sm font-medium">Sin resultados</p>
+                    <p className="text-muted-foreground/50 mt-1 text-xs">
                       Proba con otros filtros o terminos de busqueda
                     </p>
                     <button
                       onClick={clearAllFilters}
-                      className="mt-3 text-xs text-primary hover:text-primary/80 transition-colors"
+                      className="text-primary hover:text-primary/80 mt-3 text-xs transition-colors"
                     >
                       Limpiar filtros
                     </button>
@@ -717,7 +700,7 @@ export function AutomationDashboard({
                               {job.invoice?.providerName ?? job.invoice?.providerCuit ?? "-"}
                             </p>
                             {job.invoice?.providerName && (
-                              <p className="text-xs text-muted-foreground mt-0.5">
+                              <p className="text-muted-foreground mt-0.5 text-xs">
                                 {job.invoice.providerCuit}
                               </p>
                             )}
@@ -726,23 +709,29 @@ export function AutomationDashboard({
                       </TableCell>
                       <TableCell className="max-w-[180px]">
                         <span
-                          className="block truncate text-sm text-muted-foreground"
-                          title={job.invoice ? (DEDUCTION_CATEGORY_LABELS[job.invoice.deductionCategory] ?? job.invoice.deductionCategory) : job.jobType}
+                          className="text-muted-foreground block truncate text-sm"
+                          title={
+                            job.invoice
+                              ? (DEDUCTION_CATEGORY_LABELS[job.invoice.deductionCategory] ??
+                                job.invoice.deductionCategory)
+                              : job.jobType
+                          }
                         >
                           {job.invoice
-                            ? (DEDUCTION_CATEGORY_LABELS[job.invoice.deductionCategory] ?? job.invoice.deductionCategory)
+                            ? (DEDUCTION_CATEGORY_LABELS[job.invoice.deductionCategory] ??
+                              job.invoice.deductionCategory)
                             : job.jobType}
                         </span>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-sm">
                         {job.invoice?.invoiceNumber ?? "-"}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-sm">
                         {job.invoice?.invoiceDate
                           ? new Date(job.invoice.invoiceDate).toLocaleDateString("es-AR")
                           : "-"}
                       </TableCell>
-                      <TableCell className="text-sm text-right font-medium tabular-nums">
+                      <TableCell className="text-right text-sm font-medium tabular-nums">
                         {job.invoice
                           ? `$${parseFloat(job.invoice.amount).toLocaleString("es-AR")}`
                           : "-"}
@@ -752,9 +741,16 @@ export function AutomationDashboard({
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="inline-flex items-center gap-1.5 cursor-default">
-                                  <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusConfig.dot)} />
-                                  <span className="text-xs font-medium text-foreground/70">{statusConfig.label}</span>
+                                <span className="inline-flex cursor-default items-center gap-1.5">
+                                  <span
+                                    className={cn(
+                                      "h-1.5 w-1.5 shrink-0 rounded-full",
+                                      statusConfig.dot,
+                                    )}
+                                  />
+                                  <span className="text-foreground/70 text-xs font-medium">
+                                    {statusConfig.label}
+                                  </span>
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent side="top" className="max-w-72">
@@ -764,8 +760,16 @@ export function AutomationDashboard({
                           </TooltipProvider>
                         ) : (
                           <span className="inline-flex items-center gap-1.5">
-                            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusConfig.dot, statusConfig.animate && "animate-pulse")} />
-                            <span className="text-xs font-medium text-foreground/70">{statusConfig.label}</span>
+                            <span
+                              className={cn(
+                                "h-1.5 w-1.5 shrink-0 rounded-full",
+                                statusConfig.dot,
+                                statusConfig.animate && "animate-pulse",
+                              )}
+                            />
+                            <span className="text-foreground/70 text-xs font-medium">
+                              {statusConfig.label}
+                            </span>
                           </span>
                         )}
                       </TableCell>
@@ -824,16 +828,11 @@ export function AutomationDashboard({
         </div>
       )}
 
-      <Dialog
-        open={!!selectedJob}
-        onOpenChange={(open) => !open && setSelectedJob(null)}
-      >
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
+        <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalle del envio</DialogTitle>
-            <DialogDescription>
-              Logs y estado del envio a SiRADIG
-            </DialogDescription>
+            <DialogDescription>Logs y estado del envio a SiRADIG</DialogDescription>
           </DialogHeader>
           {selectedJob && <JobDetail jobId={selectedJob} />}
         </DialogContent>
@@ -849,9 +848,7 @@ export function AutomationDashboard({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Volver</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancel}>
-              Detener
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleCancel}>Detener</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -860,19 +857,16 @@ export function AutomationDashboard({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Eliminar {selectedIds.size}{" "}
-              {selectedIds.size === 1 ? "envio" : "envios"}
+              Eliminar {selectedIds.size} {selectedIds.size === 1 ? "envio" : "envios"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta accion no se puede deshacer. Se eliminaran permanentemente los
-              envios seleccionados.
+              Esta accion no se puede deshacer. Se eliminaran permanentemente los envios
+              seleccionados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBulkDelete}>
-              Eliminar
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleBulkDelete}>Eliminar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -887,9 +881,7 @@ export function AutomationDashboard({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
-              Eliminar
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>Eliminar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

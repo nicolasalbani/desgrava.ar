@@ -43,7 +43,8 @@ export const CATEGORY_LABELS: Record<SimuladorCategory, string> = {
   INTERESES_HIPOTECARIOS: "Intereses préstamo hipotecario",
   GASTOS_SEPELIO: "Gastos de sepelio",
   GASTOS_MEDICOS: "Gastos médicos y paramédicos",
-  GASTOS_INDUMENTARIA_TRABAJO: "Gastos de Adquisición de Indumentaria y Equipamiento para uso exclusivo en el lugar de trabajo",
+  GASTOS_INDUMENTARIA_TRABAJO:
+    "Gastos de Adquisición de Indumentaria y Equipamiento para uso exclusivo en el lugar de trabajo",
   ALQUILER_VIVIENDA: "Alquiler de inmuebles destinados a casa habitación",
   SERVICIO_DOMESTICO: "Deducción del personal doméstico",
   APORTE_SGR: "Aporte a sociedades de garantía recíproca",
@@ -56,7 +57,7 @@ export const CATEGORY_LABELS: Record<SimuladorCategory, string> = {
 export function applyDeductionRules(
   input: DeductionInput,
   limits: DeductionLimits,
-  netIncome: Decimal
+  netIncome: Decimal,
 ): DeductionResult {
   const { category, annualAmount } = input;
   let deductible: Decimal;

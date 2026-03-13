@@ -2,10 +2,7 @@ import { mkdir, writeFile, readFile, readdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 
-const ARTIFACTS_ROOT = path.join(
-  process.env.DATA_DIR || process.cwd(),
-  ".automation-data"
-);
+const ARTIFACTS_ROOT = path.join(process.env.DATA_DIR || process.cwd(), ".automation-data");
 
 export interface ScreenshotMeta {
   step: number;
@@ -42,7 +39,7 @@ export async function saveScreenshot(
   step: number,
   slug: string,
   label: string,
-  buffer: Buffer
+  buffer: Buffer,
 ): Promise<ScreenshotMeta> {
   const dir = await ensureJobDir(jobId);
   const name = `step-${String(step).padStart(2, "0")}-${slug}.png`;
@@ -66,10 +63,7 @@ export function getJobScreenshots(jobId: string): ScreenshotMeta[] {
   return jobScreenshots.get(jobId) ?? [];
 }
 
-export async function readScreenshotFile(
-  jobId: string,
-  filename: string
-): Promise<Buffer | null> {
+export async function readScreenshotFile(jobId: string, filename: string): Promise<Buffer | null> {
   if (!/^step-\d{2}-[\w-]+\.png$/.test(filename)) return null;
   const filePath = path.join(getJobDir(jobId), filename);
   if (!existsSync(filePath)) return null;
@@ -88,10 +82,7 @@ export async function finalizeVideo(jobId: string): Promise<string[]> {
   return webmFiles;
 }
 
-export async function readVideoFile(
-  jobId: string,
-  filename?: string
-): Promise<Buffer | null> {
+export async function readVideoFile(jobId: string, filename?: string): Promise<Buffer | null> {
   const videoDir = getVideoDir(jobId);
 
   if (filename) {
@@ -124,9 +115,7 @@ export async function listVideosFromDisk(jobId: string): Promise<string[]> {
   return files.filter((f) => f.endsWith(".webm")).sort();
 }
 
-export async function listScreenshotsFromDisk(
-  jobId: string
-): Promise<ScreenshotMeta[]> {
+export async function listScreenshotsFromDisk(jobId: string): Promise<ScreenshotMeta[]> {
   const dir = getJobDir(jobId);
   if (!existsSync(dir)) return [];
 

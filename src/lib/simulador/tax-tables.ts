@@ -46,15 +46,60 @@ export const TAX_TABLES_2025 = {
   } satisfies PersonalDeductions,
 
   brackets: [
-    { from: new Decimal(0), to: new Decimal("1_163_862.77"), fixedAmount: new Decimal(0), rate: new Decimal("0.05") },
-    { from: new Decimal("1_163_862.77"), to: new Decimal("2_327_725.53"), fixedAmount: new Decimal("58_193.14"), rate: new Decimal("0.09") },
-    { from: new Decimal("2_327_725.53"), to: new Decimal("3_491_588.30"), fixedAmount: new Decimal("162_940.86"), rate: new Decimal("0.12") },
-    { from: new Decimal("3_491_588.30"), to: new Decimal("4_655_451.07"), fixedAmount: new Decimal("302_604.39"), rate: new Decimal("0.15") },
-    { from: new Decimal("4_655_451.07"), to: new Decimal("6_983_176.60"), fixedAmount: new Decimal("477_183.80"), rate: new Decimal("0.19") },
-    { from: new Decimal("6_983_176.60"), to: new Decimal("9_310_902.13"), fixedAmount: new Decimal("919_451.65"), rate: new Decimal("0.23") },
-    { from: new Decimal("9_310_902.13"), to: new Decimal("13_966_353.20"), fixedAmount: new Decimal("1_454_878.92"), rate: new Decimal("0.27") },
-    { from: new Decimal("13_966_353.20"), to: new Decimal("18_621_804.27"), fixedAmount: new Decimal("2_711_860.82"), rate: new Decimal("0.31") },
-    { from: new Decimal("18_621_804.27"), to: new Decimal(Infinity), fixedAmount: new Decimal("4_154_049.65"), rate: new Decimal("0.35") },
+    {
+      from: new Decimal(0),
+      to: new Decimal("1_163_862.77"),
+      fixedAmount: new Decimal(0),
+      rate: new Decimal("0.05"),
+    },
+    {
+      from: new Decimal("1_163_862.77"),
+      to: new Decimal("2_327_725.53"),
+      fixedAmount: new Decimal("58_193.14"),
+      rate: new Decimal("0.09"),
+    },
+    {
+      from: new Decimal("2_327_725.53"),
+      to: new Decimal("3_491_588.30"),
+      fixedAmount: new Decimal("162_940.86"),
+      rate: new Decimal("0.12"),
+    },
+    {
+      from: new Decimal("3_491_588.30"),
+      to: new Decimal("4_655_451.07"),
+      fixedAmount: new Decimal("302_604.39"),
+      rate: new Decimal("0.15"),
+    },
+    {
+      from: new Decimal("4_655_451.07"),
+      to: new Decimal("6_983_176.60"),
+      fixedAmount: new Decimal("477_183.80"),
+      rate: new Decimal("0.19"),
+    },
+    {
+      from: new Decimal("6_983_176.60"),
+      to: new Decimal("9_310_902.13"),
+      fixedAmount: new Decimal("919_451.65"),
+      rate: new Decimal("0.23"),
+    },
+    {
+      from: new Decimal("9_310_902.13"),
+      to: new Decimal("13_966_353.20"),
+      fixedAmount: new Decimal("1_454_878.92"),
+      rate: new Decimal("0.27"),
+    },
+    {
+      from: new Decimal("13_966_353.20"),
+      to: new Decimal("18_621_804.27"),
+      fixedAmount: new Decimal("2_711_860.82"),
+      rate: new Decimal("0.31"),
+    },
+    {
+      from: new Decimal("18_621_804.27"),
+      to: new Decimal(Infinity),
+      fixedAmount: new Decimal("4_154_049.65"),
+      rate: new Decimal("0.35"),
+    },
   ] satisfies TaxBracket[],
 
   deductionLimits: {

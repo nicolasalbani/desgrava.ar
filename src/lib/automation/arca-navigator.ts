@@ -7,18 +7,14 @@ export interface LoginResult {
   hasCaptcha?: boolean;
 }
 
-export type ScreenshotCallback = (
-  buffer: Buffer,
-  slug: string,
-  label: string
-) => Promise<void>;
+export type ScreenshotCallback = (buffer: Buffer, slug: string, label: string) => Promise<void>;
 
 export async function loginToArca(
   page: Page,
   cuit: string,
   clave: string,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback
+  onScreenshot?: ScreenshotCallback,
 ): Promise<LoginResult> {
   const log = onLog ?? (() => {});
   const capture = onScreenshot ?? (async () => {});
@@ -28,11 +24,7 @@ export async function loginToArca(
     log("Navegando a la pagina de login de ARCA...");
     await page.goto(sel.url, { waitUntil: "networkidle" });
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "login-page",
-      "Pagina de login ARCA"
-    );
+    await capture(await page.screenshot({ fullPage: true }), "login-page", "Pagina de login ARCA");
 
     // Check for CAPTCHA
     const captcha = await page.$(sel.captchaContainer);
@@ -40,7 +32,7 @@ export async function loginToArca(
       await capture(
         await page.screenshot({ fullPage: true }),
         "captcha-detected",
-        "CAPTCHA detectado"
+        "CAPTCHA detectado",
       );
       log("CAPTCHA detectado. Se requiere intervencion manual.");
       return { success: false, error: "CAPTCHA detectado", hasCaptcha: true };
@@ -52,11 +44,7 @@ export async function loginToArca(
     await page.click(sel.cuitSubmit);
     await page.waitForLoadState("networkidle");
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "after-cuit",
-      "CUIT ingresado"
-    );
+    await capture(await page.screenshot({ fullPage: true }), "after-cuit", "CUIT ingresado");
 
     // Enter password
     log("Ingresando clave fiscal...");
@@ -68,11 +56,7 @@ export async function loginToArca(
     const errorEl = await page.$(sel.errorMessage);
     if (errorEl) {
       const errorText = await errorEl.textContent();
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "login-error",
-        "Error de login"
-      );
+      await capture(await page.screenshot({ fullPage: true }), "login-error", "Error de login");
       log(`Error de login: ${errorText}`);
       return {
         success: false,
@@ -87,11 +71,7 @@ export async function loginToArca(
       return { success: false, error: "Login fallido" };
     }
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "login-success",
-      "Login exitoso"
-    );
+    await capture(await page.screenshot({ fullPage: true }), "login-success", "Login exitoso");
 
     log("Login exitoso en ARCA");
     return { success: true };
@@ -105,7 +85,7 @@ export async function loginToArca(
 export async function navigateToSiradig(
   page: Page,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback
+  onScreenshot?: ScreenshotCallback,
 ): Promise<Page | null> {
   const log = onLog ?? (() => {});
   const capture = onScreenshot ?? (async () => {});
@@ -116,11 +96,7 @@ export async function navigateToSiradig(
       waitUntil: "networkidle",
     });
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "portal",
-      "Portal de servicios ARCA"
-    );
+    await capture(await page.screenshot({ fullPage: true }), "portal", "Portal de servicios ARCA");
 
     // Try to find SiRADIG link directly or search for it
     let siradigLink = await page.$(ARCA_SELECTORS.portal.siradigLink);
@@ -142,16 +118,13 @@ export async function navigateToSiradig(
 
     // SiRADIG opens in a new tab — capture the popup
     log("Accediendo a SiRADIG - Trabajador...");
-    const [siradigPage] = await Promise.all([
-      page.waitForEvent("popup"),
-      siradigLink.click(),
-    ]);
+    const [siradigPage] = await Promise.all([page.waitForEvent("popup"), siradigLink.click()]);
     await siradigPage.waitForLoadState("networkidle");
 
     await capture(
       await siradigPage.screenshot({ fullPage: true }),
       "siradig-loaded",
-      "SiRADIG cargado"
+      "SiRADIG cargado",
     );
 
     log("SiRADIG cargado correctamente (nueva pestaña)");

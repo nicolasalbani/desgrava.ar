@@ -19,10 +19,7 @@ export async function POST(req: NextRequest) {
   const svixSignature = req.headers.get("svix-signature");
 
   if (!svixId || !svixTimestamp || !svixSignature) {
-    return NextResponse.json(
-      { error: "Missing signature headers" },
-      { status: 401 }
-    );
+    return NextResponse.json({ error: "Missing signature headers" }, { status: 401 });
   }
 
   // 2. Verify webhook signature using Resend SDK
@@ -38,10 +35,7 @@ export async function POST(req: NextRequest) {
       webhookSecret: process.env.RESEND_WEBHOOK_SECRET!,
     });
   } catch {
-    return NextResponse.json(
-      { error: "Invalid webhook signature" },
-      { status: 401 }
-    );
+    return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
   }
 
   // 3. Only process email.received events
@@ -52,13 +46,17 @@ export async function POST(req: NextRequest) {
 
   // 4. Respond immediately, process in background
   const { email_id, from, to, subject } = event.data;
-  console.log(`[EMAIL_INBOUND] received email_id=${email_id} from=${from} to=${JSON.stringify(to)} subject=${subject}`);
+  console.log(
+    `[EMAIL_INBOUND] received email_id=${email_id} from=${from} to=${JSON.stringify(to)} subject=${subject}`,
+  );
 
   after(async () => {
     console.log(`[EMAIL_INGEST] starting background processing for email_id=${email_id}`);
     try {
       const result = await processInboundEmail(email_id, to, from, subject);
-      console.log(`[EMAIL_INGEST] done email_id=${email_id} invoicesCreated=${result.invoicesCreated} errors=${JSON.stringify(result.errors)}`);
+      console.log(
+        `[EMAIL_INGEST] done email_id=${email_id} invoicesCreated=${result.invoicesCreated} errors=${JSON.stringify(result.errors)}`,
+      );
     } catch (err) {
       console.error(`[EMAIL_INGEST] unhandled error for email_id=${email_id}:`, err);
     }

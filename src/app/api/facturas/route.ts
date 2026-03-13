@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Datos invalidos", details: parsed.error.flatten() },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       if (duplicate) {
         return NextResponse.json(
           { error: "Ya existe un comprobante con ese número" },
-          { status: 409 }
+          { status: 409 },
         );
       }
     }
@@ -94,20 +94,19 @@ export async function POST(req: NextRequest) {
         ...parsed.data,
         amount: new Prisma.Decimal(parsed.data.amount),
         source: fileBase64 ? "PDF" : "MANUAL",
-        ...(fileBase64 ? {
-          fileData: Buffer.from(fileBase64, "base64"),
-          fileMimeType: fileMimeType || "application/octet-stream",
-          originalFilename: originalFilename || null,
-        } : {}),
+        ...(fileBase64
+          ? {
+              fileData: Buffer.from(fileBase64, "base64"),
+              fileMimeType: fileMimeType || "application/octet-stream",
+              originalFilename: originalFilename || null,
+            }
+          : {}),
       },
     });
 
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {
     console.error("Error creating invoice:", error);
-    return NextResponse.json(
-      { error: "Error al crear factura" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al crear factura" }, { status: 500 });
   }
 }

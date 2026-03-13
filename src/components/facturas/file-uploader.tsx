@@ -2,14 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Upload,
-  FileText,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  X,
-} from "lucide-react";
+import { Upload, FileText, Loader2, CheckCircle, AlertCircle, X } from "lucide-react";
 import { InvoiceForm } from "./invoice-form";
 import { formatCuit } from "@/lib/validators/cuit";
 import { toast } from "sonner";
@@ -26,16 +19,12 @@ interface ExtractedFields {
   contractEndDate: string | null;
 }
 
-export function FileUploader({
-  onInvoiceSaved,
-}: {
-  onInvoiceSaved?: () => void;
-}) {
+export function FileUploader({ onInvoiceSaved }: { onInvoiceSaved?: () => void }) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [extracted, setExtracted] = useState<ExtractedFields | null>(null);
   const [filename, setFilename] = useState("");
-  const [method, setMethod] = useState("");
+  const [_method, setMethod] = useState("");
   const [fileBase64, setFileBase64] = useState("");
   const [fileMimeType, setFileMimeType] = useState("");
   const [rawText, setRawText] = useState("");
@@ -100,9 +89,7 @@ export function FileUploader({
     onInvoiceSaved?.();
   }
 
-  const confidencePercent = extracted
-    ? Math.round(extracted.confidence * 100)
-    : 0;
+  const confidencePercent = extracted ? Math.round(extracted.confidence * 100) : 0;
 
   const defaultValues = extracted
     ? {
@@ -127,12 +114,10 @@ export function FileUploader({
   if (extracted) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4 rounded-2xl bg-muted/50 px-5 py-4">
+        <div className="bg-muted/50 flex items-center gap-4 rounded-2xl px-5 py-4">
           <div
             className={`shrink-0 rounded-full p-2.5 ${
-              confidencePercent >= 75
-                ? "bg-emerald-500/10"
-                : "bg-amber-500/10"
+              confidencePercent >= 75 ? "bg-emerald-500/10" : "bg-amber-500/10"
             }`}
           >
             {confidencePercent >= 75 ? (
@@ -141,10 +126,10 @@ export function FileUploader({
               <AlertCircle className="h-4 w-4 text-amber-600" />
             )}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <FileText className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <p className="text-sm font-medium truncate">{filename}</p>
+              <FileText className="text-muted-foreground/60 h-3.5 w-3.5" />
+              <p className="truncate text-sm font-medium">{filename}</p>
             </div>
           </div>
           <Button
@@ -153,7 +138,7 @@ export function FileUploader({
             onClick={reset}
             className="text-muted-foreground hover:text-foreground shrink-0"
           >
-            <X className="h-4 w-4 mr-1.5" />
+            <X className="mr-1.5 h-4 w-4" />
             Descartar
           </Button>
         </div>
@@ -178,37 +163,32 @@ export function FileUploader({
       }}
       onDragLeave={() => setDragActive(false)}
       onDrop={handleDrop}
-      className={`
-        relative rounded-2xl border border-dashed
-        transition-all duration-300 ease-out
-        ${
-          uploading
-            ? "border-muted-foreground/15 bg-muted/30"
-            : dragActive
-              ? "border-primary/40 bg-primary/[0.03] shadow-sm"
-              : "border-muted-foreground/20 bg-muted/20 hover:border-muted-foreground/30 hover:bg-muted/30"
-        }
-      `}
+      className={`relative rounded-2xl border border-dashed transition-all duration-300 ease-out ${
+        uploading
+          ? "border-muted-foreground/15 bg-muted/30"
+          : dragActive
+            ? "border-primary/40 bg-primary/[0.03] shadow-sm"
+            : "border-muted-foreground/20 bg-muted/20 hover:border-muted-foreground/30 hover:bg-muted/30"
+      } `}
     >
       {uploading ? (
         <div className="flex items-center justify-center gap-3 py-12">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Procesando{" "}
-            <span className="font-medium text-foreground/70">{filename}</span>
+          <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
+          <p className="text-muted-foreground text-sm">
+            Procesando <span className="text-foreground/70 font-medium">{filename}</span>
           </p>
         </div>
       ) : (
         <div className="flex flex-col items-center">
-          <label className="flex flex-col items-center gap-3 py-10 cursor-pointer w-full">
-            <div className="rounded-full bg-muted/80 p-3">
-              <Upload className="h-5 w-5 text-muted-foreground/60" />
+          <label className="flex w-full cursor-pointer flex-col items-center gap-3 py-10">
+            <div className="bg-muted/80 rounded-full p-3">
+              <Upload className="text-muted-foreground/60 h-5 w-5" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-foreground/70">
+              <p className="text-foreground/70 text-sm font-medium">
                 Arrastra tu factura aca o hace click para seleccionar
               </p>
-              <p className="text-xs text-muted-foreground mt-1.5">
+              <p className="text-muted-foreground mt-1.5 text-xs">
                 PDF, JPG, PNG o WebP &mdash; maximo 10MB
               </p>
             </div>

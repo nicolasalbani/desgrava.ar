@@ -31,8 +31,8 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 items-center px-6 border-b border-border">
-        <Link href="/" className="flex items-center gap-2 font-bold text-lg" onClick={onNavigate}>
+      <div className="border-border flex h-16 items-center border-b px-6">
+        <Link href="/" className="flex items-center gap-2 text-lg font-bold" onClick={onNavigate}>
           <Calculator className="h-5 w-5" />
           desgrava.ar
         </Link>
@@ -41,7 +41,9 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
         <nav className="flex flex-col gap-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            const isActive =
+              pathname === item.href ||
+              (item.href !== "/dashboard" && pathname.startsWith(item.href));
             return (
               <Link
                 key={item.href}
@@ -51,7 +53,7 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150",
                   isActive
                     ? "bg-primary text-primary-foreground font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -61,10 +63,10 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
           })}
         </nav>
       </ScrollArea>
-      <div className="border-t border-border p-3 mt-auto">
+      <div className="border-border mt-auto border-t p-3">
         <Button
           variant="ghost"
-          className="w-full justify-start gap-3 text-sm text-muted-foreground hover:text-red-500 hover:bg-transparent transition-colors duration-150"
+          className="text-muted-foreground w-full justify-start gap-3 text-sm transition-colors duration-150 hover:bg-transparent hover:text-red-500"
           onClick={() => signOut({ callbackUrl: "/" })}
         >
           <LogOut className="h-4 w-4" />

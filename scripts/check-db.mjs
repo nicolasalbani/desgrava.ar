@@ -89,11 +89,9 @@ if (!existsSync(PGDATA)) {
 const isRunning = await checkReachable(host, port, { silent: true });
 if (!isRunning) {
   console.log(`Starting local PostgreSQL on port ${port} ...`);
-  const result = spawnSync(
-    pgCtl,
-    ["-D", PGDATA, "-l", PGLOG, "-o", `-p ${port}`, "start"],
-    { stdio: "inherit" }
-  );
+  const result = spawnSync(pgCtl, ["-D", PGDATA, "-l", PGLOG, "-o", `-p ${port}`, "start"], {
+    stdio: "inherit",
+  });
   if (result.status !== 0) {
     console.error(`Failed to start PostgreSQL. Check ${PGLOG} for details.`);
     process.exit(1);
@@ -107,9 +105,18 @@ if (psql && createdb && dbName) {
   try {
     const out = execFileSync(
       psql,
-      ["-U", "postgres", "-p", String(port), "-tAc", `SELECT 1 FROM pg_database WHERE datname='${dbName}'`],
-      { stdio: "pipe" }
-    ).toString().trim();
+      [
+        "-U",
+        "postgres",
+        "-p",
+        String(port),
+        "-tAc",
+        `SELECT 1 FROM pg_database WHERE datname='${dbName}'`,
+      ],
+      { stdio: "pipe" },
+    )
+      .toString()
+      .trim();
     if (out !== "1") {
       execFileSync(createdb, ["-U", "postgres", "-p", String(port), dbName], { stdio: "inherit" });
       console.log(`Created database: ${dbName}`);

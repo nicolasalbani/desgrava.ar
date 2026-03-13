@@ -50,8 +50,18 @@ const PARENTESCO_OPTIONS = [
 ] as const;
 
 const MESES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
 ];
 
 const UNION_PARENTESCOS = new Set(["1", "51"]);
@@ -187,9 +197,7 @@ function DependentDialog({
   async function onSubmit(data: FormData) {
     setSaving(true);
     try {
-      const url = editing
-        ? `/api/cargas-familia/${editing.id}`
-        : "/api/cargas-familia";
+      const url = editing ? `/api/cargas-familia/${editing.id}` : "/api/cargas-familia";
       const method = editing ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -210,7 +218,7 @@ function DependentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
             {editing ? "Editar carga de familia" : "Agregar carga de familia"}
@@ -258,7 +266,9 @@ function DependentDialog({
                     </SelectTrigger>
                     <SelectContent>
                       {TIPO_DOC_OPTIONS.map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -269,7 +279,9 @@ function DependentDialog({
               <Label>Nro. documento</Label>
               <Input {...form.register("numeroDoc")} placeholder="Nro. documento" />
               {form.formState.errors.numeroDoc && (
-                <p className="text-xs text-destructive">{form.formState.errors.numeroDoc.message}</p>
+                <p className="text-destructive text-xs">
+                  {form.formState.errors.numeroDoc.message}
+                </p>
               )}
             </div>
           </div>
@@ -280,21 +292,24 @@ function DependentDialog({
               <Label>Apellido</Label>
               <Input {...form.register("apellido")} placeholder="Apellido" />
               {form.formState.errors.apellido && (
-                <p className="text-xs text-destructive">{form.formState.errors.apellido.message}</p>
+                <p className="text-destructive text-xs">{form.formState.errors.apellido.message}</p>
               )}
             </div>
             <div className="space-y-1.5">
               <Label>Nombre</Label>
               <Input {...form.register("nombre")} placeholder="Nombre" />
               {form.formState.errors.nombre && (
-                <p className="text-xs text-destructive">{form.formState.errors.nombre.message}</p>
+                <p className="text-destructive text-xs">{form.formState.errors.nombre.message}</p>
               )}
             </div>
           </div>
 
           {/* Fecha nacimiento */}
           <div className="space-y-1.5">
-            <Label>Fecha de nacimiento <span className="text-muted-foreground/50 text-xs font-normal">(opcional)</span></Label>
+            <Label>
+              Fecha de nacimiento{" "}
+              <span className="text-muted-foreground/50 text-xs font-normal">(opcional)</span>
+            </Label>
             <Input
               {...form.register("fechaNacimiento")}
               placeholder="dd/mm/aaaa"
@@ -306,11 +321,7 @@ function DependentDialog({
           {isUnion && (
             <div className="space-y-1.5">
               <Label>{unionDateLabel(parentesco)}</Label>
-              <Input
-                {...form.register("fechaUnion")}
-                placeholder="dd/mm/aaaa"
-                className="w-40"
-              />
+              <Input {...form.register("fechaUnion")} placeholder="dd/mm/aaaa" className="w-40" />
             </div>
           )}
 
@@ -348,7 +359,7 @@ function DependentDialog({
             </div>
           )}
 
-          <div className="border-t border-border" />
+          <div className="border-border border-t" />
 
           {/* Toggles */}
           <div className="space-y-4">
@@ -360,7 +371,11 @@ function DependentDialog({
                 control={form.control}
                 name="familiaCargo"
                 render={({ field }) => (
-                  <Switch id="familiaCargo" checked={field.value} onCheckedChange={field.onChange} />
+                  <Switch
+                    id="familiaCargo"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
                 )}
               />
             </div>
@@ -384,41 +399,46 @@ function DependentDialog({
                 control={form.control}
                 name="tieneIngresos"
                 render={({ field }) => (
-                  <Switch id="tieneIngresos" checked={field.value} onCheckedChange={field.onChange} />
+                  <Switch
+                    id="tieneIngresos"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
                 )}
               />
             </div>
             {tieneIngresos && (
               <div className="space-y-1.5">
                 <Label>Monto anual de ingresos</Label>
-                <Input
-                  {...form.register("montoIngresos")}
-                  placeholder="0.00"
-                  className="w-40"
-                />
+                <Input {...form.register("montoIngresos")} placeholder="0.00" className="w-40" />
               </div>
             )}
           </div>
 
-          <div className="border-t border-border" />
+          <div className="border-border border-t" />
 
           {/* Período */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">Período</Label>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Mes desde</Label>
+                <Label className="text-muted-foreground text-xs">Mes desde</Label>
                 <Controller
                   control={form.control}
                   name="mesDesde"
                   render={({ field }) => (
-                    <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                    <Select
+                      value={String(field.value)}
+                      onValueChange={(v) => field.onChange(Number(v))}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {MESES.map((mes, i) => (
-                          <SelectItem key={i} value={String(i + 1)}>{mes}</SelectItem>
+                          <SelectItem key={i} value={String(i + 1)}>
+                            {mes}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -426,18 +446,23 @@ function DependentDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Mes hasta</Label>
+                <Label className="text-muted-foreground text-xs">Mes hasta</Label>
                 <Controller
                   control={form.control}
                   name="mesHasta"
                   render={({ field }) => (
-                    <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                    <Select
+                      value={String(field.value)}
+                      onValueChange={(v) => field.onChange(Number(v))}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {MESES.map((mes, i) => (
-                          <SelectItem key={i} value={String(i + 1)}>{mes}</SelectItem>
+                          <SelectItem key={i} value={String(i + 1)}>
+                            {mes}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -447,14 +472,18 @@ function DependentDialog({
             </div>
             {mesHasta === 12 && (
               <div className="flex items-center justify-between">
-                <Label htmlFor="proximosPeriodos" className="text-xs text-muted-foreground/80">
+                <Label htmlFor="proximosPeriodos" className="text-muted-foreground/80 text-xs">
                   Vigente para los próximos períodos fiscales
                 </Label>
                 <Controller
                   control={form.control}
                   name="proximosPeriodos"
                   render={({ field }) => (
-                    <Switch id="proximosPeriodos" checked={field.value} onCheckedChange={field.onChange} />
+                    <Switch
+                      id="proximosPeriodos"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
                   )}
                 />
               </div>
@@ -536,14 +565,14 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
     <div className="space-y-4">
       {loading ? (
         <div className="flex justify-center py-6">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
+          <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
         </div>
       ) : dependents.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">
-          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-3">
-            <Users className="h-5 w-5 text-muted-foreground/50" />
+          <div className="bg-muted mb-3 flex h-10 w-10 items-center justify-center rounded-full">
+            <Users className="text-muted-foreground/50 h-5 w-5" />
           </div>
-          <p className="text-sm text-muted-foreground/60">
+          <p className="text-muted-foreground/60 text-sm">
             No declaraste cargas de familia todavía.
           </p>
         </div>
@@ -552,21 +581,21 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
           {dependents.map((dep) => (
             <div
               key={dep.id}
-              className="flex items-center justify-between rounded-xl border border-border px-4 py-3 bg-muted/20"
+              className="border-border bg-muted/20 flex items-center justify-between rounded-xl border px-4 py-3"
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium truncate">
+                <p className="truncate text-sm font-medium">
                   {dep.apellido}, {dep.nombre}
                 </p>
-                <p className="text-xs text-muted-foreground/60 mt-0.5">
+                <p className="text-muted-foreground/60 mt-0.5 text-xs">
                   {parentescoLabel(dep.parentesco)} · {dep.tipoDoc} {dep.numeroDoc}
                 </p>
               </div>
-              <div className="flex items-center gap-1 shrink-0 ml-3">
+              <div className="ml-3 flex shrink-0 items-center gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground h-8 w-8"
                   onClick={() => openEdit(dep)}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -574,7 +603,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive h-8 w-8"
                   onClick={() => setDeleteId(dep.id)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

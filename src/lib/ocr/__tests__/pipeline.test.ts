@@ -62,20 +62,23 @@ describe.skipIf(!starlinkB.exists)("processDocument — ARCA Factura B (arca-fac
 // ---------------------------------------------------------------------------
 const arcaUsd = fixture("arca-factura-b-usd.pdf");
 
-describe.skipIf(!arcaUsd.exists)("processDocument — ARCA Factura B USD (arca-factura-b-usd.pdf)", () => {
-  it("extracts all fields correctly including ARS equivalent amount", async () => {
-    const result = await processDocument(readFileSync(arcaUsd.path), "application/pdf");
+describe.skipIf(!arcaUsd.exists)(
+  "processDocument — ARCA Factura B USD (arca-factura-b-usd.pdf)",
+  () => {
+    it("extracts all fields correctly including ARS equivalent amount", async () => {
+      const result = await processDocument(readFileSync(arcaUsd.path), "application/pdf");
 
-    expect(result.method).toBe("pdf-parse");
-    expect(result.fields.invoiceType).toBe("FACTURA_B");
-    expect(result.fields.cuit).toBe("30573873056");
-    expect(result.fields.invoiceNumber).toBe("00005-00000687");
-    expect(result.fields.amount).toBe(10173750);
-    expect(result.fields.date).toBe("2025-08-27");
-    expect(result.fields.providerName).toMatch(/BAREDES/i);
-    expect(result.fields.confidence).toBe(1);
-  }, 30_000);
-});
+      expect(result.method).toBe("pdf-parse");
+      expect(result.fields.invoiceType).toBe("FACTURA_B");
+      expect(result.fields.cuit).toBe("30573873056");
+      expect(result.fields.invoiceNumber).toBe("00005-00000687");
+      expect(result.fields.amount).toBe(10173750);
+      expect(result.fields.date).toBe("2025-08-27");
+      expect(result.fields.providerName).toMatch(/BAREDES/i);
+      expect(result.fields.confidence).toBe(1);
+    }, 30_000);
+  },
+);
 
 describe.skipIf(!afip.exists)("processDocument — AFIP Factura C (afip-factura-c.pdf)", () => {
   it("extracts all fields correctly from the real PDF", async () => {

@@ -28,15 +28,16 @@
       "Read(//Applications/**)",
       "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"yes\" npx prisma migrate reset --force)",
       "Bash(ls -la:*)",
-      "Bash(PRISMA_NONINTERACTIVE=1 npx prisma migrate dev --name add_fiscal_year_to_profile --create-only)"
+      "Bash(PRISMA_NONINTERACTIVE=1 npx prisma migrate dev --name add_fiscal_year_to_profile --create-only)",
+      "WebFetch(domain:www.bassimeledath.com)",
+      "Bash(wc -l /Users/nicolasalbani/Github/desgrava.ar/src/lib/**/*.ts)",
+      "Bash(grep -E '\"\"\\(vitest|test\\)\"\"')"
     ],
-    "deny": [
-      "Bash(git push --force*)",
-      "Bash(git reset --hard*)",
-      "Bash(git clean -f*)"
-    ],
+    "deny": ["Bash(git push --force*)", "Bash(git reset --hard*)", "Bash(git clean -f*)"],
     "additionalDirectories": [
-      "/Users/nicolasalbani/Github/desgrava.ar/src/app/api/cargas-familia"
+      "/Users/nicolasalbani/Github/desgrava.ar/src/app/api/cargas-familia",
+      "/Users/nicolasalbani/Github/desgrava.ar/.github",
+      "/Users/nicolasalbani/Github/desgrava.ar/.claude/skills"
     ]
   }
 }

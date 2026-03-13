@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Datos invalidos", details: parsed.error.flatten() },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -51,10 +51,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Error saving credentials:", error);
-    return NextResponse.json(
-      { error: "Error al guardar credenciales" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al guardar credenciales" }, { status: 500 });
   }
 }
 

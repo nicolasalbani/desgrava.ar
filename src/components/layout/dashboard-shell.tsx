@@ -13,7 +13,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1 flex-col overflow-hidden">
           <DashboardHeader />
           <DeadlineBanner />
-          <main className="flex-1 overflow-y-auto bg-muted/30 p-6">{children}</main>
+          <main className="bg-muted/30 flex-1 overflow-y-auto p-6">{children}</main>
         </div>
       </div>
     </FiscalYearProvider>

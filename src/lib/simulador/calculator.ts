@@ -1,10 +1,6 @@
 import Decimal from "decimal.js";
 import { getTaxTables, TaxBracket, TaxPeriod } from "./tax-tables";
-import {
-  DeductionInput,
-  DeductionResult,
-  applyDeductionRules,
-} from "./deduction-rules";
+import { DeductionInput, DeductionResult, applyDeductionRules } from "./deduction-rules";
 
 export interface SimulationInput {
   salarioBrutoMensual: number;
@@ -47,9 +43,7 @@ function calculateTax(taxableIncome: Decimal, brackets: TaxBracket[]): Decimal {
 
   for (const bracket of brackets) {
     if (taxableIncome.lte(bracket.to)) {
-      return bracket.fixedAmount.plus(
-        taxableIncome.minus(bracket.from).mul(bracket.rate)
-      );
+      return bracket.fixedAmount.plus(taxableIncome.minus(bracket.from).mul(bracket.rate));
     }
   }
 
@@ -90,12 +84,12 @@ export function simulate(input: SimulationInput): SimulationResult {
   }));
 
   const deductionResults: DeductionResult[] = deductionInputs.map((di) =>
-    applyDeductionRules(di, tables.deductionLimits, netaAnual)
+    applyDeductionRules(di, tables.deductionLimits, netaAnual),
   );
 
   const totalComprobantes = deductionResults.reduce(
     (sum, r) => sum.plus(r.deductibleAmount),
-    new Decimal(0)
+    new Decimal(0),
   );
 
   // 6. Taxable income WITHOUT invoice deductions (baseline)
@@ -104,7 +98,7 @@ export function simulate(input: SimulationInput): SimulationResult {
   // 7. Taxable income WITH invoice deductions
   const imponibleCon = Decimal.max(
     netaAnual.minus(personales).minus(totalComprobantes),
-    new Decimal(0)
+    new Decimal(0),
   );
 
   // 8. Tax calculation
@@ -115,12 +109,8 @@ export function simulate(input: SimulationInput): SimulationResult {
   const ahorroAnual = impuestoSin.minus(impuestoCon);
   const ahorroMensual = ahorroAnual.div(12);
 
-  const tasaEfectivaSin = brutoAnual.gt(0)
-    ? impuestoSin.div(brutoAnual).mul(100)
-    : new Decimal(0);
-  const tasaEfectivaCon = brutoAnual.gt(0)
-    ? impuestoCon.div(brutoAnual).mul(100)
-    : new Decimal(0);
+  const tasaEfectivaSin = brutoAnual.gt(0) ? impuestoSin.div(brutoAnual).mul(100) : new Decimal(0);
+  const tasaEfectivaCon = brutoAnual.gt(0) ? impuestoCon.div(brutoAnual).mul(100) : new Decimal(0);
 
   return {
     salarioBrutoAnual: brutoAnual.toFixed(2),

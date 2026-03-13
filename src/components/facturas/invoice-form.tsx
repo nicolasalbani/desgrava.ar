@@ -15,12 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Sparkles } from "lucide-react";
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
@@ -44,54 +39,65 @@ function unformatArgNumber(value: string): string {
   return value.replace(/\D/g, "");
 }
 
-const formSchema = z.object({
-  deductionCategory: z.string().min(1, "Selecciona una categoria"),
-  providerCuit: z
-    .string()
-    .min(1, "El CUIT es requerido")
-    .refine(
-      (val) => /^\d{11}$/.test(val.replace(/-/g, "")),
-      { message: "CUIT invalido" }
-    )
-    .refine(
-      (val) => validateCuit(val.replace(/-/g, "")),
-      { message: "CUIT invalido (digito verificador)" }
-    ),
-  providerName: z.string().min(1, "El nombre del proveedor es requerido"),
-  invoiceType: z.string().min(1, "Selecciona un tipo"),
-  invoiceNumber: z.string().min(1, "El numero de comprobante es requerido"),
-  invoiceDate: z.string().min(1, "La fecha del comprobante es requerida"),
-  amount: z.string().min(1, "El monto es requerido").refine(
-    (val) => {
-      const num = parseFloat(unformatArgNumber(val));
-      return !isNaN(num) && num > 0;
+const formSchema = z
+  .object({
+    deductionCategory: z.string().min(1, "Selecciona una categoria"),
+    providerCuit: z
+      .string()
+      .min(1, "El CUIT es requerido")
+      .refine((val) => /^\d{11}$/.test(val.replace(/-/g, "")), { message: "CUIT invalido" })
+      .refine((val) => validateCuit(val.replace(/-/g, "")), {
+        message: "CUIT invalido (digito verificador)",
+      }),
+    providerName: z.string().min(1, "El nombre del proveedor es requerido"),
+    invoiceType: z.string().min(1, "Selecciona un tipo"),
+    invoiceNumber: z.string().min(1, "El numero de comprobante es requerido"),
+    invoiceDate: z.string().min(1, "La fecha del comprobante es requerida"),
+    amount: z
+      .string()
+      .min(1, "El monto es requerido")
+      .refine(
+        (val) => {
+          const num = parseFloat(unformatArgNumber(val));
+          return !isNaN(num) && num > 0;
+        },
+        { message: "El monto debe ser mayor a 0" },
+      ),
+    fiscalYear: z.string(),
+    fiscalMonth: z.string(),
+    description: z.string().optional(),
+    contractStartDate: z.string().optional(),
+    contractEndDate: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (!data.invoiceDate) return true;
+      const invoiceYear = parseInt(data.invoiceDate.split("-")[0]);
+      return invoiceYear === parseInt(data.fiscalYear);
     },
-    { message: "El monto debe ser mayor a 0" }
-  ),
-  fiscalYear: z.string(),
-  fiscalMonth: z.string(),
-  description: z.string().optional(),
-  contractStartDate: z.string().optional(),
-  contractEndDate: z.string().optional(),
-}).refine(
-  (data) => {
-    if (!data.invoiceDate) return true;
-    const invoiceYear = parseInt(data.invoiceDate.split("-")[0]);
-    return invoiceYear === parseInt(data.fiscalYear);
-  },
-  {
-    message: "La fecha del comprobante no corresponde al año fiscal seleccionado",
-    path: ["invoiceDate"],
-  }
-);
+    {
+      message: "La fecha del comprobante no corresponde al año fiscal seleccionado",
+      path: ["invoiceDate"],
+    },
+  );
 
 type FormData = z.infer<typeof formSchema>;
 
 const currentYear = new Date().getFullYear();
 const currentMonth = new Date().getMonth() + 1;
 const months = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
 ];
 
 export function InvoiceForm({
@@ -152,44 +158,47 @@ export function InvoiceForm({
     },
   });
 
-  const fetchLastCategory = useCallback(async (rawCuit: string) => {
-    const cuit = rawCuit.replace(/-/g, "");
-    if (cuit.length !== 11 || !validateCuit(cuit) || cuit === lastLookedUpCuit.current) return;
-    lastLookedUpCuit.current = cuit;
+  const fetchLastCategory = useCallback(
+    async (rawCuit: string) => {
+      const cuit = rawCuit.replace(/-/g, "");
+      if (cuit.length !== 11 || !validateCuit(cuit) || cuit === lastLookedUpCuit.current) return;
+      lastLookedUpCuit.current = cuit;
 
-    try {
-      const res = await fetch(`/api/facturas/last-category?cuit=${cuit}`);
-      if (!res.ok) return;
-      const { category } = await res.json();
-      if (category && !form.getValues("deductionCategory")) {
-        form.setValue("deductionCategory", category, { shouldValidate: true });
-        return;
-      }
-    } catch {
-      // silently ignore — suggestion is best-effort
-    }
-
-    // Fallback: classify via LLM if no prior category and raw text is available
-    if (!form.getValues("deductionCategory") && invoiceRawText) {
-      setClassifying(true);
       try {
-        const res = await fetch("/api/facturas/classify-category", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: invoiceRawText }),
-        });
+        const res = await fetch(`/api/facturas/last-category?cuit=${cuit}`);
         if (!res.ok) return;
         const { category } = await res.json();
         if (category && !form.getValues("deductionCategory")) {
           form.setValue("deductionCategory", category, { shouldValidate: true });
+          return;
         }
       } catch {
-        // silently ignore — classification is best-effort
-      } finally {
-        setClassifying(false);
+        // silently ignore — suggestion is best-effort
       }
-    }
-  }, [form, invoiceRawText]);
+
+      // Fallback: classify via LLM if no prior category and raw text is available
+      if (!form.getValues("deductionCategory") && invoiceRawText) {
+        setClassifying(true);
+        try {
+          const res = await fetch("/api/facturas/classify-category", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: invoiceRawText }),
+          });
+          if (!res.ok) return;
+          const { category } = await res.json();
+          if (category && !form.getValues("deductionCategory")) {
+            form.setValue("deductionCategory", category, { shouldValidate: true });
+          }
+        } catch {
+          // silently ignore — classification is best-effort
+        } finally {
+          setClassifying(false);
+        }
+      }
+    },
+    [form, invoiceRawText],
+  );
 
   useEffect(() => {
     if (defaultValues?.providerCuit) {
@@ -215,27 +224,24 @@ export function InvoiceForm({
         contractEndDate: data.contractEndDate || undefined,
       };
 
-      const res = await fetch(
-        invoiceId ? `/api/facturas/${invoiceId}` : "/api/facturas",
-        {
-          method: invoiceId ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            invoiceId
-              ? payload
-              : {
-                  ...payload,
-                  ...(fileData?.fileBase64
-                    ? {
-                        fileBase64: fileData.fileBase64,
-                        fileMimeType: fileData.fileMimeType,
-                        originalFilename: fileData.originalFilename,
-                      }
-                    : {}),
-                }
-          ),
-        }
-      );
+      const res = await fetch(invoiceId ? `/api/facturas/${invoiceId}` : "/api/facturas", {
+        method: invoiceId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          invoiceId
+            ? payload
+            : {
+                ...payload,
+                ...(fileData?.fileBase64
+                  ? {
+                      fileBase64: fileData.fileBase64,
+                      fileMimeType: fileData.fileMimeType,
+                      originalFilename: fileData.originalFilename,
+                    }
+                  : {}),
+              },
+        ),
+      });
 
       if (!res.ok) {
         const err = await res.json();
@@ -276,263 +282,248 @@ export function InvoiceForm({
   }
 
   const formContent = (
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Categoria SiRADIG</Label>
-            <div className="relative">
-              {classifying && (
-                <div className="absolute -inset-[2px] rounded-[calc(var(--radius-md)+2px)] ai-shimmer-border pointer-events-none p-[2px]">
-                  <div className="w-full h-full rounded-md bg-background" />
-                </div>
-              )}
-              <Select
-                value={watchedCategory}
-                onValueChange={(v) =>
-                  form.setValue("deductionCategory", v, { shouldValidate: true })
-                }
-                disabled={classifying}
-              >
-                <SelectTrigger className={cn("w-full overflow-hidden relative z-10 [&>span]:truncate", missingGlow(watchedCategory))}>
-                  {classifying ? (
-                    <span className="flex items-center gap-2 text-muted-foreground">
-                      <Sparkles className="h-4 w-4 animate-pulse text-primary" />
-                      Clasificando con IA...
-                    </span>
-                  ) : (
-                    <SelectValue placeholder="Seleccionar categoria" />
-                  )}
-                </SelectTrigger>
-                <SelectContent>
-                  {DEDUCTION_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {DEDUCTION_CATEGORY_LABELS[cat]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {form.formState.errors.deductionCategory && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.deductionCategory.message}
-              </p>
-            )}
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="providerCuit">CUIT del proveedor</Label>
-              <Input
-                id="providerCuit"
-                placeholder="XX-XXXXXXXX-X"
-                className={missingGlow(watchedCuit)}
-                {...form.register("providerCuit")}
-                onChange={handleCuitChange}
-              />
-              {form.formState.errors.providerCuit && (
-                <p className="text-sm text-destructive">
-                  {form.formState.errors.providerCuit.message}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="providerName">Nombre del proveedor</Label>
-              <Input
-                id="providerName"
-                placeholder="Ej: OSDE, Galeno"
-                className={missingGlow(watchedProviderName)}
-                {...form.register("providerName")}
-              />
-              {form.formState.errors.providerName && (
-                <p className="text-sm text-destructive">
-                  {form.formState.errors.providerName.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Tipo de comprobante</Label>
-              <Select
-                value={watchedInvoiceType}
-                onValueChange={(v) =>
-                  form.setValue("invoiceType", v, { shouldValidate: true })
-                }
-              >
-                <SelectTrigger className={missingGlow(watchedInvoiceType)}>
-                  <SelectValue placeholder="Seleccionar tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {INVOICE_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {INVOICE_TYPE_LABELS[type]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {form.formState.errors.invoiceType && (
-                <p className="text-sm text-destructive">
-                  {form.formState.errors.invoiceType.message}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="amount">Monto ($)</Label>
-              <Input
-                id="amount"
-                type="text"
-                inputMode="numeric"
-                placeholder="200.000"
-                className={missingGlow(watchedAmount)}
-                value={formatArgNumber(watchedAmount)}
-                onChange={(e) => {
-                  const raw = unformatArgNumber(e.target.value);
-                  form.setValue("amount", raw, { shouldValidate: true });
-                }}
-              />
-              {form.formState.errors.amount && (
-                <p className="text-sm text-destructive">
-                  {form.formState.errors.amount.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="invoiceNumber">Numero de comprobante</Label>
-              <Input
-                id="invoiceNumber"
-                placeholder="00001-00012345"
-                className={missingGlow(watchedInvoiceNumber)}
-                {...form.register("invoiceNumber")}
-              />
-              {form.formState.errors.invoiceNumber && (
-                <p className="text-sm text-destructive">
-                  {form.formState.errors.invoiceNumber.message}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="invoiceDate">Fecha del comprobante</Label>
-              <Input
-                id="invoiceDate"
-                type="date"
-                className={missingGlow(watchedInvoiceDate)}
-                {...form.register("invoiceDate")}
-              />
-              {form.formState.errors.invoiceDate && (
-                <p className="text-sm text-destructive">
-                  {form.formState.errors.invoiceDate.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {watchedCategory === "ALQUILER_VIVIENDA" && (
-            <div className="space-y-2">
-              <Label>Vigencia del contrato</Label>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground/60">Desde</p>
-                  <Input
-                    id="contractStartDate"
-                    type="date"
-                    className={missingGlow(watchedContractStartDate)}
-                    {...form.register("contractStartDate")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground/60">Hasta</p>
-                  <Input
-                    id="contractEndDate"
-                    type="date"
-                    className={missingGlow(watchedContractEndDate)}
-                    {...form.register("contractEndDate")}
-                  />
-                </div>
-              </div>
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <div className="space-y-2">
+        <Label>Categoria SiRADIG</Label>
+        <div className="relative">
+          {classifying && (
+            <div className="ai-shimmer-border pointer-events-none absolute -inset-[2px] rounded-[calc(var(--radius-md)+2px)] p-[2px]">
+              <div className="bg-background h-full w-full rounded-md" />
             </div>
           )}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Año fiscal</Label>
-              {lockedYear !== null ? (
-                <div className="h-9 px-3 flex items-center text-sm rounded-md border border-border bg-muted/30 text-muted-foreground">
-                  {lockedYear}
-                </div>
-              ) : (
-                <Select
-                  value={form.watch("fiscalYear")}
-                  onValueChange={(v) =>
-                    form.setValue("fiscalYear", v, { shouldValidate: true })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 5 }, (_, i) => currentYear - i).map(
-                      (y) => (
-                        <SelectItem key={y} value={String(y)}>
-                          {y}
-                        </SelectItem>
-                      )
-                    )}
-                  </SelectContent>
-                </Select>
+          <Select
+            value={watchedCategory}
+            onValueChange={(v) => form.setValue("deductionCategory", v, { shouldValidate: true })}
+            disabled={classifying}
+          >
+            <SelectTrigger
+              className={cn(
+                "relative z-10 w-full overflow-hidden [&>span]:truncate",
+                missingGlow(watchedCategory),
               )}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Mes</Label>
-              <Select
-                value={form.watch("fiscalMonth")}
-                onValueChange={(v) =>
-                  form.setValue("fiscalMonth", v, { shouldValidate: true })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map((name, i) => (
-                    <SelectItem key={i} value={String(i + 1)}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripcion (opcional)</Label>
-            <Textarea
-              id="description"
-              placeholder="Detalle adicional del comprobante"
-              {...form.register("description")}
-            />
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <Button type="submit" disabled={saving}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {invoiceId ? "Guardar cambios" : "Guardar factura"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => (onCancel ? onCancel() : router.push("/facturas"))}
             >
-              Cancelar
-            </Button>
+              {classifying ? (
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <Sparkles className="text-primary h-4 w-4 animate-pulse" />
+                  Clasificando con IA...
+                </span>
+              ) : (
+                <SelectValue placeholder="Seleccionar categoria" />
+              )}
+            </SelectTrigger>
+            <SelectContent>
+              {DEDUCTION_CATEGORIES.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {DEDUCTION_CATEGORY_LABELS[cat]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {form.formState.errors.deductionCategory && (
+          <p className="text-destructive text-sm">
+            {form.formState.errors.deductionCategory.message}
+          </p>
+        )}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="providerCuit">CUIT del proveedor</Label>
+          <Input
+            id="providerCuit"
+            placeholder="XX-XXXXXXXX-X"
+            className={missingGlow(watchedCuit)}
+            {...form.register("providerCuit")}
+            onChange={handleCuitChange}
+          />
+          {form.formState.errors.providerCuit && (
+            <p className="text-destructive text-sm">{form.formState.errors.providerCuit.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="providerName">Nombre del proveedor</Label>
+          <Input
+            id="providerName"
+            placeholder="Ej: OSDE, Galeno"
+            className={missingGlow(watchedProviderName)}
+            {...form.register("providerName")}
+          />
+          {form.formState.errors.providerName && (
+            <p className="text-destructive text-sm">{form.formState.errors.providerName.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Tipo de comprobante</Label>
+          <Select
+            value={watchedInvoiceType}
+            onValueChange={(v) => form.setValue("invoiceType", v, { shouldValidate: true })}
+          >
+            <SelectTrigger className={missingGlow(watchedInvoiceType)}>
+              <SelectValue placeholder="Seleccionar tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              {INVOICE_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {INVOICE_TYPE_LABELS[type]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {form.formState.errors.invoiceType && (
+            <p className="text-destructive text-sm">{form.formState.errors.invoiceType.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="amount">Monto ($)</Label>
+          <Input
+            id="amount"
+            type="text"
+            inputMode="numeric"
+            placeholder="200.000"
+            className={missingGlow(watchedAmount)}
+            value={formatArgNumber(watchedAmount)}
+            onChange={(e) => {
+              const raw = unformatArgNumber(e.target.value);
+              form.setValue("amount", raw, { shouldValidate: true });
+            }}
+          />
+          {form.formState.errors.amount && (
+            <p className="text-destructive text-sm">{form.formState.errors.amount.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="invoiceNumber">Numero de comprobante</Label>
+          <Input
+            id="invoiceNumber"
+            placeholder="00001-00012345"
+            className={missingGlow(watchedInvoiceNumber)}
+            {...form.register("invoiceNumber")}
+          />
+          {form.formState.errors.invoiceNumber && (
+            <p className="text-destructive text-sm">
+              {form.formState.errors.invoiceNumber.message}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="invoiceDate">Fecha del comprobante</Label>
+          <Input
+            id="invoiceDate"
+            type="date"
+            className={missingGlow(watchedInvoiceDate)}
+            {...form.register("invoiceDate")}
+          />
+          {form.formState.errors.invoiceDate && (
+            <p className="text-destructive text-sm">{form.formState.errors.invoiceDate.message}</p>
+          )}
+        </div>
+      </div>
+
+      {watchedCategory === "ALQUILER_VIVIENDA" && (
+        <div className="space-y-2">
+          <Label>Vigencia del contrato</Label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-muted-foreground/60 text-xs">Desde</p>
+              <Input
+                id="contractStartDate"
+                type="date"
+                className={missingGlow(watchedContractStartDate)}
+                {...form.register("contractStartDate")}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground/60 text-xs">Hasta</p>
+              <Input
+                id="contractEndDate"
+                type="date"
+                className={missingGlow(watchedContractEndDate)}
+                {...form.register("contractEndDate")}
+              />
+            </div>
           </div>
-        </form>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Año fiscal</Label>
+          {lockedYear !== null ? (
+            <div className="border-border bg-muted/30 text-muted-foreground flex h-9 items-center rounded-md border px-3 text-sm">
+              {lockedYear}
+            </div>
+          ) : (
+            <Select
+              value={form.watch("fiscalYear")}
+              onValueChange={(v) => form.setValue("fiscalYear", v, { shouldValidate: true })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 5 }, (_, i) => currentYear - i).map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Mes</Label>
+          <Select
+            value={form.watch("fiscalMonth")}
+            onValueChange={(v) => form.setValue("fiscalMonth", v, { shouldValidate: true })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {months.map((name, i) => (
+                <SelectItem key={i} value={String(i + 1)}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="description">Descripcion (opcional)</Label>
+        <Textarea
+          id="description"
+          placeholder="Detalle adicional del comprobante"
+          {...form.register("description")}
+        />
+      </div>
+
+      <div className="flex gap-3 pt-2">
+        <Button type="submit" disabled={saving}>
+          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {invoiceId ? "Guardar cambios" : "Guardar factura"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => (onCancel ? onCancel() : router.push("/facturas"))}
+        >
+          Cancelar
+        </Button>
+      </div>
+    </form>
   );
 
   if (onSaved) {

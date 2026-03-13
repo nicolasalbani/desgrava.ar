@@ -8,7 +8,7 @@ export interface ExtractedFields {
   confidence: number;
   // For rental invoices (ALQUILER_VIVIENDA): billing/contract period dates
   contractStartDate: string | null; // ISO YYYY-MM-DD
-  contractEndDate: string | null;   // ISO YYYY-MM-DD
+  contractEndDate: string | null; // ISO YYYY-MM-DD
 }
 
 const CUIT_PATTERN = /\b(20|23|24|27|30|33|34)-?\d{8}-?\d\b/g;
@@ -149,16 +149,14 @@ export function extractFields(text: string): ExtractedFields {
   }
 
   let providerName: string | null = null;
-  const nameMatch = text.match(
-    /(?:RAZ[OÓ]N\s+SOCIAL|DENOMINACI[OÓ]N|NOMBRE)\s*:?\s*(.+)/i
-  );
+  const nameMatch = text.match(/(?:RAZ[OÓ]N\s+SOCIAL|DENOMINACI[OÓ]N|NOMBRE)\s*:?\s*(.+)/i);
   if (nameMatch) {
     // Strip trailing invoice field labels that end up on the same line
     // due to PDF column layout being merged into a single text line
     providerName = nameMatch[1]
       .replace(
         /\s+(?:Fecha\s+de\s|Punto\s+de\s+Venta|Comp\.\s*Nro|CUIT\s*:|Ingresos\s+Brutos|Condici[oó]n\s|Domicilio|Per[ií]odo|COD\.\s*\d|C\.U\.I\.T).*$/i,
-        ""
+        "",
       )
       .trim()
       .substring(0, 100);
@@ -168,7 +166,7 @@ export function extractFields(text: string): ExtractedFields {
   // (handles invoices like Starlink where the name appears without a RAZÓN SOCIAL label)
   if (!providerName) {
     const companyMatch = text.match(
-      /([A-ZÁÉÍÓÚÑ][a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]+(?:\s+[A-Za-záéíóúÁÉÍÓÚñÑ0-9\.]+){0,4}\s+(?:S\.R\.L\.|S\.A\.S\.|S\.A\.U\.|S\.A\.))/
+      /([A-ZÁÉÍÓÚÑ][a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]+(?:\s+[A-Za-záéíóúÁÉÍÓÚñÑ0-9\.]+){0,4}\s+(?:S\.R\.L\.|S\.A\.S\.|S\.A\.U\.|S\.A\.))/,
     );
     if (companyMatch) {
       providerName = companyMatch[1].trim().substring(0, 100);
@@ -179,7 +177,7 @@ export function extractFields(text: string): ExtractedFields {
   let contractStartDate: string | null = null;
   let contractEndDate: string | null = null;
   const periodMatch = text.match(
-    /Per[ií]odo\s+Facturado\s+Desde:\s*(\d{1,2}\/\d{1,2}\/\d{4})\s+Hasta:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i
+    /Per[ií]odo\s+Facturado\s+Desde:\s*(\d{1,2}\/\d{1,2}\/\d{4})\s+Hasta:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i,
   );
   if (periodMatch) {
     contractStartDate = parseArgentineDate(periodMatch[1]);
@@ -188,5 +186,15 @@ export function extractFields(text: string): ExtractedFields {
 
   const confidence = fieldsFound / totalFields;
 
-  return { cuit, invoiceType, invoiceNumber, amount, date, providerName, confidence, contractStartDate, contractEndDate };
+  return {
+    cuit,
+    invoiceType,
+    invoiceNumber,
+    amount,
+    date,
+    providerName,
+    confidence,
+    contractStartDate,
+    contractEndDate,
+  };
 }

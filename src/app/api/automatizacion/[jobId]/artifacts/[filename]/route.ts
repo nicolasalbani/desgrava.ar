@@ -6,7 +6,7 @@ import { readScreenshotFile, readVideoFile } from "@/lib/automation/artifact-man
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ jobId: string; filename: string }> }
+  { params }: { params: Promise<{ jobId: string; filename: string }> },
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -25,10 +25,7 @@ export async function GET(
 
   // Video file — legacy "video" alias or any .webm filename
   if (filename === "video" || filename.endsWith(".webm")) {
-    const buffer = await readVideoFile(
-      jobId,
-      filename === "video" ? undefined : filename
-    );
+    const buffer = await readVideoFile(jobId, filename === "video" ? undefined : filename);
     if (!buffer) {
       return new Response("Video no disponible", { status: 404 });
     }

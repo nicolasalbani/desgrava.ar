@@ -2,11 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Autoplay from "embla-carousel-autoplay";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-} from "@/components/ui/carousel";
+import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 
 const reviews = [
   {
@@ -42,9 +38,7 @@ const reviews = [
 ];
 
 export function ReviewsCarousel() {
-  const autoplayRef = useRef(
-    Autoplay({ delay: 4000, stopOnInteraction: false })
-  );
+  const autoplayRef = useRef(Autoplay({ delay: 4000, stopOnInteraction: false }));
 
   useEffect(() => {
     return () => {
@@ -62,19 +56,14 @@ export function ReviewsCarousel() {
     >
       <CarouselContent className="-ml-6">
         {reviews.map((review) => (
-          <CarouselItem
-            key={review.name}
-            className="pl-6 basis-full md:basis-1/2 lg:basis-1/3"
-          >
-            <div className="h-full flex flex-col justify-between rounded-lg border border-border bg-muted/50 px-5 py-4">
-              <p className="text-xs text-muted-foreground leading-relaxed">
+          <CarouselItem key={review.name} className="basis-full pl-6 md:basis-1/2 lg:basis-1/3">
+            <div className="border-border bg-muted/50 flex h-full flex-col justify-between rounded-lg border px-5 py-4">
+              <p className="text-muted-foreground text-xs leading-relaxed">
                 &ldquo;{review.text}&rdquo;
               </p>
-              <div className="mt-3 pt-3 border-t border-border">
-                <p className="text-xs font-medium text-foreground">
-                  {review.name}
-                </p>
-                <p className="text-[11px] text-muted-foreground">{review.role}</p>
+              <div className="border-border mt-3 border-t pt-3">
+                <p className="text-foreground text-xs font-medium">{review.name}</p>
+                <p className="text-muted-foreground text-[11px]">{review.role}</p>
               </div>
             </div>
           </CarouselItem>

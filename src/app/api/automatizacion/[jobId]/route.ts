@@ -5,10 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getJobScreenshots, getJobVideoFilenames } from "@/lib/automation/job-processor";
 import { listScreenshotsFromDisk, listVideosFromDisk } from "@/lib/automation/artifact-manager";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ jobId: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -54,17 +51,12 @@ export async function GET(
   if (videoFiles.length === 0) {
     videoFiles = await listVideosFromDisk(jobId);
   }
-  const videoUrls = videoFiles.map(
-    (f) => `/api/automatizacion/${jobId}/artifacts/${f}`
-  );
+  const videoUrls = videoFiles.map((f) => `/api/automatizacion/${jobId}/artifacts/${f}`);
 
   return NextResponse.json({ job, screenshots, videoUrls });
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ jobId: string }> }
-) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -103,7 +95,7 @@ export async function PUT(
     if (job.status !== "FAILED") {
       return NextResponse.json(
         { error: "Solo se pueden reintentar jobs fallidos" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -134,10 +126,7 @@ export async function PUT(
 
 const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ jobId: string }> }
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -156,7 +145,7 @@ export async function DELETE(
   if (!TERMINAL_STATUSES.includes(job.status)) {
     return NextResponse.json(
       { error: "Solo se pueden eliminar jobs finalizados. Cancela el job primero." },
-      { status: 409 }
+      { status: 409 },
     );
   }
 

@@ -13,11 +13,7 @@ async function ensureBrowser(): Promise<Browser> {
   if (!browser || !browser.isConnected()) {
     browser = await chromium.launch({
       headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-      ],
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
     });
   }
   return browser;
@@ -29,7 +25,7 @@ export interface ContextOptions {
 
 export async function getContext(
   userId: string,
-  options?: ContextOptions
+  options?: ContextOptions,
 ): Promise<BrowserContext> {
   const existing = contextMap.get(userId);
   if (existing) return existing;

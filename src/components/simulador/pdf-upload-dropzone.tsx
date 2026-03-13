@@ -16,7 +16,7 @@ export function PdfUploadDropzone({
   isUploading,
   progress,
   onFilesSelected,
-  isEmpty,
+  isEmpty: _isEmpty,
 }: PdfUploadDropzoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,7 +28,7 @@ export function PdfUploadDropzone({
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) onFilesSelected(files);
     },
-    [onFilesSelected]
+    [onFilesSelected],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -46,7 +46,7 @@ export function PdfUploadDropzone({
       if (files.length > 0) onFilesSelected(files);
       if (inputRef.current) inputRef.current.value = "";
     },
-    [onFilesSelected]
+    [onFilesSelected],
   );
 
   return (
@@ -57,13 +57,11 @@ export function PdfUploadDropzone({
         onDragLeave={handleDragLeave}
         onClick={() => !isUploading && inputRef.current?.click()}
         className={cn(
-          "border-2 border-dashed rounded-xl px-4 py-8 text-center transition-all duration-200",
+          "rounded-xl border-2 border-dashed px-4 py-8 text-center transition-all duration-200",
           isUploading
             ? "border-border cursor-default"
             : "cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/20",
-          isDragOver
-            ? "border-blue-400 bg-blue-50/50 dark:bg-blue-950/20"
-            : "border-border"
+          isDragOver ? "border-blue-400 bg-blue-50/50 dark:bg-blue-950/20" : "border-border",
         )}
       >
         <input
@@ -76,25 +74,23 @@ export function PdfUploadDropzone({
         />
         {isUploading ? (
           <>
-            <Loader2 className="h-5 w-5 mx-auto mb-2 text-muted-foreground/50 animate-spin" />
-            <p className="text-sm text-muted-foreground">Procesando facturas...</p>
+            <Loader2 className="text-muted-foreground/50 mx-auto mb-2 h-5 w-5 animate-spin" />
+            <p className="text-muted-foreground text-sm">Procesando facturas...</p>
           </>
         ) : (
           <>
-            <Upload className="h-5 w-5 mx-auto mb-2 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">
+            <Upload className="text-muted-foreground/40 mx-auto mb-2 h-5 w-5" />
+            <p className="text-muted-foreground text-sm">
               Arrastra facturas aqui o hace click para seleccionar
             </p>
-            <p className="text-xs text-muted-foreground/50 mt-1">
-              PDF, JPG o PNG
-            </p>
+            <p className="text-muted-foreground/50 mt-1 text-xs">PDF, JPG o PNG</p>
           </>
         )}
       </div>
 
       {isUploading && (
         <div className="space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex justify-between text-xs">
             <span>{Math.round(progress * 100)}%</span>
           </div>
           <Progress value={progress * 100} />

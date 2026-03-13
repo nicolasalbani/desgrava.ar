@@ -48,20 +48,22 @@ export function DeadlineBanner() {
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 px-6 py-2 border-b border-border bg-background animate-in fade-in slide-in-from-top-1 duration-700 ease-out">
+    <div className="border-border bg-background animate-in fade-in slide-in-from-top-1 flex items-center justify-between gap-4 border-b px-6 py-2 duration-700 ease-out">
       <div className="flex items-center gap-2">
         <span
           className={cn(
-            "h-1.5 w-1.5 rounded-full shrink-0",
-            isUrgent ? "bg-rose-400/80 animate-pulse" : "bg-amber-400/70"
+            "h-1.5 w-1.5 shrink-0 rounded-full",
+            isUrgent ? "animate-pulse bg-rose-400/80" : "bg-amber-400/70",
           )}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-muted-foreground text-xs">
           Tenés hasta el{" "}
-          <span className="font-medium text-foreground">{formatDeadline(deadline)}</span>{" "}
-          para cargar o modificar desgravaciones del período fiscal{" "}
-          <span className="font-medium text-foreground">{fiscalYear}</span>.{" "}
-          <span className={cn(isUrgent ? "text-rose-500 dark:text-rose-400" : "text-muted-foreground")}>
+          <span className="text-foreground font-medium">{formatDeadline(deadline)}</span> para
+          cargar o modificar desgravaciones del período fiscal{" "}
+          <span className="text-foreground font-medium">{fiscalYear}</span>.{" "}
+          <span
+            className={cn(isUrgent ? "text-rose-500 dark:text-rose-400" : "text-muted-foreground")}
+          >
             {daysRemaining === 1 ? "Queda 1 día." : `Quedan ${daysRemaining} días.`}
           </span>
         </p>
@@ -69,7 +71,7 @@ export function DeadlineBanner() {
       <button
         onClick={dismiss}
         aria-label="Cerrar"
-        className="shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors rounded-md p-0.5"
+        className="text-muted-foreground/40 hover:text-muted-foreground shrink-0 rounded-md p-0.5 transition-colors"
       >
         <X className="h-3.5 w-3.5" />
       </button>

@@ -45,10 +45,7 @@ function buildTextFromLayout(items: TextItem[]): string {
     .join("\n");
 }
 
-export async function processDocument(
-  buffer: Buffer,
-  mimeType: string
-): Promise<OcrResult> {
+export async function processDocument(buffer: Buffer, mimeType: string): Promise<OcrResult> {
   let text = "";
   let method: OcrResult["method"] = "pdf-parse";
 
@@ -65,6 +62,7 @@ export async function processDocument(
         const page = await doc.getPage(i);
         const content = await page.getTextContent();
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const items: TextItem[] = (content.items as any[])
           .filter((item) => "str" in item && item.str.trim().length > 0)
           .map((item) => ({

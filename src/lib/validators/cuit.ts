@@ -9,10 +9,7 @@ export function validateCuit(cuit: string): boolean {
   const digits = cleaned.split("").map(Number);
   const checkDigit = digits[10];
 
-  const sum = CUIT_WEIGHTS.reduce(
-    (acc, weight, i) => acc + weight * digits[i],
-    0
-  );
+  const sum = CUIT_WEIGHTS.reduce((acc, weight, i) => acc + weight * digits[i], 0);
 
   const remainder = sum % 11;
   let expected: number;

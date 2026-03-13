@@ -10,11 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,18 +37,10 @@ import {
   Mail,
   Upload,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InvoiceForm } from "./invoice-form";
 import { formatCuit } from "@/lib/validators/cuit";
-import {
-  DEDUCTION_CATEGORIES,
-  DEDUCTION_CATEGORY_LABELS,
-} from "@/lib/validators/invoice";
+import { DEDUCTION_CATEGORIES, DEDUCTION_CATEGORY_LABELS } from "@/lib/validators/invoice";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useFiscalYear } from "@/contexts/fiscal-year";
@@ -78,13 +66,13 @@ interface Invoice {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; animate?: boolean }> = {
-  PENDING:       { label: "Pendiente",     dot: "bg-foreground/25" },
-  QUEUED:        { label: "En cola",       dot: "bg-blue-400/50",    animate: true },
-  PROCESSING:    { label: "Procesando",    dot: "bg-blue-400/70",    animate: true },
+  PENDING: { label: "Pendiente", dot: "bg-foreground/25" },
+  QUEUED: { label: "En cola", dot: "bg-blue-400/50", animate: true },
+  PROCESSING: { label: "Procesando", dot: "bg-blue-400/70", animate: true },
   PREVIEW_READY: { label: "Preview listo", dot: "bg-amber-400/70" },
-  CONFIRMED:     { label: "Confirmado",    dot: "bg-emerald-400/60" },
-  SUBMITTED:     { label: "Enviado",       dot: "bg-emerald-400/80" },
-  FAILED:        { label: "Error",         dot: "bg-rose-400/80" },
+  CONFIRMED: { label: "Confirmado", dot: "bg-emerald-400/60" },
+  SUBMITTED: { label: "Enviado", dot: "bg-emerald-400/80" },
+  FAILED: { label: "Error", dot: "bg-rose-400/80" },
 };
 
 const SELECTABLE_STATUSES = ["PENDING", "FAILED"];
@@ -169,7 +157,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
     setBulkDeleteOpen(false);
 
     const results = await Promise.allSettled(
-      deletableIds.map((id) => fetch(`/api/facturas/${id}`, { method: "DELETE" }))
+      deletableIds.map((id) => fetch(`/api/facturas/${id}`, { method: "DELETE" })),
     );
 
     const deleted = deletableIds.filter((_, i) => {
@@ -185,9 +173,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
         return next;
       });
       toast.success(
-        deleted.length === 1
-          ? "Factura eliminada"
-          : `${deleted.length} facturas eliminadas`
+        deleted.length === 1 ? "Factura eliminada" : `${deleted.length} facturas eliminadas`,
       );
     }
     const failed = deletableIds.length - deleted.length;
@@ -211,10 +197,8 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {
       if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) return false;
-      if (categories.size > 0 && !categories.has(inv.deductionCategory))
-        return false;
-      if (statuses.size > 0 && !statuses.has(inv.siradiqStatus))
-        return false;
+      if (categories.size > 0 && !categories.has(inv.deductionCategory)) return false;
+      if (statuses.size > 0 && !statuses.has(inv.siradiqStatus)) return false;
       if (fechaDesde) {
         if (!inv.invoiceDate) return false;
         if (new Date(inv.invoiceDate) < new Date(fechaDesde)) return false;
@@ -274,15 +258,13 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   }
 
   const eligibleInvoices = filteredInvoices.filter(
-    (inv) =>
-      SELECTABLE_STATUSES.includes(inv.siradiqStatus) && !isFutureMonth(inv)
+    (inv) => SELECTABLE_STATUSES.includes(inv.siradiqStatus) && !isFutureMonth(inv),
   );
   const allEligibleSelected =
-    eligibleInvoices.length > 0 &&
-    eligibleInvoices.every((inv) => selectedIds.has(inv.id));
+    eligibleInvoices.length > 0 && eligibleInvoices.every((inv) => selectedIds.has(inv.id));
 
   const deletableSelectedCount = invoices.filter(
-    (inv) => selectedIds.has(inv.id) && inv._count.automationJobs === 0
+    (inv) => selectedIds.has(inv.id) && inv._count.automationJobs === 0,
   ).length;
 
   function toggleSelectAll() {
@@ -296,7 +278,9 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   async function handleSubmitToSiradig() {
     if (selectedIds.size === 0) return;
     if (fiscalYear === null) {
-      toast.error("Seleccioná un año fiscal antes de enviar facturas a SiRADIG", { duration: 5000 });
+      toast.error("Seleccioná un año fiscal antes de enviar facturas a SiRADIG", {
+        duration: 5000,
+      });
       return;
     }
     setSubmitting(true);
@@ -310,7 +294,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
       if (inv && inv.fiscalYear !== fiscalYear) {
         toast.error(
           `"${inv.providerName || inv.providerCuit}" es del año ${inv.fiscalYear}, pero el año fiscal activo es ${fiscalYear}. Cambiá el año o deseleccioná la factura.`,
-          { duration: 6000 }
+          { duration: 6000 },
         );
         failedIds.add(invoiceId);
         failCount++;
@@ -325,11 +309,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
         if (res.ok) {
           successCount++;
           setInvoices((prev) =>
-            prev.map((inv) =>
-              inv.id === invoiceId
-                ? { ...inv, siradiqStatus: "QUEUED" }
-                : inv
-            )
+            prev.map((inv) => (inv.id === invoiceId ? { ...inv, siradiqStatus: "QUEUED" } : inv)),
           );
         } else {
           failCount++;
@@ -342,9 +322,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
     }
 
     if (successCount > 0) {
-      toast.success(
-        `${successCount} factura(s) enviada(s) a la cola de SiRADIG`
-      );
+      toast.success(`${successCount} factura(s) enviada(s) a la cola de SiRADIG`);
       if (isFirstAutomation.current) {
         router.push("/dashboard");
         return;
@@ -369,7 +347,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
       {/* Search + count */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+          <Search className="text-muted-foreground/40 absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <Input
             placeholder="Buscar por proveedor, CUIT o comprobante..."
             value={search}
@@ -379,36 +357,29 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+              className="text-muted-foreground/40 hover:text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
         {!loading && invoices.length > 0 && (
-          <span className="text-sm text-muted-foreground tabular-nums shrink-0">
+          <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
             {hasClientFilters
               ? `${filteredInvoices.length} de ${invoices.length}`
               : invoices.length}{" "}
-            {invoices.length === 1 && !hasClientFilters
-              ? "comprobante"
-              : "comprobantes"}
+            {invoices.length === 1 && !hasClientFilters ? "comprobante" : "comprobantes"}
           </span>
         )}
       </div>
 
       {/* Selection action bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-5 py-3">
+        <div className="bg-muted/40 flex items-center gap-3 rounded-xl px-5 py-3">
           <span className="text-sm font-medium">
-            {selectedIds.size}{" "}
-            {selectedIds.size === 1 ? "seleccionada" : "seleccionadas"}
+            {selectedIds.size} {selectedIds.size === 1 ? "seleccionada" : "seleccionadas"}
           </span>
-          <Button
-            size="sm"
-            onClick={handleSubmitToSiradig}
-            disabled={submitting}
-          >
+          <Button size="sm" onClick={handleSubmitToSiradig} disabled={submitting}>
             {submitting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -429,7 +400,8 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
               ) : (
                 <Trash2 className="mr-2 h-4 w-4" />
               )}
-              Eliminar{deletableSelectedCount < selectedIds.size ? ` (${deletableSelectedCount})` : ""}
+              Eliminar
+              {deletableSelectedCount < selectedIds.size ? ` (${deletableSelectedCount})` : ""}
             </Button>
           )}
           <Button
@@ -446,32 +418,28 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
       {/* Content */}
       {loading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
+          <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
         </div>
       ) : filteredInvoices.length === 0 && !hasClientFilters ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="rounded-full bg-muted/40 p-4 mb-4">
-            <FileText className="h-6 w-6 text-muted-foreground/30" />
+          <div className="bg-muted/40 mb-4 rounded-full p-4">
+            <FileText className="text-muted-foreground/30 h-6 w-6" />
           </div>
-          <p className="text-sm font-medium text-muted-foreground/70">
-            Sin comprobantes
-          </p>
-          <p className="text-xs text-muted-foreground/50 mt-1.5 max-w-xs">
+          <p className="text-muted-foreground/70 text-sm font-medium">Sin comprobantes</p>
+          <p className="text-muted-foreground/50 mt-1.5 max-w-xs text-xs">
             {fiscalYear !== null
               ? `No hay facturas cargadas para ${fiscalYear}`
               : "No hay facturas cargadas"}
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border overflow-hidden">
+        <div className="overflow-hidden rounded-xl border">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10 pl-4">
                   <Checkbox
-                    checked={
-                      allEligibleSelected && eligibleInvoices.length > 0
-                    }
+                    checked={allEligibleSelected && eligibleInvoices.length > 0}
                     onCheckedChange={toggleSelectAll}
                     aria-label="Seleccionar todas"
                     disabled={eligibleInvoices.length === 0}
@@ -490,35 +458,32 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                             "rounded-md p-1 transition-colors",
                             isCategoryActive
                               ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <ListFilter className="h-3.5 w-3.5" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent
-                        className="w-60 p-3"
-                        align="start"
-                      >
+                      <PopoverContent className="w-60 p-3" align="start">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium text-muted-foreground">
+                            <p className="text-muted-foreground text-xs font-medium">
                               Filtrar por categoria
                             </p>
                             {isCategoryActive && (
                               <button
                                 onClick={() => setCategories(new Set())}
-                                className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                                className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
                               >
                                 Limpiar
                               </button>
                             )}
                           </div>
-                          <div className="max-h-48 overflow-y-auto space-y-1">
+                          <div className="max-h-48 space-y-1 overflow-y-auto">
                             {DEDUCTION_CATEGORIES.map((cat) => (
                               <label
                                 key={cat}
-                                className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                                className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
                               >
                                 <Checkbox
                                   checked={categories.has(cat)}
@@ -534,9 +499,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                                     });
                                   }}
                                 />
-                                <span className="text-xs">
-                                  {DEDUCTION_CATEGORY_LABELS[cat]}
-                                </span>
+                                <span className="text-xs">{DEDUCTION_CATEGORY_LABELS[cat]}</span>
                               </label>
                             ))}
                           </div>
@@ -559,43 +522,32 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                             "rounded-md p-1 transition-colors",
                             isFechaActive
                               ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <ListFilter className="h-3.5 w-3.5" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent
-                        className="w-52 p-3"
-                        align="start"
-                      >
+                      <PopoverContent className="w-52 p-3" align="start">
                         <div className="space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">
+                          <p className="text-muted-foreground text-xs font-medium">
                             Rango de fecha
                           </p>
                           <div className="space-y-1.5">
-                            <label className="text-xs text-muted-foreground/70">
-                              Desde
-                            </label>
+                            <label className="text-muted-foreground/70 text-xs">Desde</label>
                             <Input
                               type="date"
                               value={fechaDesde}
-                              onChange={(e) =>
-                                setFechaDesde(e.target.value)
-                              }
+                              onChange={(e) => setFechaDesde(e.target.value)}
                               className="h-8 text-xs"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-xs text-muted-foreground/70">
-                              Hasta
-                            </label>
+                            <label className="text-muted-foreground/70 text-xs">Hasta</label>
                             <Input
                               type="date"
                               value={fechaHasta}
-                              onChange={(e) =>
-                                setFechaHasta(e.target.value)
-                              }
+                              onChange={(e) => setFechaHasta(e.target.value)}
                               className="h-8 text-xs"
                             />
                           </div>
@@ -605,7 +557,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                                 setFechaDesde("");
                                 setFechaHasta("");
                               }}
-                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                              className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
                             >
                               Limpiar
                             </button>
@@ -627,51 +579,36 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                             "rounded-md p-1 transition-colors",
                             isMontoActive
                               ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <ListFilter className="h-3.5 w-3.5" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent
-                        className="w-44 p-3"
-                        align="end"
-                      >
+                      <PopoverContent className="w-44 p-3" align="end">
                         <div className="space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">
+                          <p className="text-muted-foreground text-xs font-medium">
                             Rango de monto
                           </p>
                           <div className="space-y-1.5">
-                            <label className="text-xs text-muted-foreground/70">
-                              Min $
-                            </label>
+                            <label className="text-muted-foreground/70 text-xs">Min $</label>
                             <Input
                               type="text"
                               inputMode="numeric"
                               placeholder="0"
                               value={montoMin}
-                              onChange={(e) =>
-                                setMontoMin(
-                                  e.target.value.replace(/[^\d]/g, "")
-                                )
-                              }
+                              onChange={(e) => setMontoMin(e.target.value.replace(/[^\d]/g, ""))}
                               className="h-8 text-xs"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-xs text-muted-foreground/70">
-                              Max $
-                            </label>
+                            <label className="text-muted-foreground/70 text-xs">Max $</label>
                             <Input
                               type="text"
                               inputMode="numeric"
                               placeholder="999999"
                               value={montoMax}
-                              onChange={(e) =>
-                                setMontoMax(
-                                  e.target.value.replace(/[^\d]/g, "")
-                                )
-                              }
+                              onChange={(e) => setMontoMax(e.target.value.replace(/[^\d]/g, ""))}
                               className="h-8 text-xs"
                             />
                           </div>
@@ -681,7 +618,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                                 setMontoMin("");
                                 setMontoMax("");
                               }}
-                              className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                              className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
                             >
                               Limpiar
                             </button>
@@ -703,55 +640,50 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                             "rounded-md p-1 transition-colors",
                             isStatusActive
                               ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground"
+                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
                           )}
                         >
                           <ListFilter className="h-3.5 w-3.5" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent
-                        className="w-44 p-3"
-                        align="start"
-                      >
+                      <PopoverContent className="w-44 p-3" align="start">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium text-muted-foreground">
+                            <p className="text-muted-foreground text-xs font-medium">
                               Filtrar por estado
                             </p>
                             {isStatusActive && (
                               <button
                                 onClick={() => setStatuses(new Set())}
-                                className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                                className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
                               >
                                 Limpiar
                               </button>
                             )}
                           </div>
                           <div className="space-y-1">
-                            {Object.entries(STATUS_CONFIG).map(
-                              ([key, cfg]) => (
-                                <label
-                                  key={key}
-                                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer transition-colors"
-                                >
-                                  <Checkbox
-                                    checked={statuses.has(key)}
-                                    onCheckedChange={(checked) => {
-                                      setStatuses((prev) => {
-                                        const next = new Set(prev);
-                                        if (checked) {
-                                          next.add(key);
-                                        } else {
-                                          next.delete(key);
-                                        }
-                                        return next;
-                                      });
-                                    }}
-                                  />
-                                  <span className="text-xs">{cfg.label}</span>
-                                </label>
-                              )
-                            )}
+                            {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                              <label
+                                key={key}
+                                className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
+                              >
+                                <Checkbox
+                                  checked={statuses.has(key)}
+                                  onCheckedChange={(checked) => {
+                                    setStatuses((prev) => {
+                                      const next = new Set(prev);
+                                      if (checked) {
+                                        next.add(key);
+                                      } else {
+                                        next.delete(key);
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span className="text-xs">{cfg.label}</span>
+                              </label>
+                            ))}
                           </div>
                         </div>
                       </PopoverContent>
@@ -765,19 +697,14 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
             <TableBody>
               {filteredInvoices.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={9}
-                    className="text-center py-12"
-                  >
-                    <p className="text-sm font-medium text-muted-foreground/70">
-                      Sin resultados
-                    </p>
-                    <p className="text-xs text-muted-foreground/50 mt-1">
+                  <TableCell colSpan={9} className="py-12 text-center">
+                    <p className="text-muted-foreground/70 text-sm font-medium">Sin resultados</p>
+                    <p className="text-muted-foreground/50 mt-1 text-xs">
                       Proba con otros filtros o terminos de busqueda
                     </p>
                     <button
                       onClick={clearAllFilters}
-                      className="mt-3 text-xs text-primary hover:text-primary/80 transition-colors"
+                      className="text-primary hover:text-primary/80 mt-3 text-xs transition-colors"
                     >
                       Limpiar filtros
                     </button>
@@ -786,9 +713,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
               ) : (
                 filteredInvoices.map((inv) => {
                   const isFuture = isFutureMonth(inv);
-                  const isEligible =
-                    SELECTABLE_STATUSES.includes(inv.siradiqStatus) &&
-                    !isFuture;
+                  const isEligible = SELECTABLE_STATUSES.includes(inv.siradiqStatus) && !isFuture;
                   return (
                     <TableRow key={inv.id}>
                       <TableCell className="pl-4">
@@ -821,7 +746,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                               {inv.providerName || inv.providerCuit}
                             </p>
                             {inv.providerName && (
-                              <p className="text-xs text-muted-foreground mt-0.5">
+                              <p className="text-muted-foreground mt-0.5 text-xs">
                                 {inv.providerCuit}
                               </p>
                             )}
@@ -830,23 +755,25 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                       </TableCell>
                       <TableCell className="max-w-[180px]">
                         <span
-                          className="block truncate text-sm text-muted-foreground"
-                          title={DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ?? inv.deductionCategory}
+                          className="text-muted-foreground block truncate text-sm"
+                          title={
+                            DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                            inv.deductionCategory
+                          }
                         >
-                          {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ?? inv.deductionCategory}
+                          {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                            inv.deductionCategory}
                         </span>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-sm">
                         {inv.invoiceNumber ?? "-"}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-sm">
                         {inv.invoiceDate
-                          ? new Date(inv.invoiceDate).toLocaleDateString(
-                              "es-AR"
-                            )
+                          ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
                           : "-"}
                       </TableCell>
-                      <TableCell className="text-sm text-right font-medium tabular-nums">
+                      <TableCell className="text-right text-sm font-medium tabular-nums">
                         ${parseFloat(inv.amount).toLocaleString("es-AR")}
                       </TableCell>
                       <TableCell>
@@ -854,14 +781,22 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                           const cfg = STATUS_CONFIG[inv.siradiqStatus];
                           return (
                             <span className="inline-flex items-center gap-1.5">
-                              <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", cfg?.dot ?? "bg-foreground/25", cfg?.animate && "animate-pulse")} />
-                              <span className="text-xs font-medium text-foreground/70">{cfg?.label ?? inv.siradiqStatus}</span>
+                              <span
+                                className={cn(
+                                  "h-1.5 w-1.5 shrink-0 rounded-full",
+                                  cfg?.dot ?? "bg-foreground/25",
+                                  cfg?.animate && "animate-pulse",
+                                )}
+                              />
+                              <span className="text-foreground/70 text-xs font-medium">
+                                {cfg?.label ?? inv.siradiqStatus}
+                              </span>
                             </span>
                           );
                         })()}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1 justify-end">
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -871,12 +806,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                             <Pencil className="h-4 w-4" />
                           </Button>
                           {inv.hasFile && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              asChild
-                              title="Ver comprobante"
-                            >
+                            <Button variant="ghost" size="icon" asChild title="Ver comprobante">
                               <a
                                 href={`/api/facturas/${inv.id}/file`}
                                 target="_blank"
@@ -916,23 +846,17 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
         </div>
       )}
 
-      <AlertDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-      >
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Eliminar factura</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta accion no se puede deshacer. Se eliminara la factura
-              permanentemente.
+              Esta accion no se puede deshacer. Se eliminara la factura permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
-              Eliminar
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>Eliminar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -945,54 +869,58 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
               {deletableSelectedCount === 1 ? "factura" : "facturas"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta accion no se puede deshacer. Se eliminaran permanentemente
-              las facturas seleccionadas.
+              Esta accion no se puede deshacer. Se eliminaran permanentemente las facturas
+              seleccionadas.
               {deletableSelectedCount < selectedIds.size && (
-                <span className="block mt-1">
-                  Nota: {selectedIds.size - deletableSelectedCount} factura(s)
-                  con automatizaciones vinculadas no se pueden eliminar.
+                <span className="mt-1 block">
+                  Nota: {selectedIds.size - deletableSelectedCount} factura(s) con automatizaciones
+                  vinculadas no se pueden eliminar.
                 </span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBulkDelete}>
-              Eliminar
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleBulkDelete}>Eliminar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden [grid-template-rows:auto_1fr]">
+        <DialogContent className="max-h-[90vh] max-w-2xl [grid-template-rows:auto_1fr] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Editar comprobante</DialogTitle>
           </DialogHeader>
-          <div className="overflow-y-auto min-h-0">
-          {editTarget && (
-            <InvoiceForm
-              invoiceId={editTarget.id}
-              defaultValues={{
-                deductionCategory: editTarget.deductionCategory,
-                providerCuit: formatCuit(editTarget.providerCuit),
-                providerName: editTarget.providerName ?? undefined,
-                invoiceType: editTarget.invoiceType,
-                invoiceNumber: editTarget.invoiceNumber ?? undefined,
-                invoiceDate: editTarget.invoiceDate ? editTarget.invoiceDate.slice(0, 10) : undefined,
-                amount: parseFloat(editTarget.amount),
-                fiscalYear: editTarget.fiscalYear,
-                fiscalMonth: editTarget.fiscalMonth,
-                contractStartDate: editTarget.contractStartDate ? editTarget.contractStartDate.slice(0, 10) : undefined,
-                contractEndDate: editTarget.contractEndDate ? editTarget.contractEndDate.slice(0, 10) : undefined,
-              }}
-              onSaved={() => {
-                setEditTarget(null);
-                fetchInvoices();
-              }}
-              onCancel={() => setEditTarget(null)}
-            />
-          )}
+          <div className="min-h-0 overflow-y-auto">
+            {editTarget && (
+              <InvoiceForm
+                invoiceId={editTarget.id}
+                defaultValues={{
+                  deductionCategory: editTarget.deductionCategory,
+                  providerCuit: formatCuit(editTarget.providerCuit),
+                  providerName: editTarget.providerName ?? undefined,
+                  invoiceType: editTarget.invoiceType,
+                  invoiceNumber: editTarget.invoiceNumber ?? undefined,
+                  invoiceDate: editTarget.invoiceDate
+                    ? editTarget.invoiceDate.slice(0, 10)
+                    : undefined,
+                  amount: parseFloat(editTarget.amount),
+                  fiscalYear: editTarget.fiscalYear,
+                  fiscalMonth: editTarget.fiscalMonth,
+                  contractStartDate: editTarget.contractStartDate
+                    ? editTarget.contractStartDate.slice(0, 10)
+                    : undefined,
+                  contractEndDate: editTarget.contractEndDate
+                    ? editTarget.contractEndDate.slice(0, 10)
+                    : undefined,
+                }}
+                onSaved={() => {
+                  setEditTarget(null);
+                  fetchInvoices();
+                }}
+                onCancel={() => setEditTarget(null)}
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>

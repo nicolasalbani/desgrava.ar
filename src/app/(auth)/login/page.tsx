@@ -5,13 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calculator } from "lucide-react";
 
 function LoginForm() {
@@ -20,7 +14,7 @@ function LoginForm() {
   const [error, setError] = useState(
     searchParams.get("error") === "invite_required"
       ? "Necesitas un código de invitación para crear una cuenta."
-      : ""
+      : "",
   );
   const [loading, setLoading] = useState(false);
 
@@ -50,9 +44,9 @@ function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md mx-4">
+    <Card className="mx-4 w-full max-w-md">
       <CardHeader className="text-center">
-        <div className="flex justify-center mb-4">
+        <div className="mb-4 flex justify-center">
           <Calculator className="h-10 w-10" />
         </div>
         <CardTitle className="text-2xl">desgrava.ar</CardTitle>
@@ -69,9 +63,7 @@ function LoginForm() {
             onKeyDown={(e) => e.key === "Enter" && code.trim() && handleSignIn()}
             disabled={loading}
           />
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
         <Button
           className="w-full"
@@ -81,8 +73,9 @@ function LoginForm() {
         >
           Continuar con Google
         </Button>
-        <p className="text-xs text-muted-foreground text-center">
-          Al continuar, aceptas que tus datos se usan unicamente para gestionar tus deducciones impositivas.
+        <p className="text-muted-foreground text-center text-xs">
+          Al continuar, aceptas que tus datos se usan unicamente para gestionar tus deducciones
+          impositivas.
         </p>
       </CardContent>
     </Card>

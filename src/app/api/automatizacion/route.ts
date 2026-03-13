@@ -21,10 +21,7 @@ export async function POST(req: NextRequest) {
         where: { id: invoiceId, userId: session.user.id },
       });
       if (!invoice) {
-        return NextResponse.json(
-          { error: "Factura no encontrada" },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 });
       }
 
       // Prevent submitting invoices for future months
@@ -37,7 +34,7 @@ export async function POST(req: NextRequest) {
       ) {
         return NextResponse.json(
           { error: "No se pueden enviar comprobantes de periodos futuros a SiRADIG" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -71,10 +68,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ job }, { status: 201 });
   } catch (error) {
     console.error("Error creating job:", error);
-    return NextResponse.json(
-      { error: "Error al crear job" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al crear job" }, { status: 500 });
   }
 }
 

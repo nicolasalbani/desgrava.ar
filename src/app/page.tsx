@@ -9,48 +9,44 @@ const features = [
   {
     icon: Calculator,
     title: "Sabe cuanto vas a ahorrar",
-    description:
-      "Simula tu devolucion de ganancias antes de cargar nada. Sin registro.",
+    description: "Simula tu devolucion de ganancias antes de cargar nada. Sin registro.",
   },
   {
     icon: FileText,
     title: "Subi tus facturas y listo",
-    description:
-      "Arrastra un PDF o carga los datos a mano. Nuestro OCR extrae todo en segundos.",
+    description: "Arrastra un PDF o carga los datos a mano. Nuestro OCR extrae todo en segundos.",
   },
   {
     icon: Bot,
     title: "SiRADIG en un click",
-    description:
-      "Conecta tu clave fiscal y dejanos cargar tus deducciones automaticamente.",
+    description: "Conecta tu clave fiscal y dejanos cargar tus deducciones automaticamente.",
   },
   {
     icon: Shield,
     title: "Tu clave fiscal, protegida",
-    description:
-      "Encriptacion AES-256 de grado bancario. Nunca se almacena en texto plano.",
+    description: "Encriptacion AES-256 de grado bancario. Nunca se almacena en texto plano.",
   },
 ];
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="bg-background flex min-h-screen flex-col">
       <Navbar />
 
       <main className="flex-1">
         {/* Hero */}
         <section className="py-16 md:py-20">
-          <div className="max-w-5xl mx-auto px-4 md:px-6 space-y-6 text-center">
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">
+          <div className="mx-auto max-w-5xl space-y-6 px-4 text-center md:px-6">
+            <h1 className="text-foreground text-4xl font-bold tracking-tight md:text-5xl">
               Recupera la plata
               <br />
               <span className="text-primary">que ganancias te saca</span>
             </h1>
-            <p className="text-base text-muted-foreground max-w-xl mx-auto leading-relaxed">
-              Miles de pesos en deducciones se pierden cada ano porque cargarlas
-              en SiRADIG es un dolor de cabeza. desgrava.ar lo hace por vos.
+            <p className="text-muted-foreground mx-auto max-w-xl text-base leading-relaxed">
+              Miles de pesos en deducciones se pierden cada ano porque cargarlas en SiRADIG es un
+              dolor de cabeza. desgrava.ar lo hace por vos.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <div className="flex flex-col justify-center gap-3 sm:flex-row">
               <Button size="lg" asChild>
                 <Link href="/simulador">
                   Calcula tu ahorro
@@ -65,20 +61,18 @@ export default function LandingPage() {
         </section>
 
         {/* Features */}
-        <section className="bg-muted/50 py-14 border-t border-border">
-          <div className="max-w-5xl mx-auto px-4 md:px-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <section className="bg-muted/50 border-border border-t py-14">
+          <div className="mx-auto max-w-5xl px-4 md:px-6">
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
               {features.map((feature) => {
                 const Icon = feature.icon;
                 return (
                   <div key={feature.title} className="space-y-3">
-                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                      <Icon className="h-5 w-5 text-muted-foreground" />
+                    <div className="bg-muted flex h-10 w-10 items-center justify-center rounded-lg">
+                      <Icon className="text-muted-foreground h-5 w-5" />
                     </div>
-                    <h3 className="font-medium text-foreground">
-                      {feature.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <h3 className="text-foreground font-medium">{feature.title}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
                       {feature.description}
                     </p>
                   </div>
@@ -89,8 +83,8 @@ export default function LandingPage() {
         </section>
 
         {/* Reviews */}
-        <section className="py-14 border-t border-border">
-          <div className="max-w-5xl mx-auto px-4 md:px-6">
+        <section className="border-border border-t py-14">
+          <div className="mx-auto max-w-5xl px-4 md:px-6">
             <ReviewsCarousel />
           </div>
         </section>

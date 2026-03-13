@@ -19,7 +19,13 @@ function formatCompact(value: number): string {
   return "$" + value;
 }
 
-export function SimuladorChart({ result, viewMode = "mensual" }: { result: SimulationResult; viewMode?: "mensual" | "anual" }) {
+export function SimuladorChart({
+  result,
+  viewMode = "mensual",
+}: {
+  result: SimulationResult;
+  viewMode?: "mensual" | "anual";
+}) {
   const d = viewMode === "mensual" ? 12 : 1;
   const data = [
     { name: "Sin deducciones", impuesto: parseFloat(result.impuestoSinDeducciones) / d },

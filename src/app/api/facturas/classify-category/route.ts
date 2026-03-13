@@ -13,10 +13,7 @@ export async function POST(req: NextRequest) {
     const { text } = await req.json();
 
     if (!text || typeof text !== "string" || text.trim().length < 10) {
-      return NextResponse.json(
-        { error: "Texto insuficiente para clasificar" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Texto insuficiente para clasificar" }, { status: 400 });
     }
 
     const category = await classifyCategory(text);
@@ -24,9 +21,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ category });
   } catch (error) {
     console.error("Error classifying category:", error);
-    return NextResponse.json(
-      { error: "Error al clasificar categoría" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al clasificar categoría" }, { status: 500 });
   }
 }

@@ -11,10 +11,7 @@ import {
 
 const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ jobId: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return new Response("No autorizado", { status: 401 });
@@ -71,15 +68,17 @@ export async function GET(
         const screenshots = getJobScreenshots(jobId);
         while (lastScreenshotIndex < screenshots.length) {
           const meta = screenshots[lastScreenshotIndex];
-          enqueue(JSON.stringify({
-            screenshot: {
-              step: meta.step,
-              name: meta.name,
-              label: meta.label,
-              timestamp: meta.timestamp,
-              url: `/api/automatizacion/${jobId}/artifacts/${meta.name}`,
-            },
-          }));
+          enqueue(
+            JSON.stringify({
+              screenshot: {
+                step: meta.step,
+                name: meta.name,
+                label: meta.label,
+                timestamp: meta.timestamp,
+                url: `/api/automatizacion/${jobId}/artifacts/${meta.name}`,
+              },
+            }),
+          );
           lastScreenshotIndex++;
         }
 
@@ -117,7 +116,7 @@ export async function GET(
           };
           if (videoFilenames.length > 0) {
             terminalData.videoUrls = videoFilenames.map(
-              (f) => `/api/automatizacion/${jobId}/artifacts/${f}`
+              (f) => `/api/automatizacion/${jobId}/artifacts/${f}`,
             );
           }
 

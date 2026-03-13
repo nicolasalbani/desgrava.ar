@@ -4,12 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { processDocument } from "@/lib/ocr/pipeline";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const ALLOWED_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-];
+const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -22,24 +17,18 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File | null;
 
     if (!file) {
-      return NextResponse.json(
-        { error: "No se recibio ningun archivo" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No se recibio ningun archivo" }, { status: 400 });
     }
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
         { error: "Tipo de archivo no soportado. Usa PDF, JPG, PNG o WebP." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { error: "El archivo excede el limite de 10MB" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "El archivo excede el limite de 10MB" }, { status: 400 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -56,9 +45,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Error processing upload:", error);
-    return NextResponse.json(
-      { error: "Error al procesar el archivo" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al procesar el archivo" }, { status: 500 });
   }
 }

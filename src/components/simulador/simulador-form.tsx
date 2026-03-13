@@ -21,39 +21,39 @@ import { SimuladorResults } from "./simulador-results";
 import { PdfUploadDropzone } from "./pdf-upload-dropzone";
 import type { SimulationResult } from "@/lib/simulador/calculator";
 
-const ALLOWED_UPLOAD_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-];
+const ALLOWED_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const MAX_UPLOAD_FILES = 10;
 
 const formSchema = z.object({
-  salarioBrutoMensual: z.string().min(1, "El salario es requerido").refine(
-    (val) => {
-      const num = parseFloat(unformatArgNumber(val));
-      return !isNaN(num) && num > 0;
-    },
-    { message: "El salario debe ser mayor a 0" }
-  ),
+  salarioBrutoMensual: z
+    .string()
+    .min(1, "El salario es requerido")
+    .refine(
+      (val) => {
+        const num = parseFloat(unformatArgNumber(val));
+        return !isNaN(num) && num > 0;
+      },
+      { message: "El salario debe ser mayor a 0" },
+    ),
   tieneHijos: z.string(),
   tieneConyuge: z.boolean(),
   incluyeSindicato: z.boolean(),
-  deducciones: z
-    .array(
-      z.object({
-        category: z.string().min(1, "Selecciona una categoria"),
-        monthlyAmount: z.string().min(1, "Ingresa un monto").refine(
+  deducciones: z.array(
+    z.object({
+      category: z.string().min(1, "Selecciona una categoria"),
+      monthlyAmount: z
+        .string()
+        .min(1, "Ingresa un monto")
+        .refine(
           (val) => {
             const num = parseFloat(unformatArgNumber(val));
             return !isNaN(num) && num > 0;
           },
-          { message: "El monto debe ser mayor a 0" }
+          { message: "El monto debe ser mayor a 0" },
         ),
-        _sourceFilename: z.string().optional(),
-      })
-    ),
+      _sourceFilename: z.string().optional(),
+    }),
+  ),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -92,42 +92,45 @@ export function SimuladorForm() {
     name: "deducciones",
   });
 
-  const handleFilesSelected = useCallback(async (files: File[]) => {
-    const validFiles = files
-      .filter((f) => ALLOWED_UPLOAD_TYPES.includes(f.type))
-      .slice(0, MAX_UPLOAD_FILES);
+  const handleFilesSelected = useCallback(
+    async (files: File[]) => {
+      const validFiles = files
+        .filter((f) => ALLOWED_UPLOAD_TYPES.includes(f.type))
+        .slice(0, MAX_UPLOAD_FILES);
 
-    if (validFiles.length === 0) return;
+      if (validFiles.length === 0) return;
 
-    setIsUploading(true);
-    setUploadProgress(0);
+      setIsUploading(true);
+      setUploadProgress(0);
 
-    for (let i = 0; i < validFiles.length; i++) {
-      const file = validFiles[i];
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await fetch("/api/simulador/upload", {
-          method: "POST",
-          body: formData,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const amount = data.extractedFields?.amount ?? null;
-          append({
-            category: "",
-            monthlyAmount: amount != null ? amount.toString() : "",
-            _sourceFilename: file.name,
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          const res = await fetch("/api/simulador/upload", {
+            method: "POST",
+            body: formData,
           });
+          if (res.ok) {
+            const data = await res.json();
+            const amount = data.extractedFields?.amount ?? null;
+            append({
+              category: "",
+              monthlyAmount: amount != null ? amount.toString() : "",
+              _sourceFilename: file.name,
+            });
+          }
+        } catch {
+          // skip failed files silently
         }
-      } catch {
-        // skip failed files silently
+        setUploadProgress((i + 1) / validFiles.length);
       }
-      setUploadProgress((i + 1) / validFiles.length);
-    }
 
-    setIsUploading(false);
-  }, [append]);
+      setIsUploading(false);
+    },
+    [append],
+  );
 
   async function onSubmit(data: FormData) {
     setLoading(true);
@@ -163,14 +166,15 @@ export function SimuladorForm() {
   return (
     <div className="space-y-12">
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-10">
-
         {/* Salary */}
         <div className="space-y-2">
-          <Label htmlFor="salario" className="text-sm text-muted-foreground">
+          <Label htmlFor="salario" className="text-muted-foreground text-sm">
             Salario bruto mensual
           </Label>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/60 text-lg select-none">$</span>
+            <span className="text-muted-foreground/60 absolute top-1/2 left-4 -translate-y-1/2 text-lg select-none">
+              $
+            </span>
             <Input
               id="salario"
               type="text"
@@ -181,27 +185,29 @@ export function SimuladorForm() {
                 const raw = unformatArgNumber(e.target.value);
                 form.setValue("salarioBrutoMensual", raw, { shouldValidate: true });
               }}
-              className="pl-8 h-14 text-xl font-medium tracking-tight"
+              className="h-14 pl-8 text-xl font-medium tracking-tight"
             />
           </div>
           {form.formState.errors.salarioBrutoMensual && (
-            <p className="text-sm text-destructive">
+            <p className="text-destructive text-sm">
               {form.formState.errors.salarioBrutoMensual.message}
             </p>
           )}
         </div>
 
         {/* Family situation */}
-        <div className="flex flex-wrap gap-x-8 gap-y-4 py-5 border-y border-border">
+        <div className="border-border flex flex-wrap gap-x-8 gap-y-4 border-y py-5">
           <div className="space-y-1">
-            <Label htmlFor="hijos" className="text-sm text-muted-foreground">Hijos a cargo</Label>
+            <Label htmlFor="hijos" className="text-muted-foreground text-sm">
+              Hijos a cargo
+            </Label>
             <Input
               id="hijos"
               type="number"
               min="0"
               max="20"
               {...form.register("tieneHijos")}
-              className="w-24 h-9"
+              className="h-9 w-24"
             />
           </div>
 
@@ -211,7 +217,9 @@ export function SimuladorForm() {
               checked={form.watch("tieneConyuge")}
               onCheckedChange={(v) => form.setValue("tieneConyuge", v)}
             />
-            <Label htmlFor="conyuge" className="cursor-pointer text-sm">Conyuge a cargo</Label>
+            <Label htmlFor="conyuge" className="cursor-pointer text-sm">
+              Conyuge a cargo
+            </Label>
           </div>
 
           <div className="flex items-center gap-3 self-end pb-0.5">
@@ -220,7 +228,9 @@ export function SimuladorForm() {
               checked={form.watch("incluyeSindicato")}
               onCheckedChange={(v) => form.setValue("incluyeSindicato", v)}
             />
-            <Label htmlFor="sindicato" className="cursor-pointer text-sm">Aporte sindical (2%)</Label>
+            <Label htmlFor="sindicato" className="cursor-pointer text-sm">
+              Aporte sindical (2%)
+            </Label>
           </div>
         </div>
 
@@ -228,8 +238,8 @@ export function SimuladorForm() {
         <div className="space-y-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-sm font-medium text-foreground">Deducciones por comprobantes</h3>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              <h3 className="text-foreground text-sm font-medium">Deducciones por comprobantes</h3>
+              <p className="text-muted-foreground mt-0.5 text-sm">
                 Subi facturas para cargarlas automaticamente, o agrega manualmente
               </p>
             </div>
@@ -240,7 +250,7 @@ export function SimuladorForm() {
               className="shrink-0"
               onClick={() => append({ category: "", monthlyAmount: "" })}
             >
-              <Plus className="h-3.5 w-3.5 mr-1" />
+              <Plus className="mr-1 h-3.5 w-3.5" />
               Agregar
             </Button>
           </div>
@@ -257,17 +267,15 @@ export function SimuladorForm() {
               {fields.map((field, index) => (
                 <div
                   key={field.id}
-                  className="flex flex-col sm:flex-row gap-3 items-start sm:items-end"
+                  className="flex flex-col items-start gap-3 sm:flex-row sm:items-end"
                 >
-                  <div className="flex-1 min-w-0 space-y-1 w-full">
+                  <div className="w-full min-w-0 flex-1 space-y-1">
                     {index === 0 && (
-                      <Label className="text-xs text-muted-foreground">Categoria</Label>
+                      <Label className="text-muted-foreground text-xs">Categoria</Label>
                     )}
                     <Select
                       value={form.watch(`deducciones.${index}.category`)}
-                      onValueChange={(v) =>
-                        form.setValue(`deducciones.${index}.category`, v)
-                      }
+                      onValueChange={(v) => form.setValue(`deducciones.${index}.category`, v)}
                     >
                       <SelectTrigger className="w-full overflow-hidden">
                         <SelectValue placeholder="Seleccionar categoria" />
@@ -282,12 +290,14 @@ export function SimuladorForm() {
                     </Select>
                   </div>
 
-                  <div className="w-full sm:w-44 sm:shrink-0 space-y-1">
+                  <div className="w-full space-y-1 sm:w-44 sm:shrink-0">
                     {index === 0 && (
-                      <Label className="text-xs text-muted-foreground">Monto mensual</Label>
+                      <Label className="text-muted-foreground text-xs">Monto mensual</Label>
                     )}
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 text-sm select-none">$</span>
+                      <span className="text-muted-foreground/60 absolute top-1/2 left-3 -translate-y-1/2 text-sm select-none">
+                        $
+                      </span>
                       <Input
                         type="text"
                         inputMode="numeric"
@@ -295,7 +305,9 @@ export function SimuladorForm() {
                         value={formatArgNumber(form.watch(`deducciones.${index}.monthlyAmount`))}
                         onChange={(e) => {
                           const raw = unformatArgNumber(e.target.value);
-                          form.setValue(`deducciones.${index}.monthlyAmount`, raw, { shouldValidate: true });
+                          form.setValue(`deducciones.${index}.monthlyAmount`, raw, {
+                            shouldValidate: true,
+                          });
                         }}
                         className="pl-6"
                       />
@@ -303,7 +315,7 @@ export function SimuladorForm() {
                   </div>
 
                   {form.watch(`deducciones.${index}._sourceFilename`) && (
-                    <div className="shrink-0 text-xs text-muted-foreground max-w-32 truncate hidden sm:flex items-center gap-1 pb-2">
+                    <div className="text-muted-foreground hidden max-w-32 shrink-0 items-center gap-1 truncate pb-2 text-xs sm:flex">
                       <FileText className="h-3 w-3 shrink-0" />
                       {form.watch(`deducciones.${index}._sourceFilename`)}
                     </div>
@@ -314,7 +326,7 @@ export function SimuladorForm() {
                     variant="ghost"
                     size="icon"
                     onClick={() => remove(index)}
-                    className="shrink-0 text-muted-foreground/60 hover:text-destructive"
+                    className="text-muted-foreground/60 hover:text-destructive shrink-0"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -322,7 +334,7 @@ export function SimuladorForm() {
               ))}
 
               {form.formState.errors.deducciones && (
-                <p className="text-sm text-destructive">
+                <p className="text-destructive text-sm">
                   Completa todos los campos de las deducciones
                 </p>
               )}

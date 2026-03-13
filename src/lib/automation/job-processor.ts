@@ -105,11 +105,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
     // Screenshot step counter
     let stepCounter = 0;
 
-    const onScreenshot = async (
-      buffer: Buffer,
-      slug: string,
-      label: string
-    ) => {
+    const onScreenshot = async (buffer: Buffer, slug: string, label: string) => {
       stepCounter++;
       await saveScreenshot(jobId, stepCounter, slug, label, buffer);
       await appendLog(jobId, `Screenshot: ${label}`, onLog);
@@ -118,11 +114,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
     try {
       // Decrypt credentials
       await appendLog(jobId, "Desencriptando credenciales...", onLog);
-      const clave = decrypt(
-        credential.encryptedClave,
-        credential.iv,
-        credential.authTag
-      );
+      const clave = decrypt(credential.encryptedClave, credential.iv, credential.authTag);
 
       // Get browser context with video recording
       await appendLog(jobId, "Iniciando navegador...", onLog);
@@ -137,7 +129,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           credential.cuit,
           clave,
           (msg) => appendLog(jobId, msg, onLog),
-          onScreenshot
+          onScreenshot,
         );
 
         if (!loginResult.success) {
@@ -161,7 +153,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         const siradigPage = await navigateToSiradig(
           page,
           (msg) => appendLog(jobId, msg, onLog),
-          onScreenshot
+          onScreenshot,
         );
 
         if (!siradigPage) {
@@ -184,7 +176,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             siradigPage,
             job.invoice.fiscalYear,
             (msg) => appendLog(jobId, msg, onLog),
-            onScreenshot
+            onScreenshot,
           );
 
           if (!navResult.success) {
@@ -213,12 +205,12 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               fiscalMonth: job.invoice.fiscalMonth,
               contractStartDate: job.invoice.contractStartDate?.toISOString() ?? undefined,
               contractEndDate: job.invoice.contractEndDate?.toISOString() ?? undefined,
-              ownsProperty: job.user.yearPreferences.find(
-                (p) => p.fiscalYear === job.invoice!.fiscalYear
-              )?.ownsProperty ?? false,
+              ownsProperty:
+                job.user.yearPreferences.find((p) => p.fiscalYear === job.invoice!.fiscalYear)
+                  ?.ownsProperty ?? false,
             },
             (msg) => appendLog(jobId, msg, onLog),
-            onScreenshot
+            onScreenshot,
           );
 
           if (!fillResult.success) {
@@ -238,7 +230,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           const submitResult = await submitDeduction(
             siradigPage,
             (msg) => appendLog(jobId, msg, onLog),
-            onScreenshot
+            onScreenshot,
           );
 
           setJobStatus(jobId, submitResult.success ? "COMPLETED" : "FAILED");

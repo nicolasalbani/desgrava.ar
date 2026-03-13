@@ -38,7 +38,14 @@ interface IngestLog {
   createdAt: string;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Check }> = {
+const STATUS_CONFIG: Record<
+  string,
+  {
+    label: string;
+    variant: "default" | "secondary" | "destructive" | "outline";
+    icon: typeof Check;
+  }
+> = {
   COMPLETED: { label: "Completado", variant: "default", icon: CheckCircle2 },
   PARTIAL: { label: "Parcial", variant: "secondary", icon: AlertCircle },
   PROCESSING: { label: "Procesando", variant: "outline", icon: Clock },
@@ -127,7 +134,7 @@ export function EmailIngestCard() {
   if (loading) {
     return (
       <div className="flex justify-center py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
+        <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
       </div>
     );
   }
@@ -135,31 +142,15 @@ export function EmailIngestCard() {
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground/70">
+        <div className="text-muted-foreground/70 flex items-center gap-2 text-sm">
           <Mail className="h-4 w-4" />
-          <span>
-            Envia facturas como adjuntos a este email y se cargan
-            automaticamente
-          </span>
+          <span>Envia facturas como adjuntos a este email y se cargan automaticamente</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <Input
-            readOnly
-            value={ingestEmail}
-            className="font-mono text-sm bg-muted/40"
-          />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleCopy}
-            className="shrink-0"
-          >
-            {copied ? (
-              <Check className="h-4 w-4 text-green-600" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
+          <Input readOnly value={ingestEmail} className="bg-muted/40 font-mono text-sm" />
+          <Button variant="outline" size="icon" onClick={handleCopy} className="shrink-0">
+            {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
           </Button>
         </div>
 
@@ -177,7 +168,7 @@ export function EmailIngestCard() {
             )}
             Regenerar email
           </Button>
-          <p className="text-xs text-muted-foreground/50">
+          <p className="text-muted-foreground/50 text-xs">
             La direccion anterior dejara de funcionar
           </p>
         </div>
@@ -188,16 +179,13 @@ export function EmailIngestCard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Regenerar email de ingesta</AlertDialogTitle>
             <AlertDialogDescription>
-              Se generara una nueva direccion de email. La direccion anterior
-              dejara de funcionar inmediatamente. Cualquier email enviado a la
-              direccion anterior sera rechazado.
+              Se generara una nueva direccion de email. La direccion anterior dejara de funcionar
+              inmediatamente. Cualquier email enviado a la direccion anterior sera rechazado.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRegenerate}>
-              Regenerar
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleRegenerate}>Regenerar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -205,9 +193,7 @@ export function EmailIngestCard() {
       {/* Recent activity */}
       {!logsLoading && logs.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-muted-foreground/70">
-            Actividad reciente
-          </h3>
+          <h3 className="text-muted-foreground/70 text-sm font-medium">Actividad reciente</h3>
           <div className="space-y-2">
             {logs.map((log) => {
               const config = STATUS_CONFIG[log.status] || STATUS_CONFIG.FAILED;
@@ -216,39 +202,37 @@ export function EmailIngestCard() {
               const iconColor = isFailed
                 ? "text-destructive/70"
                 : log.status === "COMPLETED"
-                ? "text-emerald-600/70"
-                : "text-muted-foreground/60";
+                  ? "text-emerald-600/70"
+                  : "text-muted-foreground/60";
               return (
                 <div
                   key={log.id}
-                  className="rounded-md border border-border px-3 py-2 text-sm space-y-1"
+                  className="border-border space-y-1 rounded-md border px-3 py-2 text-sm"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
                       <Icon className={`h-3.5 w-3.5 shrink-0 ${iconColor}`} />
-                      <span className="truncate text-muted-foreground/70">
+                      <span className="text-muted-foreground/70 truncate">
                         {log.subject || log.fromAddress}
                       </span>
                       {log.invoicesCreated > 0 && (
-                        <span className="text-xs text-muted-foreground/50">
+                        <span className="text-muted-foreground/50 text-xs">
                           ({log.invoicesCreated}{" "}
                           {log.invoicesCreated === 1 ? "factura" : "facturas"})
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex shrink-0 items-center gap-2">
                       <Badge variant={config.variant} className="text-xs">
                         {config.label}
                       </Badge>
-                      <span className="text-xs text-muted-foreground/50">
+                      <span className="text-muted-foreground/50 text-xs">
                         {formatDate(log.createdAt)}
                       </span>
                     </div>
                   </div>
                   {isFailed && log.errorMessage && (
-                    <p className="text-xs text-muted-foreground/50 pl-5">
-                      {log.errorMessage}
-                    </p>
+                    <p className="text-muted-foreground/50 pl-5 text-xs">{log.errorMessage}</p>
                   )}
                 </div>
               );

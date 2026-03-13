@@ -10,7 +10,7 @@ export const simuladorInputSchema = z.object({
       z.object({
         category: z.string(),
         monthlyAmount: z.number().positive("El monto debe ser mayor a 0"),
-      })
+      }),
     )
     .default([]),
 });

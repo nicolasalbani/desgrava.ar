@@ -41,37 +41,38 @@ export default function PerfilPage() {
   }
 
   return (
-    <div className="space-y-10 max-w-xl">
+    <div className="max-w-xl space-y-10">
       <div
         className="animate-in fade-in slide-in-from-bottom-2 duration-500"
         style={{ animationFillMode: "backwards" }}
       >
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Perfil impositivo</h1>
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+          <span className="bg-muted text-muted-foreground border-border rounded-full border px-2 py-0.5 text-xs font-medium">
             {year}
           </span>
         </div>
-        <p className="text-sm text-muted-foreground/70 mt-1">
+        <p className="text-muted-foreground/70 mt-1 text-sm">
           Tu situacion personal y familiar para el calculo de deducciones
         </p>
       </div>
 
       {/* Situacion personal */}
       <div
-        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
         style={{ animationDelay: "80ms", animationFillMode: "backwards" }}
       >
         {loading ? (
           <div className="flex justify-center py-6">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
+            <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
           </div>
         ) : (
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label htmlFor="ownsProperty">Soy titular de un inmueble</Label>
-              <p className="text-xs text-muted-foreground/60">
-                Activar si sos propietario de un inmueble en cualquier proporcion. Determina el beneficio de alquiler aplicable (10% Art. 85 inc. k vs. 40% Art. 85 inc. h).
+              <p className="text-muted-foreground/60 text-xs">
+                Activar si sos propietario de un inmueble en cualquier proporcion. Determina el
+                beneficio de alquiler aplicable (10% Art. 85 inc. k vs. 40% Art. 85 inc. h).
               </p>
             </div>
             <Switch
@@ -84,18 +85,18 @@ export default function PerfilPage() {
       </div>
 
       <div
-        className="border-t border-border animate-in fade-in duration-500"
+        className="border-border animate-in fade-in border-t duration-500"
         style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
       />
 
       {/* Cargas de Familia */}
       <div
-        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
         style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
       >
         <div>
           <h2 className="text-base font-semibold">Cargas de Familia</h2>
-          <p className="text-sm text-muted-foreground/70 mt-0.5">
+          <p className="text-muted-foreground/70 mt-0.5 text-sm">
             Declara tus dependientes familiares para que se descuenten de tu base imponible
           </p>
         </div>

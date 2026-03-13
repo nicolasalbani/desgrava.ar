@@ -8,16 +8,24 @@ Desgrava.ar is a tax deduction automation platform for Argentine taxpayers. It h
 
 ## Commands
 
-| Command | Purpose |
-|---------|---------|
-| `npm run dev` | Start Next.js dev server |
-| `npm run build` | Production build |
-| `npm run start` | Start production server |
-| `npm run lint` | ESLint |
-| `npx prisma migrate dev --name <name>` | Create database migration |
-| `npx prisma generate` | Regenerate Prisma client (output: `src/generated/prisma/`) |
+| Command                                | Purpose                                                    |
+| -------------------------------------- | ---------------------------------------------------------- |
+| `npm run dev`                          | Start Next.js dev server                                   |
+| `npm run build`                        | Production build                                           |
+| `npm run start`                        | Start production server                                    |
+| `npm run lint`                         | ESLint                                                     |
+| `npm run test`                         | Run all tests (Vitest)                                     |
+| `npm run test:watch`                   | Run tests in watch mode                                    |
+| `npm run format`                       | Format all files with Prettier                             |
+| `npm run format:check`                 | Check formatting (CI-friendly)                             |
+| `npx prisma migrate dev --name <name>` | Create database migration                                  |
+| `npx prisma generate`                  | Regenerate Prisma client (output: `src/generated/prisma/`) |
 
-No test framework is configured yet.
+**CI validation** (run all before submitting work):
+
+```bash
+npm run lint && npm run format:check && npm run build && npm run test
+```
 
 ## Tech Stack
 
@@ -26,6 +34,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 ## Architecture
 
 **Route groups** organize the app by access level:
+
 - `(public)/` — unauthenticated pages (e.g., `/simulador`)
 - `(auth)/` — login flow (Google OAuth)
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
@@ -33,6 +42,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 **API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`. All protected routes validate `session?.user?.id`.
 
 **Business logic** lives in `src/lib/`, organized by domain:
+
 - `simulador/` — Tax calculation engine with Argentine tax brackets, deduction rules, and Zod schemas
 - `ocr/` — Document processing pipeline (pdf-parse first, Tesseract fallback) + field extraction
 - `automation/` — Playwright-based ARCA/SiRADIG automation: job processor, browser pool, navigators, CSS selectors, deduction mapper
@@ -53,6 +63,45 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - **Path alias**: `@/*` maps to `./src/*`.
 - **Naming**: Spanish names in ARCA/SiRADIG-specific automation code, English elsewhere.
 - **Design**: Jony Ive-inspired — clean whites, `border-gray-200` borders, `bg-gray-50` content areas, generous whitespace, translucent navbar with backdrop blur. Consistent palette across landing page and dashboard.
+
+## Testing
+
+**Framework**: Vitest with 330+ tests across 13 test files.
+
+**Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
+
+**Covered modules**:
+
+- `simulador/` — calculator, deduction-rules, tax-tables, schemas (125 tests)
+- `validators/` — cuit, invoice, credentials (55 tests)
+- `crypto/` — encryption round-trip and tamper detection (17 tests)
+- `automation/` — deduction-mapper, selectors (96 tests)
+- `ocr/` — field-extractor, pipeline (22 tests)
+- `invite-codes` — token creation and validation (15 tests)
+
+**Writing new tests**: Always create tests for new `src/lib/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
+
+## CI/CD
+
+**GitHub Actions** (`.github/workflows/ci.yml`) runs on push/PR to main:
+
+1. **lint-and-format** — ESLint + Prettier check
+2. **build** — Next.js production build (depends on lint)
+3. **test** — Vitest (runs in parallel with build)
+
+**Pre-commit hooks** (husky + lint-staged): Prettier + ESLint auto-fix on staged `.ts/.tsx` files.
+
+## Skills
+
+Custom skills in `.claude/skills/`:
+
+- `/new-feature <description>` — Full workflow: plan → implement → test → validate → document
+- `/fix-bug <description>` — Investigate → fix → regression test → validate
+- `/implement-loop <task>` — Autonomous loop: code until lint+format+build+test all pass (max 10 iterations)
+
+## Acceptance Criteria
+
+Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_template.md` as a starting point. Reference specs when using `/new-feature`: `/new-feature specs/my-feature.md`.
 
 ## Environment Variables
 

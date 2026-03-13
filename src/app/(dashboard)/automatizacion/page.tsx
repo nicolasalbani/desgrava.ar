@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { AutomationDashboard } from "@/components/automatizacion/automation-dashboard";
 import { PendingInvoicesPanel } from "@/components/automatizacion/pending-invoices";
@@ -9,17 +9,20 @@ import Link from "next/link";
 
 function CelebrationBanner() {
   return (
-    <div className="rounded-2xl bg-primary/[0.04] border border-primary/10 px-6 py-5 flex items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-        <Sparkles className="h-4 w-4 text-primary" />
+    <div className="bg-primary/[0.04] border-primary/10 animate-in fade-in slide-in-from-bottom-2 flex items-start gap-4 rounded-2xl border px-6 py-5 duration-500">
+      <div className="bg-primary/10 mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+        <Sparkles className="text-primary h-4 w-4" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-foreground">
+        <p className="text-foreground text-sm font-semibold">
           Tu primera deduccion fue enviada a SiRADIG
         </p>
-        <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
           Cada comprobante que cargas se convierte en plata de vuelta.{" "}
-          <Link href="/facturas" className="text-primary underline-offset-4 hover:underline font-medium">
+          <Link
+            href="/facturas"
+            className="text-primary font-medium underline-offset-4 hover:underline"
+          >
             Segui subiendo facturas
           </Link>{" "}
           — cuantas mas cargues, mayor es tu devolucion de impuestos.
@@ -75,7 +78,7 @@ export default function AutomatizacionPage() {
         style={{ animationFillMode: "backwards" }}
       >
         <h1 className="text-2xl font-semibold tracking-tight">Enviar a SiRADIG</h1>
-        <p className="text-sm text-muted-foreground/70 mt-1">
+        <p className="text-muted-foreground/70 mt-1 text-sm">
           Carga tus deducciones directamente en SiRADIG
         </p>
       </div>
@@ -83,27 +86,31 @@ export default function AutomatizacionPage() {
       {showCelebration && <CelebrationBanner />}
 
       <div
-        className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        className="animate-in fade-in slide-in-from-bottom-2 space-y-2 duration-500"
         style={{ animationDelay: "80ms", animationFillMode: "backwards" }}
       >
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+        <h2 className="text-muted-foreground text-sm font-medium tracking-wide uppercase">
           Facturas pendientes
         </h2>
         <PendingInvoicesPanel
           onSubmitted={handleSubmitted}
-          onRegisterRefresh={(fn) => { pendingRefreshRef.current = fn; }}
+          onRegisterRefresh={(fn) => {
+            pendingRefreshRef.current = fn;
+          }}
         />
       </div>
 
       <div
-        className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        className="animate-in fade-in slide-in-from-bottom-2 space-y-2 duration-500"
         style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
       >
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+        <h2 className="text-muted-foreground text-sm font-medium tracking-wide uppercase">
           Envios a SiRADIG
         </h2>
         <AutomationDashboard
-          onRegisterRefresh={(fn) => { dashboardRefreshRef.current = fn; }}
+          onRegisterRefresh={(fn) => {
+            dashboardRefreshRef.current = fn;
+          }}
           onFirstJobCompleted={handleFirstJobCompleted}
           onJobDeleted={handleJobDeleted}
         />

@@ -5,15 +5,13 @@ import { processDocument } from "@/lib/ocr/pipeline";
 import { classifyCategory } from "@/lib/ocr/category-classifier";
 import { extractTokenFromEmail } from "@/lib/email/token";
 import { Prisma, DeductionCategory, InvoiceType } from "@/generated/prisma/client";
-import { DEDUCTION_CATEGORY_LABELS as CATEGORY_LABELS, INVOICE_TYPE_LABELS } from "@/lib/validators/invoice";
+import {
+  DEDUCTION_CATEGORY_LABELS as CATEGORY_LABELS,
+  INVOICE_TYPE_LABELS,
+} from "@/lib/validators/invoice";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-];
+const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const RATE_LIMIT_PER_HOUR = 20;
 
 let _resend: Resend | null = null;
@@ -78,10 +76,22 @@ function formatDate(date: Date | null): string {
 }
 
 function formatMonth(month: number): string {
-  return [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-  ][month - 1] ?? String(month);
+  return (
+    [
+      "Enero",
+      "Febrero",
+      "Marzo",
+      "Abril",
+      "Mayo",
+      "Junio",
+      "Julio",
+      "Agosto",
+      "Septiembre",
+      "Octubre",
+      "Noviembre",
+      "Diciembre",
+    ][month - 1] ?? String(month)
+  );
 }
 
 function row(label: string, value: string): string {
@@ -124,15 +134,13 @@ function invoiceCard(inv: CreatedInvoiceInfo): string {
     </div>`;
 }
 
-function buildSuccessHtml(
-  originalSubject: string | null,
-  invoices: CreatedInvoiceInfo[]
-): string {
+function buildSuccessHtml(originalSubject: string | null, invoices: CreatedInvoiceInfo[]): string {
   const count = invoices.length;
   const headline = count === 1 ? "Factura cargada" : `${count} facturas cargadas`;
-  const subline = count === 1
-    ? "Se procesó y guardó el comprobante adjunto en tu cuenta de desgrava.ar."
-    : `Se procesaron y guardaron ${count} comprobantes adjuntos en tu cuenta de desgrava.ar.`;
+  const subline =
+    count === 1
+      ? "Se procesó y guardó el comprobante adjunto en tu cuenta de desgrava.ar."
+      : `Se procesaron y guardaron ${count} comprobantes adjuntos en tu cuenta de desgrava.ar.`;
 
   return buildLayout(`
     <div style="padding:32px 40px 8px;">
@@ -149,14 +157,14 @@ function buildSuccessHtml(
   `);
 }
 
-function buildFailureHtml(
-  originalSubject: string | null,
-  errorMessage: string
-): string {
+function buildFailureHtml(originalSubject: string | null, errorMessage: string): string {
   const suggestions: Record<string, string> = {
-    "No se encontraron adjuntos": "Asegurate de adjuntar el archivo PDF, JPG, PNG o WebP directamente al email (no como enlace).",
-    "Ningún adjunto válido": "El adjunto debe ser un archivo PDF, JPG, PNG o WebP de menos de 10 MB.",
-    "Límite de envíos alcanzado": "Podés enviar hasta 20 emails por hora. Intentá de nuevo más tarde.",
+    "No se encontraron adjuntos":
+      "Asegurate de adjuntar el archivo PDF, JPG, PNG o WebP directamente al email (no como enlace).",
+    "Ningún adjunto válido":
+      "El adjunto debe ser un archivo PDF, JPG, PNG o WebP de menos de 10 MB.",
+    "Límite de envíos alcanzado":
+      "Podés enviar hasta 20 emails por hora. Intentá de nuevo más tarde.",
   };
   const suggestion = Object.entries(suggestions).find(([k]) => errorMessage.includes(k))?.[1];
 
@@ -173,11 +181,15 @@ function buildFailureHtml(
         <p style="margin:0 0 4px;font-size:12px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;color:#9b1c1c;">Motivo</p>
         <p style="margin:0;font-size:14px;color:#3a3a3c;line-height:1.5;">${errorMessage}</p>
       </div>
-      ${suggestion ? `
+      ${
+        suggestion
+          ? `
       <div style="margin-top:12px;border:1px solid #e5e5ea;border-radius:10px;padding:16px 20px;">
         <p style="margin:0 0 4px;font-size:12px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;color:#8e8e93;">Sugerencia</p>
         <p style="margin:0;font-size:14px;color:#3a3a3c;line-height:1.5;">${suggestion}</p>
-      </div>` : ""}
+      </div>`
+          : ""
+      }
     </div>
   `);
 }
@@ -185,7 +197,7 @@ function buildFailureHtml(
 function buildPartialHtml(
   originalSubject: string | null,
   invoices: CreatedInvoiceInfo[],
-  errors: string[]
+  errors: string[],
 ): string {
   return buildLayout(`
     <div style="padding:32px 40px 8px;">
@@ -202,7 +214,7 @@ function buildPartialHtml(
     <div style="padding:0 40px 32px;">
       <div style="border:1px solid #fde8e8;border-radius:10px;padding:16px 20px;background:#fff9f9;">
         <p style="margin:0 0 8px;font-size:12px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;color:#9b1c1c;">Errores</p>
-        ${errors.map(e => `<p style="margin:0 0 4px;font-size:13px;color:#3a3a3c;line-height:1.5;">• ${e}</p>`).join("")}
+        ${errors.map((e) => `<p style="margin:0 0 4px;font-size:13px;color:#3a3a3c;line-height:1.5;">• ${e}</p>`).join("")}
       </div>
     </div>
   `);
@@ -248,15 +260,15 @@ async function sendReplyEmail(
   status: "COMPLETED" | "PARTIAL" | "FAILED",
   invoices: CreatedInvoiceInfo[],
   errors: string[],
-  errorMessage: string | null
+  errorMessage: string | null,
 ): Promise<void> {
   const from = process.env.RESEND_FROM_EMAIL ?? "desgrava.ar <notificaciones@ingest.desgrava.ar>";
   const replySubject =
     status === "COMPLETED"
       ? `✓ Factura cargada — desgrava.ar`
       : status === "PARTIAL"
-      ? `⚠ Procesamiento parcial — desgrava.ar`
-      : `✗ Error al procesar — desgrava.ar`;
+        ? `⚠ Procesamiento parcial — desgrava.ar`
+        : `✗ Error al procesar — desgrava.ar`;
 
   let html: string;
   if (status === "COMPLETED") {
@@ -269,7 +281,12 @@ async function sendReplyEmail(
 
   console.log(`[EMAIL_INGEST] sending reply from=${from} to=${to} subject="${replySubject}"`);
   try {
-    const { data, error } = await getResend().emails.send({ from, to, subject: replySubject, html });
+    const { data, error } = await getResend().emails.send({
+      from,
+      to,
+      subject: replySubject,
+      html,
+    });
     if (error) {
       console.error(`[EMAIL_INGEST] reply send failed to=${to}:`, JSON.stringify(error));
     } else {
@@ -286,11 +303,13 @@ export async function processInboundEmail(
   emailId: string,
   toAddresses: string[],
   fromAddress: string,
-  subject: string | null
+  subject: string | null,
 ): Promise<IngestResult> {
   const result: IngestResult = { invoicesCreated: 0, errors: [], createdInvoices: [] };
 
-  console.log(`[EMAIL_INGEST] processInboundEmail start email_id=${emailId} from=${fromAddress} to=${JSON.stringify(toAddresses)}`);
+  console.log(
+    `[EMAIL_INGEST] processInboundEmail start email_id=${emailId} from=${fromAddress} to=${JSON.stringify(toAddresses)}`,
+  );
 
   // 1. Extract token from recipient address
   let token: string | null = null;
@@ -381,7 +400,9 @@ export async function processInboundEmail(
     });
 
     const resendAttachments = attachmentList?.data ?? [];
-    console.log(`[EMAIL_INGEST] attachments.list returned ${resendAttachments.length} items: ${JSON.stringify(resendAttachments.map(a => ({ filename: a.filename, content_type: a.content_type, size: a.size })))}`);
+    console.log(
+      `[EMAIL_INGEST] attachments.list returned ${resendAttachments.length} items: ${JSON.stringify(resendAttachments.map((a) => ({ filename: a.filename, content_type: a.content_type, size: a.size })))}`,
+    );
     let normalized: NormalizedAttachment[] = resendAttachments
       .filter((att) => ALLOWED_TYPES.includes(att.content_type) && att.size <= MAX_FILE_SIZE)
       .map((att) => ({
@@ -399,35 +420,38 @@ export async function processInboundEmail(
     if (normalized.length === 0) {
       console.log(`[EMAIL_INGEST] no valid attachments from API, trying raw MIME fallback`);
       const { data: emailData, error: emailError } = await resend.emails.receiving.get(emailId);
-      console.log(`[EMAIL_INGEST] receiving.get: hasRaw=${!!emailData?.raw?.download_url} error=${JSON.stringify(emailError)}`);
+      console.log(
+        `[EMAIL_INGEST] receiving.get: hasRaw=${!!emailData?.raw?.download_url} error=${JSON.stringify(emailError)}`,
+      );
       const rawUrl = emailData?.raw?.download_url;
       if (rawUrl) {
         const mimeRes = await fetch(rawUrl);
         console.log(`[EMAIL_INGEST] raw MIME download: status=${mimeRes.status}`);
         if (mimeRes.ok) {
           const parsed = await simpleParser(Buffer.from(await mimeRes.arrayBuffer()));
-          console.log(`[EMAIL_INGEST] mailparser found ${parsed.attachments?.length ?? 0} attachments: ${JSON.stringify(parsed.attachments?.map(a => ({ filename: a.filename, contentType: a.contentType, size: a.size })))}`);
+          console.log(
+            `[EMAIL_INGEST] mailparser found ${parsed.attachments?.length ?? 0} attachments: ${JSON.stringify(parsed.attachments?.map((a) => ({ filename: a.filename, contentType: a.contentType, size: a.size })))}`,
+          );
           normalized = (parsed.attachments ?? [])
-            .filter(
-              (att) =>
-                ALLOWED_TYPES.includes(att.contentType) &&
-                att.size <= MAX_FILE_SIZE
-            )
+            .filter((att) => ALLOWED_TYPES.includes(att.contentType) && att.size <= MAX_FILE_SIZE)
             .map((att) => ({
               filename: att.filename ?? null,
               contentType: att.contentType,
               size: att.size,
               getBuffer: async () => att.content,
             }));
-          console.log(`[EMAIL_INGEST] after type/size filter: ${normalized.length} processable attachments`);
+          console.log(
+            `[EMAIL_INGEST] after type/size filter: ${normalized.length} processable attachments`,
+          );
         }
       }
     }
 
     if (normalized.length === 0) {
-      const errorMessage = resendAttachments.length === 0
-        ? "No se encontraron adjuntos"
-        : "Ningún adjunto válido (debe ser PDF, JPG, PNG o WebP, máximo 10 MB)";
+      const errorMessage =
+        resendAttachments.length === 0
+          ? "No se encontraron adjuntos"
+          : "Ningún adjunto válido (debe ser PDF, JPG, PNG o WebP, máximo 10 MB)";
       await prisma.emailIngestLog.update({
         where: { id: log.id },
         data: {
@@ -476,9 +500,7 @@ export async function processInboundEmail(
 
         // Build description noting manual review if needed
         const needsReview =
-          !ocrResult.fields.cuit ||
-          !ocrResult.fields.invoiceType ||
-          !ocrResult.fields.amount;
+          !ocrResult.fields.cuit || !ocrResult.fields.invoiceType || !ocrResult.fields.amount;
 
         const descriptionParts: string[] = [];
         if (needsReview) {
@@ -487,15 +509,12 @@ export async function processInboundEmail(
         if (subject) {
           descriptionParts.push(`Asunto: ${subject}`);
         }
-        const description = descriptionParts.length > 0
-          ? descriptionParts.join(" | ")
-          : undefined;
+        const description = descriptionParts.length > 0 ? descriptionParts.join(" | ") : undefined;
 
         // Determine invoice type
         const invoiceTypeStr = ocrResult.fields.invoiceType;
         const invoiceType = (
-          invoiceTypeStr &&
-          Object.values(InvoiceType).includes(invoiceTypeStr as InvoiceType)
+          invoiceTypeStr && Object.values(InvoiceType).includes(invoiceTypeStr as InvoiceType)
             ? invoiceTypeStr
             : "FACTURA_B"
         ) as InvoiceType;
@@ -509,9 +528,7 @@ export async function processInboundEmail(
             providerName: ocrResult.fields.providerName || undefined,
             invoiceType,
             invoiceNumber: ocrResult.fields.invoiceNumber || undefined,
-            invoiceDate: ocrResult.fields.date
-              ? new Date(ocrResult.fields.date)
-              : undefined,
+            invoiceDate: ocrResult.fields.date ? new Date(ocrResult.fields.date) : undefined,
             amount: new Prisma.Decimal(ocrResult.fields.amount || 0),
             fiscalYear,
             fiscalMonth,
@@ -539,11 +556,8 @@ export async function processInboundEmail(
           filename: attachment.filename,
         });
       } catch (err) {
-        const msg =
-          err instanceof Error ? err.message : "Error desconocido al procesar";
-        result.errors.push(
-          `Error al procesar ${attachment.filename}: ${msg}`
-        );
+        const msg = err instanceof Error ? err.message : "Error desconocido al procesar";
+        result.errors.push(`Error al procesar ${attachment.filename}: ${msg}`);
       }
     }
 
@@ -560,8 +574,7 @@ export async function processInboundEmail(
       data: {
         status: finalStatus,
         invoicesCreated: result.invoicesCreated,
-        errorMessage:
-          result.errors.length > 0 ? result.errors.join("; ") : undefined,
+        errorMessage: result.errors.length > 0 ? result.errors.join("; ") : undefined,
       },
     });
 
@@ -572,7 +585,7 @@ export async function processInboundEmail(
       finalStatus,
       result.createdInvoices,
       result.errors,
-      result.errors.length > 0 ? result.errors.join("; ") : null
+      result.errors.length > 0 ? result.errors.join("; ") : null,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

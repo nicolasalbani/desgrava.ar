@@ -1,10 +1,8 @@
 export function Footer() {
   return (
-    <footer className="border-t border-border mt-auto">
-      <div className="max-w-5xl mx-auto flex items-center justify-center py-8 px-4 md:px-6">
-        <p className="text-sm text-muted-foreground">
-          desgrava.ar · sin afiliación a ARCA/AFIP
-        </p>
+    <footer className="border-border mt-auto border-t">
+      <div className="mx-auto flex max-w-5xl items-center justify-center px-4 py-8 md:px-6">
+        <p className="text-muted-foreground text-sm">desgrava.ar · sin afiliación a ARCA/AFIP</p>
       </div>
     </footer>
   );

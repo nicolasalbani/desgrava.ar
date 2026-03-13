@@ -105,13 +105,8 @@ export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProp
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div
-        className="animate-in fade-in duration-500"
-        style={{ animationFillMode: "backwards" }}
-      >
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Hola, {firstName}
-        </h1>
+      <div className="animate-in fade-in duration-500" style={{ animationFillMode: "backwards" }}>
+        <h1 className="text-2xl font-semibold tracking-tight">Hola, {firstName}</h1>
         <p className="text-muted-foreground mt-1">
           {allDone
             ? "Todo listo. Tu cuenta esta completamente configurada."
@@ -125,13 +120,11 @@ export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProp
           className="animate-in fade-in slide-in-from-bottom-1 duration-400"
           style={{ animationDelay: "80ms", animationFillMode: "backwards" }}
         >
-          <div className="flex items-center justify-between mb-2.5">
-            <p className="text-xs font-medium text-muted-foreground tracking-wide uppercase">
+          <div className="mb-2.5 flex items-center justify-between">
+            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               Progreso
             </p>
-            <p className="text-xs tabular-nums text-muted-foreground">
-              {completedCount}/5
-            </p>
+            <p className="text-muted-foreground text-xs tabular-nums">{completedCount}/5</p>
           </div>
           <Progress value={progressPercent} className="h-1.5" />
         </div>
@@ -141,7 +134,7 @@ export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProp
       {allDone && <CelebrationBanner />}
 
       {/* Step cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {steps.map((step, index) => (
           <StepCard
             key={step.id}
@@ -159,16 +152,16 @@ export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProp
 function CelebrationBanner() {
   return (
     <div
-      className="flex items-center gap-3 animate-in fade-in duration-700"
+      className="animate-in fade-in flex items-center gap-3 duration-700"
       style={{ animationFillMode: "backwards" }}
     >
       <div
-        className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 animate-in zoom-in-50 duration-500"
+        className="bg-primary/10 animate-in zoom-in-50 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full duration-500"
         style={{ animationDelay: "200ms", animationFillMode: "backwards" }}
       >
-        <Sparkles className="h-4 w-4 text-primary" />
+        <Sparkles className="text-primary h-4 w-4" />
       </div>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-muted-foreground text-sm">
         Completaste la configuracion. Tus deducciones se cargan automaticamente en SiRADIG.
       </p>
     </div>
@@ -196,33 +189,30 @@ function StepCard({
   const inner = (
     <div
       className={cn(
-        "group relative rounded-2xl p-5 h-full min-h-[164px] flex flex-col",
+        "group relative flex h-full min-h-[164px] flex-col rounded-2xl p-5",
         "transition-all duration-300 ease-out",
         "animate-in fade-in slide-in-from-bottom-3 duration-500",
         isCompleted && [
-          "bg-primary/[0.03] border border-primary/10",
+          "bg-primary/[0.03] border-primary/10 border",
           "hover:bg-primary/[0.05] hover:border-primary/15",
           "hover:shadow-sm",
         ],
         isActive && [
-          "bg-white dark:bg-card border border-border shadow-md",
-          "hover:shadow-lg hover:-translate-y-0.5",
+          "dark:bg-card border-border border bg-white shadow-md",
+          "hover:-translate-y-0.5 hover:shadow-lg",
         ],
-        isPending && [
-          "bg-transparent border border-transparent",
-          "opacity-40 hover:opacity-55",
-        ]
+        isPending && ["border border-transparent bg-transparent", "opacity-40 hover:opacity-55"],
       )}
       style={{ animationDelay: `${baseDelay}ms`, animationFillMode: "backwards" }}
     >
       {/* Step indicator */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <div
           className={cn(
-            "w-10 h-10 rounded-xl flex items-center justify-center transition-colors duration-300",
+            "flex h-10 w-10 items-center justify-center rounded-xl transition-colors duration-300",
             isCompleted && "bg-primary/10",
             isActive && "bg-primary/8",
-            isPending && "bg-muted"
+            isPending && "bg-muted",
           )}
         >
           <Icon
@@ -230,19 +220,19 @@ function StepCard({
               "h-[18px] w-[18px] transition-colors duration-300",
               isCompleted && "text-primary",
               isActive && "text-primary",
-              isPending && "text-muted-foreground/70"
+              isPending && "text-muted-foreground/70",
             )}
           />
         </div>
 
         {isCompleted && (
-          <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center animate-in zoom-in-0 duration-300">
-            <Check className="h-3.5 w-3.5 text-primary-foreground" strokeWidth={2.5} />
+          <div className="bg-primary animate-in zoom-in-0 flex h-6 w-6 items-center justify-center rounded-full duration-300">
+            <Check className="text-primary-foreground h-3.5 w-3.5" strokeWidth={2.5} />
           </div>
         )}
 
         {isActive && (
-          <span className="text-[11px] font-medium text-primary/70 tracking-wide uppercase">
+          <span className="text-primary/70 text-[11px] font-medium tracking-wide uppercase">
             Siguiente
           </span>
         )}
@@ -251,10 +241,10 @@ function StepCard({
       {/* Content */}
       <h3
         className={cn(
-          "text-sm font-semibold mb-1 transition-colors duration-300",
+          "mb-1 text-sm font-semibold transition-colors duration-300",
           isCompleted && "text-primary",
           isActive && "text-foreground",
-          isPending && "text-muted-foreground"
+          isPending && "text-muted-foreground",
         )}
       >
         {step.title}
@@ -264,7 +254,7 @@ function StepCard({
           "text-xs leading-relaxed transition-colors duration-300",
           isCompleted && "text-primary/50",
           isActive && "text-muted-foreground",
-          isPending && "text-muted-foreground/60"
+          isPending && "text-muted-foreground/60",
         )}
       >
         {isCompleted ? step.completedDescription : step.description}
@@ -272,7 +262,7 @@ function StepCard({
 
       {/* Navigation CTA (active) */}
       {isActive && step.activeLabel && (
-        <div className="mt-auto pt-3 flex items-center text-xs font-medium text-primary group-hover:gap-1.5 gap-1 transition-all duration-300">
+        <div className="text-primary mt-auto flex items-center gap-1 pt-3 text-xs font-medium transition-all duration-300 group-hover:gap-1.5">
           {step.activeLabel}
           <ArrowRight className="h-3 w-3" />
         </div>

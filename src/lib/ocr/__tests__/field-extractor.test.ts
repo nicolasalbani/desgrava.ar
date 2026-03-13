@@ -94,7 +94,9 @@ describe("extractFields — invoice type patterns", () => {
   });
 
   it("detects FACTURA_C via standard layout (letter after FACTURA)", () => {
-    expect(extractFields("FACTURA C\nCUIT: 20123456789\nImporte Total: $1000").invoiceType).toBe("FACTURA_C");
+    expect(extractFields("FACTURA C\nCUIT: 20123456789\nImporte Total: $1000").invoiceType).toBe(
+      "FACTURA_C",
+    );
   });
 
   it("detects FACTURA_C via COD.011 when no adjacent letter pattern exists", () => {
@@ -104,7 +106,9 @@ describe("extractFields — invoice type patterns", () => {
   });
 
   it("detects NOTA_CREDITO_C", () => {
-    expect(extractFields("NOTA DE CRÉDITO C\nCUIT: 20123456789").invoiceType).toBe("NOTA_CREDITO_C");
+    expect(extractFields("NOTA DE CRÉDITO C\nCUIT: 20123456789").invoiceType).toBe(
+      "NOTA_CREDITO_C",
+    );
   });
 
   it("detects NOTA_DEBITO_A", () => {

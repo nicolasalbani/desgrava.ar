@@ -36,48 +36,42 @@ export default function ConfiguracionPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
+        <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-10 max-w-xl">
+    <div className="max-w-xl space-y-10">
       <div
         className="animate-in fade-in slide-in-from-bottom-2 duration-500"
         style={{ animationFillMode: "backwards" }}
       >
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Configuracion
-        </h1>
-        <p className="text-sm text-muted-foreground/70 mt-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Configuracion</h1>
+        <p className="text-muted-foreground/70 mt-1 text-sm">
           Preferencias para la carga de deducciones
         </p>
       </div>
 
       <div
-        className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
         style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
       >
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label htmlFor="notifications">Notificaciones</Label>
-            <p className="text-xs text-muted-foreground/60">
+            <p className="text-muted-foreground/60 text-xs">
               Recibir notificaciones sobre el estado de las cargas
             </p>
           </div>
-          <Switch
-            id="notifications"
-            checked={notifications}
-            onCheckedChange={handleToggle}
-          />
+          <Switch id="notifications" checked={notifications} onCheckedChange={handleToggle} />
         </div>
 
-        <div className="border-t border-border" />
+        <div className="border-border border-t" />
 
         <div className="space-y-2">
           <Label>Email para facturas</Label>
-          <p className="text-xs text-muted-foreground/60">
+          <p className="text-muted-foreground/60 text-xs">
             Envia facturas por email y se cargan automaticamente
           </p>
         </div>

@@ -14,10 +14,7 @@ export async function POST() {
   });
 
   if (!credential) {
-    return NextResponse.json(
-      { error: "No hay credenciales guardadas" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "No hay credenciales guardadas" }, { status: 404 });
   }
 
   await prisma.arcaCredential.update({
@@ -27,6 +24,7 @@ export async function POST() {
 
   return NextResponse.json({
     valid: true,
-    message: "Credenciales guardadas correctamente. La validacion con ARCA se realizara al automatizar.",
+    message:
+      "Credenciales guardadas correctamente. La validacion con ARCA se realizara al automatizar.",
   });
 }

@@ -10,7 +10,8 @@ export const SIRADIG_CATEGORY_MAP: Record<string, string> = {
   INTERESES_HIPOTECARIOS: "Intereses préstamo hipotecario",
   GASTOS_SEPELIO: "Gastos de sepelio",
   GASTOS_MEDICOS: "Gastos médicos y paramédicos",
-  GASTOS_INDUMENTARIA_TRABAJO: "Indumentaria y Equipamiento para uso exclusivo en el lugar de trabajo",
+  GASTOS_INDUMENTARIA_TRABAJO:
+    "Indumentaria y Equipamiento para uso exclusivo en el lugar de trabajo",
   ALQUILER_VIVIENDA: "Alquiler de inmuebles destinados a casa habitación",
   SERVICIO_DOMESTICO: "Deducción del personal doméstico",
   APORTE_SGR: "Aporte a sociedades de garantía recíproca",
@@ -103,9 +104,20 @@ export function isIndumentariaTrabajoCategory(category: string): boolean {
 // Keywords that indicate the provider is a school/educational institution
 // (as opposed to a store selling educational tools/supplies)
 const SCHOOL_KEYWORDS = [
-  "escuela", "colegio", "universidad", "instituto", "school",
-  "jardín", "jardin", "liceo", "academia", "educaci",
-  "kindergarten", "college", "facultad", "fundación escuelas",
+  "escuela",
+  "colegio",
+  "universidad",
+  "instituto",
+  "school",
+  "jardín",
+  "jardin",
+  "liceo",
+  "academia",
+  "educaci",
+  "kindergarten",
+  "college",
+  "facultad",
+  "fundación escuelas",
 ];
 
 export function isSchoolProvider(denomination: string): boolean {

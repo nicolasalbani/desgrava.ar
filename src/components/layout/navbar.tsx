@@ -25,25 +25,28 @@ export function Navbar() {
     setTheme(next);
   }
 
-  const ThemeIcon = mounted
-    ? (themeIcons[(theme as keyof typeof themeIcons)] ?? Monitor)
-    : Monitor;
+  const ThemeIcon = mounted ? (themeIcons[theme as keyof typeof themeIcons] ?? Monitor) : Monitor;
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="max-w-5xl mx-auto px-4 md:px-6 flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-bold text-lg">
+    <header className="border-border bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 md:px-6">
+        <Link href="/" className="flex items-center gap-2 text-lg font-bold">
           <Calculator className="h-5 w-5" />
           desgrava.ar
         </Link>
 
-        <nav className="hidden md:flex items-center gap-6">
-          <Button variant="ghost" size="icon" onClick={cycleTheme} className="text-muted-foreground hover:text-foreground">
+        <nav className="hidden items-center gap-6 md:flex">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={cycleTheme}
+            className="text-muted-foreground hover:text-foreground"
+          >
             <ThemeIcon className="h-4 w-4" />
           </Button>
           <Link
             href="/simulador"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
             Simulador
           </Link>
@@ -57,7 +60,12 @@ export function Navbar() {
         </nav>
 
         <div className="flex items-center gap-1 md:hidden">
-          <Button variant="ghost" size="icon" onClick={cycleTheme} className="text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={cycleTheme}
+            className="text-muted-foreground hover:text-foreground"
+          >
             <ThemeIcon className="h-4 w-4" />
           </Button>
           <Sheet open={open} onOpenChange={setOpen}>
@@ -67,11 +75,11 @@ export function Navbar() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[280px]">
-              <nav className="flex flex-col gap-4 mt-8">
+              <nav className="mt-8 flex flex-col gap-4">
                 <Link
                   href="/simulador"
                   onClick={() => setOpen(false)}
-                  className="text-base text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-muted-foreground hover:text-foreground text-base transition-colors"
                 >
                   Simulador
                 </Link>
@@ -79,7 +87,7 @@ export function Navbar() {
                   <Link
                     href="/dashboard"
                     onClick={() => setOpen(false)}
-                    className="text-base text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-muted-foreground hover:text-foreground text-base transition-colors"
                   >
                     Ir al panel
                   </Link>
@@ -87,7 +95,7 @@ export function Navbar() {
                   <Link
                     href="/login"
                     onClick={() => setOpen(false)}
-                    className="text-base text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-muted-foreground hover:text-foreground text-base transition-colors"
                   >
                     Iniciar sesion
                   </Link>

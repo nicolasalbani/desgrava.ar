@@ -39,7 +39,7 @@ function ExpandingButton({
       className={cn("group gap-0 overflow-hidden transition-all duration-300", className)}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      <span className="max-w-0 overflow-hidden opacity-0 whitespace-nowrap group-hover:max-w-[140px] group-hover:opacity-100 group-hover:ml-2 transition-all duration-300 ease-out">
+      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-300 ease-out group-hover:ml-2 group-hover:max-w-[140px] group-hover:opacity-100">
         {label}
       </span>
     </Button>
@@ -79,20 +79,20 @@ function EmailIngestDialog({
         <DialogHeader>
           <DialogTitle>Subir factura por email</DialogTitle>
           <DialogDescription>
-            Envia un email con tu factura adjunta (PDF, JPG o PNG) a esta
-            direccion y la procesamos automaticamente.
+            Envia un email con tu factura adjunta (PDF, JPG o PNG) a esta direccion y la procesamos
+            automaticamente.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-1">
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5">
-            <Mail className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-            <span className="text-sm font-mono whitespace-nowrap select-all text-foreground/80">
+          <div className="border-border bg-muted/40 flex items-center gap-2 rounded-xl border px-3 py-2.5">
+            <Mail className="text-muted-foreground/60 h-4 w-4 shrink-0" />
+            <span className="text-foreground/80 font-mono text-sm whitespace-nowrap select-all">
               {email || "Cargando..."}
             </span>
             <Button
               variant="ghost"
               size="sm"
-              className="shrink-0 h-7 px-2 text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground h-7 shrink-0 px-2"
               onClick={handleCopy}
               disabled={!email}
             >
@@ -103,11 +103,11 @@ function EmailIngestDialog({
               )}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground/60 leading-relaxed">
+          <p className="text-muted-foreground/60 text-xs leading-relaxed">
             Podes gestionar esta direccion desde{" "}
             <a
               href="/configuracion"
-              className="underline underline-offset-2 hover:text-foreground transition-colors"
+              className="hover:text-foreground underline underline-offset-2 transition-colors"
             >
               Configuracion
             </a>
@@ -126,24 +126,21 @@ const METHOD_CARDS = [
     key: "upload",
     icon: Upload,
     title: "Subir archivo",
-    description:
-      "Arrastra un PDF, JPG o PNG. Extraemos los datos automaticamente con OCR.",
+    description: "Arrastra un PDF, JPG o PNG. Extraemos los datos automaticamente con OCR.",
     cta: "Subir",
   },
   {
     key: "email",
     icon: Mail,
     title: "Por email",
-    description:
-      "Envia un email con la factura adjunta a tu direccion personal de carga.",
+    description: "Envia un email con la factura adjunta a tu direccion personal de carga.",
     cta: "Ver direccion",
   },
   {
     key: "manual",
     icon: PenLine,
     title: "Carga manual",
-    description:
-      "Ingresa los datos del comprobante a mano si no tenes el archivo.",
+    description: "Ingresa los datos del comprobante a mano si no tenes el archivo.",
     cta: "Cargar",
   },
 ] as const;
@@ -156,9 +153,9 @@ function IntroBanner({
   onDismiss: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card shadow-sm animate-in fade-in slide-in-from-top-2 duration-400">
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border/60">
-        <p className="text-sm font-medium text-foreground/80">
+    <div className="border-border bg-card animate-in fade-in slide-in-from-top-2 rounded-2xl border shadow-sm duration-400">
+      <div className="border-border/60 flex items-center justify-between border-b px-5 pt-4 pb-3">
+        <p className="text-foreground/80 text-sm font-medium">
           Tres formas de agregar tus comprobantes
         </p>
         <button
@@ -168,23 +165,21 @@ function IntroBanner({
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border/60">
+      <div className="divide-border/60 grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         {METHOD_CARDS.map(({ key, icon: Icon, title, description, cta }) => (
           <button
             key={key}
             onClick={() => onAction(key)}
-            className="group text-left px-5 py-4 hover:bg-muted/30 transition-colors"
+            className="group hover:bg-muted/30 px-5 py-4 text-left transition-colors"
           >
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-primary/8 flex items-center justify-center group-hover:bg-primary/12 transition-colors">
-                <Icon className="h-3.5 w-3.5 text-primary" />
+            <div className="mb-2 flex items-center gap-2.5">
+              <div className="bg-primary/8 group-hover:bg-primary/12 flex h-7 w-7 items-center justify-center rounded-lg transition-colors">
+                <Icon className="text-primary h-3.5 w-3.5" />
               </div>
               <span className="text-sm font-medium">{title}</span>
             </div>
-            <p className="text-xs text-muted-foreground/70 leading-relaxed mb-3">
-              {description}
-            </p>
-            <span className="text-xs font-medium text-primary group-hover:underline underline-offset-2">
+            <p className="text-muted-foreground/70 mb-3 text-xs leading-relaxed">{description}</p>
+            <span className="text-primary text-xs font-medium underline-offset-2 group-hover:underline">
               {cta} →
             </span>
           </button>
@@ -205,9 +200,7 @@ function FacturasInner() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
-  const [showIntro, setShowIntro] = useState(
-    () => searchParams.get("intro") === "1"
-  );
+  const [showIntro, setShowIntro] = useState(() => searchParams.get("intro") === "1");
 
   function handleInitialLoad(count: number) {
     if (!firstLoadDone.current) {
@@ -248,12 +241,12 @@ function FacturasInner() {
   return (
     <div className="space-y-6">
       <div
-        className="flex items-center justify-between animate-in fade-in slide-in-from-bottom-2 duration-500"
+        className="animate-in fade-in slide-in-from-bottom-2 flex items-center justify-between duration-500"
         style={{ animationFillMode: "backwards" }}
       >
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Facturas</h1>
-          <p className="text-sm text-muted-foreground/70 mt-1">
+          <p className="text-muted-foreground/70 mt-1 text-sm">
             Comprobantes para deducciones SiRADIG
           </p>
         </div>
@@ -262,29 +255,26 @@ function FacturasInner() {
             icon={PenLine}
             label="Carga manual"
             onClick={openManual}
-            className={cn(showIntro && "ring-2 ring-primary/20")}
+            className={cn(showIntro && "ring-primary/20 ring-2")}
           />
           <ExpandingButton
             icon={Mail}
             label="Por email"
             onClick={openEmail}
-            className={cn(showIntro && "ring-2 ring-primary/20")}
+            className={cn(showIntro && "ring-primary/20 ring-2")}
           />
           <ExpandingButton
             icon={Upload}
             label="Subir archivo"
             onClick={openUpload}
             variant="default"
-            className={cn(showIntro && "ring-2 ring-primary/30")}
+            className={cn(showIntro && "ring-primary/30 ring-2")}
           />
         </div>
       </div>
 
       {showIntro && (
-        <IntroBanner
-          onAction={handleIntroAction}
-          onDismiss={() => setShowIntro(false)}
-        />
+        <IntroBanner onAction={handleIntroAction} onDismiss={() => setShowIntro(false)} />
       )}
 
       <div
@@ -298,15 +288,14 @@ function FacturasInner() {
 
       {/* Upload dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden [grid-template-rows:auto_1fr]">
+        <DialogContent className="max-h-[90vh] [grid-template-rows:auto_1fr] overflow-hidden sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Subir comprobante</DialogTitle>
             <DialogDescription>
-              Subi un archivo PDF, JPG, PNG o WebP y extraeremos los datos
-              automaticamente.
+              Subi un archivo PDF, JPG, PNG o WebP y extraeremos los datos automaticamente.
             </DialogDescription>
           </DialogHeader>
-          <div className="overflow-y-auto min-h-0">
+          <div className="min-h-0 overflow-y-auto">
             <FileUploader onInvoiceSaved={handleSaved} />
           </div>
         </DialogContent>
@@ -314,18 +303,13 @@ function FacturasInner() {
 
       {/* Manual entry dialog */}
       <Dialog open={manualOpen} onOpenChange={setManualOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden [grid-template-rows:auto_1fr]">
+        <DialogContent className="max-h-[90vh] [grid-template-rows:auto_1fr] overflow-hidden sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Carga manual</DialogTitle>
-            <DialogDescription>
-              Ingresa los datos del comprobante manualmente.
-            </DialogDescription>
+            <DialogDescription>Ingresa los datos del comprobante manualmente.</DialogDescription>
           </DialogHeader>
-          <div className="overflow-y-auto min-h-0">
-            <InvoiceForm
-              onSaved={handleSaved}
-              onCancel={() => setManualOpen(false)}
-            />
+          <div className="min-h-0 overflow-y-auto">
+            <InvoiceForm onSaved={handleSaved} onCancel={() => setManualOpen(false)} />
           </div>
         </DialogContent>
       </Dialog>

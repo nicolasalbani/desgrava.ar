@@ -42,7 +42,10 @@ interface PendingInvoicesPanelProps {
   onRegisterRefresh?: (fn: () => void) => void;
 }
 
-export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: PendingInvoicesPanelProps) {
+export function PendingInvoicesPanel({
+  onSubmitted,
+  onRegisterRefresh,
+}: PendingInvoicesPanelProps) {
   const { fiscalYear } = useFiscalYear();
   const [invoices, setInvoices] = useState<PendingInvoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,9 +61,8 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
       const res = await fetch("/api/facturas");
       const data = await res.json();
       const all: PendingInvoice[] = data.invoices || [];
-      const pending = all.filter((inv) =>
-        ["PENDING", "FAILED"].includes(inv.siradiqStatus) &&
-        inv.fiscalYear === fiscalYear
+      const pending = all.filter(
+        (inv) => ["PENDING", "FAILED"].includes(inv.siradiqStatus) && inv.fiscalYear === fiscalYear,
       );
       setInvoices(pending);
     } finally {
@@ -78,8 +80,7 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
 
   const eligibleInvoices = invoices.filter((inv) => !isFutureMonth(inv));
   const allSelected =
-    eligibleInvoices.length > 0 &&
-    eligibleInvoices.every((inv) => selectedIds.has(inv.id));
+    eligibleInvoices.length > 0 && eligibleInvoices.every((inv) => selectedIds.has(inv.id));
 
   function toggleSelectAll() {
     if (allSelected) {
@@ -110,7 +111,7 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
       if (inv && inv.fiscalYear !== fiscalYear) {
         toast.error(
           `"${inv.providerName || inv.providerCuit}" es del año ${inv.fiscalYear}, pero el año fiscal activo es ${fiscalYear}.`,
-          { duration: 6000 }
+          { duration: 6000 },
         );
         failCount++;
         continue;
@@ -146,12 +147,12 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
 
   if (fiscalYear === null) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed border-border">
-        <div className="rounded-full bg-muted/40 p-3 mb-3">
-          <FileText className="h-5 w-5 text-muted-foreground/30" />
+      <div className="border-border flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
+        <div className="bg-muted/40 mb-3 rounded-full p-3">
+          <FileText className="text-muted-foreground/30 h-5 w-5" />
         </div>
-        <p className="text-sm text-muted-foreground/70">Seleccioná un año fiscal</p>
-        <p className="text-xs text-muted-foreground/50 mt-1">
+        <p className="text-muted-foreground/70 text-sm">Seleccioná un año fiscal</p>
+        <p className="text-muted-foreground/50 mt-1 text-xs">
           Elegí el período fiscal desde el menú superior para ver las facturas pendientes
         </p>
       </div>
@@ -161,19 +162,21 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
   if (loading) {
     return (
       <div className="flex justify-center py-10">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
+        <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
       </div>
     );
   }
 
   if (invoices.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed border-border">
-        <div className="rounded-full bg-muted/40 p-3 mb-3">
-          <FileText className="h-5 w-5 text-muted-foreground/30" />
+      <div className="border-border flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
+        <div className="bg-muted/40 mb-3 rounded-full p-3">
+          <FileText className="text-muted-foreground/30 h-5 w-5" />
         </div>
-        <p className="text-sm text-muted-foreground/70">Sin facturas pendientes para {fiscalYear}</p>
-        <p className="text-xs text-muted-foreground/50 mt-1">
+        <p className="text-muted-foreground/70 text-sm">
+          Sin facturas pendientes para {fiscalYear}
+        </p>
+        <p className="text-muted-foreground/50 mt-1 text-xs">
           Todas las facturas de {fiscalYear} ya fueron enviadas a SiRADIG
         </p>
       </div>
@@ -183,10 +186,9 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
   return (
     <div className="space-y-3">
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-5 py-3">
+        <div className="bg-muted/40 flex items-center gap-3 rounded-xl px-5 py-3">
           <span className="text-sm font-medium">
-            {selectedIds.size}{" "}
-            {selectedIds.size === 1 ? "seleccionada" : "seleccionadas"}
+            {selectedIds.size} {selectedIds.size === 1 ? "seleccionada" : "seleccionadas"}
           </span>
           <Button size="sm" onClick={handleSubmit} disabled={submitting}>
             {submitting ? (
@@ -207,7 +209,7 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
         </div>
       )}
 
-      <div className="rounded-xl border overflow-hidden">
+      <div className="overflow-hidden rounded-xl border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -236,34 +238,29 @@ export function PendingInvoicesPanel({ onSubmitted, onRegisterRefresh }: Pending
                       onCheckedChange={() => toggleSelect(inv.id)}
                       disabled={future}
                       title={
-                        future
-                          ? "El periodo fiscal aun no esta habilitado en SiRADIG"
-                          : undefined
+                        future ? "El periodo fiscal aun no esta habilitado en SiRADIG" : undefined
                       }
                       aria-label={`Seleccionar factura ${inv.id}`}
                     />
                   </TableCell>
                   <TableCell>
-                    <p className="text-sm font-medium">
-                      {inv.providerName || inv.providerCuit}
-                    </p>
+                    <p className="text-sm font-medium">{inv.providerName || inv.providerCuit}</p>
                     {inv.providerName && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {inv.providerCuit}
-                      </p>
+                      <p className="text-muted-foreground mt-0.5 text-xs">{inv.providerCuit}</p>
                     )}
                   </TableCell>
                   <TableCell className="max-w-[200px]">
-                    <span className="block truncate text-sm text-muted-foreground" title={DEDUCTION_CATEGORY_LABELS[inv.deductionCategory]}>
+                    <span
+                      className="text-muted-foreground block truncate text-sm"
+                      title={DEDUCTION_CATEGORY_LABELS[inv.deductionCategory]}
+                    >
                       {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ?? inv.deductionCategory}
                     </span>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {inv.invoiceDate
-                      ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
-                      : "-"}
+                  <TableCell className="text-muted-foreground text-sm">
+                    {inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString("es-AR") : "-"}
                   </TableCell>
-                  <TableCell className="text-sm text-right font-medium tabular-nums">
+                  <TableCell className="text-right text-sm font-medium tabular-nums">
                     ${parseFloat(inv.amount).toLocaleString("es-AR")}
                   </TableCell>
                 </TableRow>

@@ -18,15 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Loader2,
-  Eye,
-  EyeOff,
-  Trash2,
-  ShieldCheck,
-  ShieldAlert,
-  Lock,
-} from "lucide-react";
+import { Loader2, Eye, EyeOff, Trash2, ShieldCheck, ShieldAlert, Lock } from "lucide-react";
 import { formatCuit, validateCuit } from "@/lib/validators/cuit";
 import { toast } from "sonner";
 
@@ -39,12 +31,11 @@ const formSchema = z.object({
         const cleaned = val.replace(/-/g, "");
         return /^\d{11}$/.test(cleaned);
       },
-      { message: "El CUIT debe tener 11 digitos" }
+      { message: "El CUIT debe tener 11 digitos" },
     )
-    .refine(
-      (val) => validateCuit(val.replace(/-/g, "")),
-      { message: "El CUIT no es valido (digito verificador incorrecto)" }
-    ),
+    .refine((val) => validateCuit(val.replace(/-/g, "")), {
+      message: "El CUIT no es valido (digito verificador incorrecto)",
+    }),
   clave: z.string().min(1, "La clave fiscal es requerida"),
 });
 
@@ -150,7 +141,7 @@ export function CredentialsForm() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/60" />
+        <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
       </div>
     );
   }
@@ -159,12 +150,10 @@ export function CredentialsForm() {
     <div className="space-y-8">
       {/* Status banner */}
       {credential && (
-        <div className="flex items-center gap-4 rounded-2xl bg-muted/50 px-5 py-4">
+        <div className="bg-muted/50 flex items-center gap-4 rounded-2xl px-5 py-4">
           <div
             className={`shrink-0 rounded-full p-2.5 ${
-              credential.isValidated
-                ? "bg-emerald-500/10"
-                : "bg-amber-500/10"
+              credential.isValidated ? "bg-emerald-500/10" : "bg-amber-500/10"
             }`}
           >
             {credential.isValidated ? (
@@ -173,19 +162,17 @@ export function CredentialsForm() {
               <ShieldAlert className="h-4 w-4 text-amber-600" />
             )}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
-              {credential.isValidated
-                ? "Credenciales validadas"
-                : "Credenciales sin validar"}
+              {credential.isValidated ? "Credenciales validadas" : "Credenciales sin validar"}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-muted-foreground mt-0.5 text-xs">
               {credential.isValidated
                 ? "Listas para automatizar la carga en SiRADIG"
                 : "Guarda tu clave fiscal para validarlas"}
             </p>
           </div>
-          <p className="text-xs text-muted-foreground/60 shrink-0">
+          <p className="text-muted-foreground/60 shrink-0 text-xs">
             {new Date(credential.updatedAt).toLocaleDateString("es-AR", {
               day: "2-digit",
               month: "2-digit",
@@ -206,9 +193,7 @@ export function CredentialsForm() {
             onChange={handleCuitChange}
           />
           {form.formState.errors.cuit && (
-            <p className="text-sm text-destructive">
-              {form.formState.errors.cuit.message}
-            </p>
+            <p className="text-destructive text-sm">{form.formState.errors.cuit.message}</p>
           )}
         </div>
 
@@ -218,27 +203,19 @@ export function CredentialsForm() {
             <Input
               id="clave"
               type={showClave ? "text" : "password"}
-              placeholder={
-                credential ? "••••••••" : "Ingresa tu clave fiscal"
-              }
+              placeholder={credential ? "••••••••" : "Ingresa tu clave fiscal"}
               {...form.register("clave")}
             />
             <button
               type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+              className="text-muted-foreground/40 hover:text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
               onClick={() => setShowClave(!showClave)}
             >
-              {showClave ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
+              {showClave ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
           {form.formState.errors.clave && (
-            <p className="text-sm text-destructive">
-              {form.formState.errors.clave.message}
-            </p>
+            <p className="text-destructive text-sm">{form.formState.errors.clave.message}</p>
           )}
         </div>
 
@@ -269,11 +246,11 @@ export function CredentialsForm() {
       </form>
 
       {/* Security note */}
-      <div className="flex items-start gap-2.5 text-xs text-muted-foreground/50">
-        <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+      <div className="text-muted-foreground/50 flex items-start gap-2.5 text-xs">
+        <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <p>
-          Tu clave fiscal se encripta con AES-256-GCM antes de guardarse.
-          Nunca se almacena en texto plano ni se muestra en la interfaz.
+          Tu clave fiscal se encripta con AES-256-GCM antes de guardarse. Nunca se almacena en texto
+          plano ni se muestra en la interfaz.
         </p>
       </div>
 
@@ -283,15 +260,13 @@ export function CredentialsForm() {
           <AlertDialogHeader>
             <AlertDialogTitle>Eliminar credenciales</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminaran tu CUIT y clave fiscal. No podras automatizar la
-              carga en SiRADIG hasta que las vuelvas a cargar.
+              Se eliminaran tu CUIT y clave fiscal. No podras automatizar la carga en SiRADIG hasta
+              que las vuelvas a cargar.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
-              Eliminar
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>Eliminar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

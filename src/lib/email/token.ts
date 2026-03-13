@@ -23,8 +23,6 @@ export function getIngestEmail(token: string): string {
 export function extractTokenFromEmail(email: string): string | null {
   const domain = process.env.INGEST_EMAIL_DOMAIN || "ingest.desgrava.ar";
   const escapedDomain = domain.replace(/\./g, "\\.");
-  const match = email.match(
-    new RegExp(`^(.+)@${escapedDomain}$`, "i")
-  );
+  const match = email.match(new RegExp(`^(.+)@${escapedDomain}$`, "i"));
   return match?.[1] ?? null;
 }
