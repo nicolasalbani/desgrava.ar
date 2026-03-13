@@ -9,6 +9,7 @@ import {
   submitDeduction,
   navigateToCargasFamilia,
   extractCargasFamilia,
+  pushCargasFamilia,
 } from "./siradig-navigator";
 import type { SiradigFamilyDependent } from "./siradig-navigator";
 import {
@@ -223,6 +224,162 @@ async function processPullFamilyDependents(
   });
 }
 
+/**
+ * Process a PUSH_FAMILY_DEPENDENTS job:
+ * load local dependents, navigate to cargas de familia section, push each one to SiRADIG.
+ */
+async function processPushFamilyDependents(
+  siradigPage: Page,
+  job: { userId: string; fiscalYear?: number | null; familyDependentId?: string | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  // Load the specific dependent to export
+  if (!job.familyDependentId) {
+    await appendLogFn(jobId, "Falta el ID de la carga de familia", onLog);
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "FAILED",
+        errorMessage: "Falta el ID de la carga de familia",
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
+  const dependent = await prisma.familyDependent.findUnique({
+    where: { id: job.familyDependentId },
+  });
+
+  if (!dependent) {
+    await appendLogFn(jobId, "Carga de familia no encontrada", onLog);
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "FAILED",
+        errorMessage: "Carga de familia no encontrada",
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
+  const localDependents = [dependent];
+  await appendLogFn(
+    jobId,
+    `Exportando: ${dependent.apellido}, ${dependent.nombre} (${dependent.numeroDoc})`,
+    onLog,
+  );
+
+  // Navigate to "Carga de Formulario" and expand deductions
+  const navResult = await navigateToDeductionSection(
+    siradigPage,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!navResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Expand the cargas de familia accordion
+  const cfNavResult = await navigateToCargasFamilia(
+    siradigPage,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!cfNavResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: cfNavResult.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Convert DB dependents to SiradigFamilyDependent format
+  const siradigDependents: SiradigFamilyDependent[] = localDependents.map((dep) => ({
+    tipoDoc: dep.tipoDoc,
+    numeroDoc: dep.numeroDoc,
+    apellido: dep.apellido,
+    nombre: dep.nombre,
+    fechaNacimiento: dep.fechaNacimiento ?? "",
+    parentesco: dep.parentesco,
+    fechaUnion: dep.fechaUnion ?? "",
+    porcentajeDed: dep.porcentajeDed ?? "",
+    cuitOtroDed: dep.cuitOtroDed ?? "",
+    familiaCargo: dep.familiaCargo,
+    residente: dep.residente,
+    tieneIngresos: dep.tieneIngresos,
+    montoIngresos: dep.montoIngresos ? dep.montoIngresos.toString() : "",
+    mesDesde: dep.mesDesde,
+    mesHasta: dep.mesHasta,
+    proximosPeriodos: dep.proximosPeriodos,
+  }));
+
+  // Push to SiRADIG
+  const pushResult = await pushCargasFamilia(
+    siradigPage,
+    siradigDependents,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  const resultData = JSON.parse(
+    JSON.stringify({
+      created: pushResult.created,
+      updated: pushResult.updated,
+      failed: pushResult.failed,
+      total: localDependents.length,
+    }),
+  );
+
+  if (!pushResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "FAILED",
+        errorMessage: pushResult.error,
+        completedAt: new Date(),
+        resultData,
+      },
+    });
+    return;
+  }
+
+  const failedCount = pushResult.failed.length;
+  const failedSummary = failedCount > 0 ? `, ${failedCount} con errores` : "";
+  const summary = `Exportacion completada: ${pushResult.created} creadas, ${pushResult.updated} actualizadas${failedSummary}`;
+  await appendLogFn(jobId, summary, onLog);
+
+  // If some dependents failed but the job itself didn't crash, still mark as COMPLETED
+  // but include the failure details in resultData for the UI to show
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData,
+    },
+  });
+}
+
 export async function processJob(jobId: string, onLog?: LogCallback): Promise<void> {
   return enqueueJob(async () => {
     const job = await prisma.automationJob.findUnique({
@@ -327,6 +484,19 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         // ── PULL_FAMILY_DEPENDENTS flow ──
         if (job.jobType === "PULL_FAMILY_DEPENDENTS") {
           await processPullFamilyDependents(
+            siradigPage,
+            job,
+            jobId,
+            onLog,
+            onScreenshot,
+            appendLog,
+          );
+          return;
+        }
+
+        // ── PUSH_FAMILY_DEPENDENTS flow ──
+        if (job.jobType === "PUSH_FAMILY_DEPENDENTS") {
+          await processPushFamilyDependents(
             siradigPage,
             job,
             jobId,

@@ -33,7 +33,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Pencil, Trash2, Users, Download } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  Users,
+  Download,
+  Upload,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useRef, useCallback } from "react";
 
@@ -526,6 +536,14 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
   const eventSourceRef = useRef<EventSource | null>(null);
   const dependentsRef = useRef<FamilyDependent[]>([]);
 
+  // Per-dependent export state
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const [exportResults, setExportResults] = useState<
+    Map<string, { status: "success" | "failed"; error?: string }>
+  >(new Map());
+  const [exportLogs, setExportLogs] = useState<string[]>([]);
+  const exportEventSourceRef = useRef<EventSource | null>(null);
+
   // Keep ref in sync for use in SSE callbacks
   useEffect(() => {
     dependentsRef.current = dependents;
@@ -687,6 +705,187 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
     }
   }
 
+  // Connect to SSE for a per-dependent export job
+  const connectToExportJobSSE = useCallback((jobId: string, dependentId: string) => {
+    exportEventSourceRef.current?.close();
+
+    const es = new EventSource(`/api/automatizacion/${jobId}/logs`);
+    exportEventSourceRef.current = es;
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.log) {
+          setExportLogs((prev) => [...prev, data.log]);
+        }
+        if (data.done) {
+          es.close();
+          exportEventSourceRef.current = null;
+          setExportingId(null);
+
+          if (data.status === "COMPLETED") {
+            // Fetch result to check for per-dependent failures
+            fetch(`/api/automatizacion/${jobId}`)
+              .then((r) => r.json())
+              .then((jobData) => {
+                const result = jobData.job?.resultData;
+                const failedArr = Array.isArray(result?.failed) ? result.failed : [];
+                if (failedArr.length > 0) {
+                  const errorMsg = failedArr[0]?.error ?? "Error de validacion en SiRADIG";
+                  setExportResults((prev) => {
+                    const next = new Map(prev);
+                    next.set(dependentId, { status: "failed", error: errorMsg });
+                    return next;
+                  });
+                  toast.error(`Error al exportar: ${errorMsg}`);
+                } else {
+                  setExportResults((prev) => {
+                    const next = new Map(prev);
+                    next.set(dependentId, { status: "success" });
+                    return next;
+                  });
+                  toast.success("Carga exportada a SiRADIG");
+                }
+              })
+              .catch(() => {
+                setExportResults((prev) => {
+                  const next = new Map(prev);
+                  next.set(dependentId, { status: "success" });
+                  return next;
+                });
+                toast.success("Carga exportada a SiRADIG");
+              });
+          } else {
+            // FAILED status
+            fetch(`/api/automatizacion/${jobId}`)
+              .then((r) => r.json())
+              .then((jobData) => {
+                const errorMsg = jobData.job?.errorMessage ?? "Error al exportar carga de familia";
+                setExportResults((prev) => {
+                  const next = new Map(prev);
+                  next.set(dependentId, { status: "failed", error: errorMsg });
+                  return next;
+                });
+                toast.error(errorMsg);
+              })
+              .catch(() => {
+                setExportResults((prev) => {
+                  const next = new Map(prev);
+                  next.set(dependentId, { status: "failed", error: "Error desconocido" });
+                  return next;
+                });
+                toast.error("Error al exportar carga de familia");
+              });
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      exportEventSourceRef.current = null;
+      setExportingId(null);
+      setExportResults((prev) => {
+        const next = new Map(prev);
+        next.set(dependentId, { status: "failed", error: "Se perdio la conexion con el servidor" });
+        return next;
+      });
+      toast.error("Se perdio la conexion con el servidor");
+    };
+  }, []);
+
+  // On mount, check for an active PUSH_FAMILY_DEPENDENTS job and reconnect
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkActiveExportJob() {
+      try {
+        const res = await fetch("/api/automatizacion");
+        if (!res.ok) return;
+        const { jobs } = await res.json();
+        const activeJob = jobs.find(
+          (j: {
+            jobType: string;
+            fiscalYear?: number | null;
+            familyDependentId?: string | null;
+            status: string;
+          }) =>
+            j.jobType === "PUSH_FAMILY_DEPENDENTS" &&
+            j.fiscalYear === fiscalYear &&
+            j.familyDependentId &&
+            (j.status === "PENDING" || j.status === "RUNNING"),
+        );
+        if (activeJob && !cancelled) {
+          setExportingId(activeJob.familyDependentId);
+          if (Array.isArray(activeJob.logs) && activeJob.logs.length > 0) {
+            setExportLogs(activeJob.logs);
+          }
+          connectToExportJobSSE(activeJob.id, activeJob.familyDependentId);
+        }
+      } catch {
+        // Best-effort
+      }
+    }
+
+    checkActiveExportJob();
+    return () => {
+      cancelled = true;
+    };
+  }, [fiscalYear, connectToExportJobSSE]);
+
+  // Clean up export SSE on unmount
+  useEffect(() => {
+    return () => {
+      exportEventSourceRef.current?.close();
+    };
+  }, []);
+
+  const handleExportDependent = useCallback(
+    async (dependentId: string) => {
+      setExportingId(dependentId);
+      setExportLogs([]);
+      // Clear previous result for this dependent
+      setExportResults((prev) => {
+        const next = new Map(prev);
+        next.delete(dependentId);
+        return next;
+      });
+
+      try {
+        const res = await fetch("/api/automatizacion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobType: "PUSH_FAMILY_DEPENDENTS",
+            fiscalYear,
+            familyDependentId: dependentId,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Error al iniciar exportacion");
+        }
+
+        const { job } = await res.json();
+        connectToExportJobSSE(job.id, dependentId);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "Error al exportar";
+        toast.error(errorMsg);
+        setExportingId(null);
+        setExportResults((prev) => {
+          const next = new Map(prev);
+          next.set(dependentId, { status: "failed", error: errorMsg });
+          return next;
+        });
+      }
+    },
+    [fiscalYear, connectToExportJobSSE],
+  );
+
   const handleImportFromSiradig = useCallback(async () => {
     setImporting(true);
     setImportLogs([]);
@@ -716,6 +915,8 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
     }
   }, [fiscalYear, connectToJobSSE]);
 
+  const isExporting = exportingId !== null;
+
   return (
     <div className="space-y-4">
       {loading ? (
@@ -735,55 +936,118 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
         <div className="space-y-2">
           {dependents.map((dep) => {
             const highlight = highlightedIds.get(dep.id);
+            const exportResult = exportResults.get(dep.id);
+            const isThisExporting = exportingId === dep.id;
+
+            // Determine card styling based on state priority:
+            // exporting animation > export result > import highlight > default
+            let cardClass = "border-border bg-muted/20";
+            if (isThisExporting) {
+              cardClass =
+                "border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 animate-pulse";
+            } else if (exportResult?.status === "success") {
+              cardClass = "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30";
+            } else if (exportResult?.status === "failed") {
+              cardClass = "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30";
+            } else if (highlight === "created") {
+              cardClass = "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30";
+            } else if (highlight === "updated") {
+              cardClass = "border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30";
+            }
+
             return (
-              <div
-                key={dep.id}
-                className={`flex items-center justify-between rounded-xl border px-4 py-3 transition-all duration-700 ${
-                  highlight === "created"
-                    ? "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
-                    : highlight === "updated"
-                      ? "border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30"
-                      : "border-border bg-muted/20"
-                }`}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium">
-                      {dep.apellido}, {dep.nombre}
+              <div key={dep.id}>
+                <div
+                  className={`flex items-center justify-between rounded-xl border px-4 py-3 transition-all duration-700 ${cardClass}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium">
+                        {dep.apellido}, {dep.nombre}
+                      </p>
+                      {isThisExporting && (
+                        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/50 dark:text-blue-400">
+                          exportando...
+                        </span>
+                      )}
+                      {!isThisExporting && exportResult?.status === "success" && (
+                        <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/50 dark:text-green-400">
+                          exportado
+                        </span>
+                      )}
+                      {!isThisExporting && exportResult?.status === "failed" && (
+                        <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/50 dark:text-red-400">
+                          error
+                        </span>
+                      )}
+                      {highlight === "created" && !exportResult && !isThisExporting && (
+                        <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/50 dark:text-green-400">
+                          nuevo
+                        </span>
+                      )}
+                      {highlight === "updated" && !exportResult && !isThisExporting && (
+                        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/50 dark:text-blue-400">
+                          actualizado
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-muted-foreground/60 mt-0.5 text-xs">
+                      {parentescoLabel(dep.parentesco)} · {dep.tipoDoc} {dep.numeroDoc}
                     </p>
-                    {highlight === "created" && (
-                      <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/50 dark:text-green-400">
-                        nuevo
-                      </span>
-                    )}
-                    {highlight === "updated" && (
-                      <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/50 dark:text-blue-400">
-                        actualizado
-                      </span>
-                    )}
                   </div>
-                  <p className="text-muted-foreground/60 mt-0.5 text-xs">
-                    {parentescoLabel(dep.parentesco)} · {dep.tipoDoc} {dep.numeroDoc}
-                  </p>
+                  <div className="ml-3 flex shrink-0 items-center gap-1">
+                    {/* Export to SiRADIG button */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-8 w-8 ${
+                        exportResult?.status === "success"
+                          ? "text-green-600 dark:text-green-400"
+                          : exportResult?.status === "failed"
+                            ? "text-red-500 dark:text-red-400"
+                            : "text-muted-foreground hover:text-foreground"
+                      }`}
+                      onClick={() => handleExportDependent(dep.id)}
+                      disabled={isExporting || importing}
+                      title="Exportar a SiRADIG"
+                    >
+                      {isThisExporting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : exportResult?.status === "success" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : exportResult?.status === "failed" ? (
+                        <AlertCircle className="h-3.5 w-3.5" />
+                      ) : (
+                        <Upload className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-foreground h-8 w-8"
+                      onClick={() => openEdit(dep)}
+                      disabled={isThisExporting}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive h-8 w-8"
+                      onClick={() => setDeleteId(dep.id)}
+                      disabled={isThisExporting}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="ml-3 flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-foreground h-8 w-8"
-                    onClick={() => openEdit(dep)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-destructive h-8 w-8"
-                    onClick={() => setDeleteId(dep.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                {/* Per-dependent error message */}
+                {!isThisExporting && exportResult?.status === "failed" && exportResult.error && (
+                  <div className="mx-4 mt-1 mb-1 flex items-start gap-1.5 rounded-lg bg-red-100/60 px-3 py-2 dark:bg-red-900/30">
+                    <AlertCircle className="mt-0.5 h-3 w-3 shrink-0 text-red-500 dark:text-red-400" />
+                    <p className="text-xs text-red-600 dark:text-red-400">{exportResult.error}</p>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -812,12 +1076,34 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
         </div>
       )}
 
+      {/* Export progress log (shown below cards while any dependent is exporting) */}
+      {isExporting && exportLogs.length > 0 && (
+        <div className="border-border bg-muted rounded-xl border p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
+            <span className="text-sm font-medium">Exportando a SiRADIG...</span>
+          </div>
+          <div className="bg-card max-h-32 overflow-y-auto rounded-lg p-2">
+            {exportLogs.slice(-8).map((log, i) => (
+              <p key={i} className="text-muted-foreground text-xs leading-relaxed">
+                {log}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <Button variant="outline" size="sm" onClick={openAdd}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Agregar carga de familia
         </Button>
-        <Button variant="outline" size="sm" onClick={handleImportFromSiradig} disabled={importing}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleImportFromSiradig}
+          disabled={importing || isExporting}
+        >
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
           ) : (

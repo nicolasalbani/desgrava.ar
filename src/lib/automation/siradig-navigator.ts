@@ -930,6 +930,17 @@ export interface SiradigFamilyDependent {
 }
 
 /**
+ * Reverse map: our tipoDoc strings → SiRADIG numeric option values.
+ */
+const TIPO_DOC_TO_SIRADIG: Record<string, string> = Object.fromEntries(
+  Object.entries(SIRADIG_TIPO_DOC_MAP).map(([k, v]) => [v, k]),
+);
+
+export function mapTipoDocToSiradig(tipoDoc: string): string {
+  return TIPO_DOC_TO_SIRADIG[tipoDoc] ?? tipoDoc;
+}
+
+/**
  * Filter out phantom/empty dependents that have no document number.
  */
 export function filterValidDependents(
@@ -1136,4 +1147,397 @@ export async function extractCargasFamilia(
     }
     return { success: false, error: msg, dependents: [] };
   }
+}
+
+// ── Push Cargas de Familia ──────────────────────────────────────
+
+export interface PushFailedDependent {
+  apellido: string;
+  nombre: string;
+  numeroDoc: string;
+  error: string;
+}
+
+export interface PushCargasFamiliaResult {
+  success: boolean;
+  error?: string;
+  created: number;
+  updated: number;
+  failed: PushFailedDependent[];
+}
+
+/**
+ * Push local family dependents to SiRADIG by creating or updating rows
+ * in the "Detalles de las cargas de familia" table.
+ *
+ * Prerequisite: the "Cargas de Familia" accordion must already be expanded
+ * (call navigateToCargasFamilia first).
+ */
+export async function pushCargasFamilia(
+  page: Page,
+  dependents: SiradigFamilyDependent[],
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback,
+): Promise<PushCargasFamiliaResult> {
+  const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
+  const sel = ARCA_SELECTORS.siradig.cargasFamilia;
+
+  let created = 0;
+  let updated = 0;
+  const failed: PushFailedDependent[] = [];
+
+  try {
+    // Step 1: Scan existing SiRADIG rows to build a documento → row-index map
+    const existingRows = page.locator(sel.tableRows);
+    const existingCount = await existingRows.count();
+    const existingDocMap = new Map<string, number>();
+
+    log(`Escaneando tabla existente (${existingCount} filas)...`);
+    for (let i = 0; i < existingCount; i++) {
+      const rowText = (await existingRows.nth(i).textContent()) ?? "";
+      // Extract documento number from the row text (second column typically)
+      const cells = existingRows.nth(i).locator("td");
+      const cellCount = await cells.count();
+      // The table typically has: Tipo Doc | Nro Doc | Apellido | Nombre | ...
+      // Try to get the documento from the second cell
+      if (cellCount >= 2) {
+        const docText = ((await cells.nth(1).textContent()) ?? "").trim();
+        if (docText) {
+          existingDocMap.set(docText, i);
+        }
+      }
+      // Also try matching the raw text in case table structure differs
+      for (const dep of dependents) {
+        if (
+          dep.numeroDoc &&
+          rowText.includes(dep.numeroDoc) &&
+          !existingDocMap.has(dep.numeroDoc)
+        ) {
+          existingDocMap.set(dep.numeroDoc, i);
+        }
+      }
+    }
+
+    log(`Encontradas ${existingDocMap.size} cargas existentes en SiRADIG`);
+
+    // Step 2: Process each local dependent
+    for (let d = 0; d < dependents.length; d++) {
+      const dep = dependents[d];
+      if (!dep.numeroDoc || !dep.numeroDoc.trim()) continue;
+
+      const isUpdate = existingDocMap.has(dep.numeroDoc);
+      log(
+        `${isUpdate ? "Actualizando" : "Creando"} carga ${d + 1}/${dependents.length}: ${dep.apellido}, ${dep.nombre} (${dep.numeroDoc})...`,
+      );
+
+      if (isUpdate) {
+        // Click the edit button for the matching row
+        const rowIndex = existingDocMap.get(dep.numeroDoc)!;
+        const currentRows = page.locator(sel.tableRows);
+        const editBtn = currentRows.nth(rowIndex).locator(sel.editButton);
+        await editBtn.waitFor({ state: "visible", timeout: 10000 });
+        await editBtn.click();
+        await page.waitForLoadState("networkidle");
+        await page.waitForTimeout(500);
+      } else {
+        // Click "Agregar" to create a new entry
+        const agregarBtn = page.locator("#btn_alta_cargas_familia, #btn_agregar_carga_familia");
+        // Fallback: look for any "Agregar" button within the cargas section
+        const sectionAgregar = agregarBtn.or(
+          page.locator(sel.sectionContainer).getByText("Agregar", { exact: false }).first(),
+        );
+        await sectionAgregar.first().waitFor({ state: "visible", timeout: 10000 });
+        await sectionAgregar.first().click();
+        await page.waitForLoadState("networkidle");
+        await page.waitForTimeout(500);
+      }
+
+      // Step 3: Fill the form fields
+      // Use page.evaluate with jQuery triggers for dropdowns (SiRADIG uses jQuery)
+      await fillCargaFamiliaForm(page, dep, isUpdate, log);
+
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        `push-carga-${d + 1}`,
+        `${isUpdate ? "Actualizada" : "Creada"}: ${dep.apellido}, ${dep.nombre}`,
+      );
+
+      // Step 4: Click "Guardar"
+      log("Guardando...");
+      const guardarBtn = page.locator("#btn_guardar");
+      await guardarBtn.waitFor({ state: "visible", timeout: 10000 });
+      await guardarBtn.click();
+
+      // Wait for SiRADIG to process — handlers often use setTimeout before AJAX
+      await page.waitForTimeout(500);
+      await page.waitForLoadState("networkidle");
+      // Extra wait for error tooltips/banners to render after AJAX completes
+      await page.waitForTimeout(1000);
+
+      // Check for errors after save — SiRADIG uses multiple error patterns:
+      // 1. ".formErrorContent" for field-level validation errors
+      // 2. ".ui-state-error" / ".error" for red banner/tooltip errors
+      // 3. Text containing "Se detectaron errores" in a visible banner
+      // 4. Tooltip-style popups with error messages (often "*" prefixed)
+      const errorText = await page.evaluate(() => {
+        const messages: string[] = [];
+
+        // .formErrorContent elements
+        document.querySelectorAll(".formErrorContent").forEach((el) => {
+          const text = (el as HTMLElement).innerText?.trim();
+          if (text) messages.push(text);
+        });
+
+        // .ui-state-error-text or .error-msg elements
+        document
+          .querySelectorAll(".ui-state-error-text, .error-msg, .mensaje-error, .alert-danger")
+          .forEach((el) => {
+            const text = (el as HTMLElement).innerText?.trim();
+            if (text) messages.push(text);
+          });
+
+        // SiRADIG often shows errors in a qtip tooltip with class "qtip-content"
+        document.querySelectorAll(".qtip-content").forEach((el) => {
+          const text = (el as HTMLElement).innerText?.trim();
+          if (text && text.startsWith("*")) messages.push(text);
+        });
+
+        // Check for the general error banner "Se detectaron errores en los datos enviados"
+        const errorBanner = document.querySelector("#mensajeError, .mensajeError");
+        if (errorBanner) {
+          const text = (errorBanner as HTMLElement).innerText?.trim();
+          if (text) messages.push(text);
+        }
+
+        // Deduplicate
+        return [...new Set(messages)].join(" | ");
+      });
+
+      const hasError = errorText.length > 0;
+
+      if (hasError) {
+        const displayError = errorText || "Error de validacion desconocido";
+        log(`Error al guardar ${dep.apellido}, ${dep.nombre}: ${displayError}`);
+        failed.push({
+          apellido: dep.apellido,
+          nombre: dep.nombre,
+          numeroDoc: dep.numeroDoc,
+          error: displayError,
+        });
+        await capture(
+          await page.screenshot({ fullPage: true }),
+          `push-error-${d + 1}`,
+          `Error guardando: ${dep.apellido}`,
+        );
+        // Try to go back to the table to continue with next dependent
+        const volverBtn = page.getByText("Volver", { exact: true }).first();
+        await volverBtn.click().catch(() => {});
+        await page.waitForLoadState("networkidle").catch(() => {});
+        await page.waitForTimeout(1000);
+        continue;
+      }
+
+      // Wait for the table to re-render
+      await page.waitForTimeout(1500);
+
+      if (isUpdate) {
+        updated++;
+      } else {
+        created++;
+      }
+
+      log(`${isUpdate ? "Actualizada" : "Creada"} exitosamente: ${dep.apellido}, ${dep.nombre}`);
+
+      // After creating a new entry, the existing row indices shift.
+      // Re-scan the table to update indices for remaining dependents.
+      if (!isUpdate) {
+        const newRows = page.locator(sel.tableRows);
+        const newCount = await newRows.count();
+        existingDocMap.clear();
+        for (let i = 0; i < newCount; i++) {
+          const cells = newRows.nth(i).locator("td");
+          const cellCount = await cells.count();
+          if (cellCount >= 2) {
+            const docText = ((await cells.nth(1).textContent()) ?? "").trim();
+            if (docText) existingDocMap.set(docText, i);
+          }
+        }
+      }
+    }
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "push-completed",
+      `Exportacion completada: ${created} creadas, ${updated} actualizadas`,
+    );
+
+    const failedSummary = failed.length > 0 ? `, ${failed.length} con errores` : "";
+    log(`Exportacion completada: ${created} creadas, ${updated} actualizadas${failedSummary}`);
+
+    if (failed.length > 0) {
+      log("Cargas con errores:");
+      for (const f of failed) {
+        log(`  - ${f.apellido}, ${f.nombre} (${f.numeroDoc}): ${f.error}`);
+      }
+    }
+
+    return { success: true, created, updated, failed };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Error desconocido";
+    log(`Error exportando cargas de familia: ${msg} | URL: ${page.url()}`);
+    try {
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "push-error",
+        "Error exportando cargas de familia",
+      );
+    } catch {
+      /* screenshot may fail too */
+    }
+    return { success: false, error: msg, created, updated, failed };
+  }
+}
+
+/**
+ * Fill the cargas de familia edit/create form with dependent data.
+ * Handles read-only fields gracefully by checking disabled/readonly state.
+ */
+async function fillCargaFamiliaForm(
+  page: Page,
+  dep: SiradigFamilyDependent,
+  isUpdate: boolean,
+  log: (msg: string) => void,
+): Promise<void> {
+  const siradigTipoDoc = mapTipoDocToSiradig(dep.tipoDoc);
+
+  // Helper: set a select value via jQuery (SiRADIG uses jQuery for all form interactions)
+  const setSelect = async (selector: string, value: string, label: string) => {
+    const isDisabled = await page
+      .locator(selector)
+      .evaluate((el) => {
+        const sel = el as HTMLSelectElement;
+        return sel.disabled || sel.hasAttribute("readonly");
+      })
+      .catch(() => false);
+
+    if (isDisabled) {
+      log(`  Campo ${label} no editable, saltando...`);
+      return;
+    }
+
+    await page.evaluate(
+      ({ sel, val }: { sel: string; val: string }) => {
+        (window as any).$(sel).val(val).trigger("change");
+      },
+      { sel: selector, val: value },
+    );
+    await page.waitForTimeout(300);
+  };
+
+  // Helper: set an input value via jQuery
+  const setInput = async (selector: string, value: string, label: string) => {
+    const isDisabled = await page
+      .locator(selector)
+      .evaluate((el) => {
+        const inp = el as HTMLInputElement;
+        return inp.disabled || inp.readOnly;
+      })
+      .catch(() => false);
+
+    if (isDisabled) {
+      log(`  Campo ${label} no editable, saltando...`);
+      return;
+    }
+
+    await page.evaluate(
+      ({ sel, val }: { sel: string; val: string }) => {
+        (window as any).$(sel).val(val).trigger("change");
+      },
+      { sel: selector, val: value },
+    );
+    await page.waitForTimeout(200);
+  };
+
+  // Helper: set a checkbox via jQuery
+  const setCheckbox = async (selector: string, checked: boolean, label: string) => {
+    const isDisabled = await page
+      .locator(selector)
+      .evaluate((el) => (el as HTMLInputElement).disabled)
+      .catch(() => false);
+
+    if (isDisabled) {
+      log(`  Campo ${label} no editable, saltando...`);
+      return;
+    }
+
+    await page.evaluate(
+      ({ sel, val }: { sel: string; val: boolean }) => {
+        const $el = (window as any).$(sel);
+        if ($el.prop("checked") !== val) {
+          $el.prop("checked", val).trigger("change");
+        }
+      },
+      { sel: selector, val: checked },
+    );
+    await page.waitForTimeout(200);
+  };
+
+  const sel = ARCA_SELECTORS.siradig.cargasFamilia;
+
+  // Parentesco (must be set first as it may show/hide conditional fields)
+  await setSelect(sel.formParentesco, dep.parentesco, "parentesco");
+  await page.waitForTimeout(500); // Extra wait for conditional field visibility
+
+  // Tipo documento + numero documento
+  await setSelect(sel.formTipoDoc, siradigTipoDoc, "tipo documento");
+  await setInput(sel.formNumeroDoc, dep.numeroDoc, "numero documento");
+
+  // Apellido / Nombre
+  await setInput(sel.formApellido, dep.apellido, "apellido");
+  await setInput(sel.formNombre, dep.nombre, "nombre");
+
+  // Fecha de nacimiento
+  if (dep.fechaNacimiento) {
+    await setInput(sel.formFechaNacimiento, dep.fechaNacimiento, "fecha nacimiento");
+  }
+
+  // Fecha de casamiento/union (conditional on parentesco 1 or 51)
+  if (dep.fechaUnion) {
+    await setInput(sel.formFechaCasamiento, dep.fechaUnion, "fecha union");
+  }
+
+  // Porcentaje deduccion (conditional on hijo parentescos)
+  if (dep.porcentajeDed) {
+    await setSelect(sel.formPorcentajeDed, dep.porcentajeDed, "porcentaje deduccion");
+  }
+
+  // CUIT otro deduccion (conditional on 50% porcentaje)
+  if (dep.cuitOtroDed) {
+    await setInput(sel.formCuitOtroDed, dep.cuitOtroDed, "CUIT otro deduccion");
+  }
+
+  // Familia a cargo (S/N select)
+  await setSelect(sel.formFamiliaCargo, dep.familiaCargo ? "S" : "N", "familia a cargo");
+
+  // Residente (S/N select)
+  await setSelect(sel.formResidente, dep.residente ? "S" : "N", "residente");
+
+  // Ingresos (S/N select)
+  await setSelect(sel.formIngresos, dep.tieneIngresos ? "S" : "N", "ingresos");
+  await page.waitForTimeout(300); // Wait for monto field to appear/hide
+
+  // Monto ingresos (conditional on tieneIngresos)
+  if (dep.tieneIngresos && dep.montoIngresos) {
+    await setInput(sel.formMontoIngresos, dep.montoIngresos, "monto ingresos");
+  }
+
+  // Periodo
+  await setSelect(sel.formMesDesde, String(dep.mesDesde), "mes desde");
+  await setSelect(sel.formMesHasta, String(dep.mesHasta), "mes hasta");
+
+  // Proximos periodos
+  await setCheckbox(sel.formProximosPeriodos, dep.proximosPeriodos, "proximos periodos");
+
+  log(`  Formulario completado para ${dep.apellido}, ${dep.nombre}`);
 }

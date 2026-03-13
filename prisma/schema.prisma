@@ -122,25 +122,27 @@ model Invoice {
 // ─── Automation Jobs ───────────────────────────────────────────
 
 model AutomationJob {
-  id            String        @id @default(cuid())
-  userId        String
-  invoiceId     String?
-  jobType       JobType
-  status        JobStatus     @default(PENDING)
-  attempts      Int           @default(0)
-  maxAttempts   Int           @default(3)
-  logs          Json          @default("[]")
-  screenshotUrl String?
-  errorMessage  String?
-  resultData    Json?
-  fiscalYear    Int?
-  startedAt     DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                String        @id @default(cuid())
+  userId            String
+  invoiceId         String?
+  familyDependentId String?
+  jobType           JobType
+  status            JobStatus     @default(PENDING)
+  attempts          Int           @default(0)
+  maxAttempts       Int           @default(3)
+  logs              Json          @default("[]")
+  screenshotUrl     String?
+  errorMessage      String?
+  resultData        Json?
+  fiscalYear        Int?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoice         Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  familyDependent FamilyDependent? @relation("AutomationJobFamilyDependent", fields: [familyDependentId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
 }
@@ -224,6 +226,7 @@ enum JobType {
   SUBMIT_INVOICE
   BULK_SUBMIT
   PULL_FAMILY_DEPENDENTS
+  PUSH_FAMILY_DEPENDENTS
 }
 
 enum JobStatus {
@@ -259,8 +262,9 @@ model FamilyDependent {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invoices Invoice[]
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices       Invoice[]
+  automationJobs AutomationJob[] @relation("AutomationJobFamilyDependent")
 
   @@index([userId, fiscalYear])
 }

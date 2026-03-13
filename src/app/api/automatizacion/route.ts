@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { invoiceId, jobType = "SUBMIT_INVOICE", fiscalYear } = body;
+    const { invoiceId, jobType = "SUBMIT_INVOICE", fiscalYear, familyDependentId } = body;
 
     // PULL_FAMILY_DEPENDENTS doesn't need an invoice
     if (jobType === "PULL_FAMILY_DEPENDENTS") {
@@ -24,8 +24,62 @@ export async function POST(req: NextRequest) {
       const job = await prisma.automationJob.create({
         data: {
           userId: session.user.id,
-          jobType: "PULL_FAMILY_DEPENDENTS",
+          jobType,
           fiscalYear,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
+
+    // PUSH_FAMILY_DEPENDENTS: requires familyDependentId (individual export)
+    if (jobType === "PUSH_FAMILY_DEPENDENTS") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+      if (!familyDependentId) {
+        return NextResponse.json({ error: "Falta el ID de la carga de familia" }, { status: 400 });
+      }
+
+      // Verify the dependent exists and belongs to the user
+      const dependent = await prisma.familyDependent.findFirst({
+        where: { id: familyDependentId, userId: session.user.id, fiscalYear },
+      });
+      if (!dependent) {
+        return NextResponse.json({ error: "Carga de familia no encontrada" }, { status: 404 });
+      }
+
+      // Prevent concurrent push jobs for the same dependent
+      const activeJob = await prisma.automationJob.findFirst({
+        where: {
+          userId: session.user.id,
+          jobType: "PUSH_FAMILY_DEPENDENTS",
+          familyDependentId,
+          status: { in: ["PENDING", "RUNNING"] },
+        },
+      });
+      if (activeJob) {
+        return NextResponse.json(
+          { error: "Ya hay una exportación en curso para esta carga de familia" },
+          { status: 409 },
+        );
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType,
+          fiscalYear,
+          familyDependentId,
           status: "PENDING",
         },
       });
