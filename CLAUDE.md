@@ -98,6 +98,7 @@ Custom skills in `.claude/skills/`:
 - `/new-feature <description>` — Full workflow: plan → implement → test → validate → document
 - `/fix-bug <description>` — Investigate → fix → regression test → validate
 - `/implement-loop <task>` — Autonomous loop: code until lint+format+build+test all pass (max 10 iterations)
+- `/arca-assisted-navigation <flow>` — Record a live ARCA/SiRADIG browsing session, then generate Playwright automation code, tests, and docs. Auto-triggers when working on automation tasks.
 
 ## Acceptance Criteria
 
