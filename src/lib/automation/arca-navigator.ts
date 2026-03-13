@@ -22,7 +22,8 @@ export async function loginToArca(
 
   try {
     log("Navegando a la pagina de login de ARCA...");
-    await page.goto(sel.url, { waitUntil: "networkidle" });
+    await page.goto(sel.url, { waitUntil: "domcontentloaded" });
+    await page.locator(sel.cuitInput).waitFor({ state: "visible", timeout: 30_000 });
 
     await capture(await page.screenshot({ fullPage: true }), "login-page", "Pagina de login ARCA");
 
@@ -42,7 +43,10 @@ export async function loginToArca(
     log("Ingresando CUIT...");
     await page.fill(sel.cuitInput, cuit);
     await page.click(sel.cuitSubmit);
-    await page.waitForLoadState("networkidle");
+
+    // Wait for password field (CUIT submit may trigger full navigation or AJAX update)
+    log("Esperando campo de clave fiscal...");
+    await page.locator(sel.claveInput).waitFor({ state: "visible", timeout: 30_000 });
 
     await capture(await page.screenshot({ fullPage: true }), "after-cuit", "CUIT ingresado");
 
@@ -50,7 +54,16 @@ export async function loginToArca(
     log("Ingresando clave fiscal...");
     await page.fill(sel.claveInput, clave);
     await page.click(sel.loginSubmit);
-    await page.waitForLoadState("networkidle");
+
+    // Wait for navigation away from login pages (login.xhtml → loginClave.xhtml → portal)
+    try {
+      await page.waitForURL((url) => !url.toString().includes("/contribuyente_/"), {
+        timeout: 30_000,
+      });
+      await page.waitForLoadState("load");
+    } catch {
+      // If URL didn't change, check for error messages below
+    }
 
     // Check for errors
     const errorEl = await page.$(sel.errorMessage);
