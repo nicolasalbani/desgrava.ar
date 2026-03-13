@@ -27,6 +27,7 @@ interface PendingInvoice {
   _count: { automationJobs: number };
   fiscalYear: number;
   fiscalMonth: number;
+  familyDependentId: string | null;
 }
 
 function isFutureMonth(inv: PendingInvoice): boolean {
@@ -111,6 +112,14 @@ export function PendingInvoicesPanel({
       if (inv && inv.fiscalYear !== fiscalYear) {
         toast.error(
           `"${inv.providerName || inv.providerCuit}" es del año ${inv.fiscalYear}, pero el año fiscal activo es ${fiscalYear}.`,
+          { duration: 6000 },
+        );
+        failCount++;
+        continue;
+      }
+      if (inv && inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId) {
+        toast.error(
+          `"${inv.providerName || "Factura"}" es un gasto educativo sin familiar vinculado. Vinculá un familiar antes de enviar.`,
           { duration: 6000 },
         );
         failCount++;

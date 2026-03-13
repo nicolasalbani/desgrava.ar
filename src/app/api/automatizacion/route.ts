@@ -50,6 +50,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 });
       }
 
+      // Prevent submitting education invoices without a linked dependent
+      if (invoice.deductionCategory === "GASTOS_EDUCATIVOS" && !invoice.familyDependentId) {
+        return NextResponse.json(
+          {
+            error:
+              "Los gastos educativos requieren un familiar vinculado antes de enviar a SiRADIG",
+          },
+          { status: 400 },
+        );
+      }
+
       // Prevent submitting invoices for future months
       const now = new Date();
       const currentYear = now.getFullYear();

@@ -339,6 +339,15 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
         failCount++;
         continue;
       }
+      if (inv && inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId) {
+        toast.error(
+          `"${inv.providerName || "Factura"}" es un gasto educativo sin familiar vinculado. Vinculá un familiar antes de enviar.`,
+          { duration: 6000 },
+        );
+        failedIds.add(invoiceId);
+        failCount++;
+        continue;
+      }
       try {
         const res = await fetch("/api/automatizacion", {
           method: "POST",
