@@ -43,6 +43,11 @@ Once the plan is approved:
    - Use Zod for all input validation
    - Spanish names only in ARCA/SiRADIG automation code, English everywhere else
    - Follow the Jony Ive design system: clean whites, `border-gray-200`, `bg-gray-50`, generous whitespace
+   - **All UI must support dark mode.** The project uses `next-themes` with Tailwind's `dark:` variant (`@custom-variant dark (&:is(.dark *))`). Rules:
+     - **Never use raw color classes** like `bg-gray-50`, `bg-white`, `text-gray-600` without a `dark:` counterpart. Prefer semantic tokens (`bg-muted`, `text-muted-foreground`, `bg-card`, `border-border`) which auto-adapt.
+     - When semantic tokens aren't sufficient (e.g. success/error states), always pair light and dark variants: `bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 text-green-700 dark:text-green-400`.
+     - Interactive states need dark variants: `hover:bg-accent dark:hover:bg-accent/50`.
+     - Semi-transparent overlays work well in dark mode: `dark:bg-input/30`, `dark:border-input`.
 
 3. Run `npm run lint` and `npm run format:check` after implementation. Fix any issues.
 

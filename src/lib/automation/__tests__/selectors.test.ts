@@ -58,10 +58,14 @@ describe("ARCA_SELECTORS", () => {
       expect(ARCA_SELECTORS.siradig.errorContainer).toBeDefined();
     });
 
-    it("all siradig selectors are non-empty strings", () => {
+    it("all top-level siradig selectors are non-empty strings", () => {
       for (const [key, value] of Object.entries(ARCA_SELECTORS.siradig)) {
-        expect(typeof value, `siradig.${key} should be a string`).toBe("string");
-        expect(value.length, `siradig.${key} should be non-empty`).toBeGreaterThan(0);
+        if (typeof value === "string") {
+          expect(value.length, `siradig.${key} should be non-empty`).toBeGreaterThan(0);
+        } else {
+          // nested selector group (e.g. cargasFamilia)
+          expect(typeof value, `siradig.${key} should be an object`).toBe("object");
+        }
       }
     });
 
@@ -89,6 +93,15 @@ describe("ARCA_SELECTORS", () => {
       for (const [key, value] of Object.entries(ARCA_SELECTORS.siradig)) {
         expect(value, `siradig.${key} should not be null`).not.toBeNull();
         expect(value, `siradig.${key} should not be undefined`).not.toBeUndefined();
+        if (typeof value === "object") {
+          for (const [subKey, subValue] of Object.entries(value)) {
+            expect(subValue, `siradig.${key}.${subKey} should not be null`).not.toBeNull();
+            expect(
+              subValue,
+              `siradig.${key}.${subKey} should not be undefined`,
+            ).not.toBeUndefined();
+          }
+        }
       }
     });
   });

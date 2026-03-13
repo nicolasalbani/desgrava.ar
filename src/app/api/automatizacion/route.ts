@@ -13,7 +13,33 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { invoiceId, jobType = "SUBMIT_INVOICE" } = body;
+    const { invoiceId, jobType = "SUBMIT_INVOICE", fiscalYear } = body;
+
+    // PULL_FAMILY_DEPENDENTS doesn't need an invoice
+    if (jobType === "PULL_FAMILY_DEPENDENTS") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType: "PULL_FAMILY_DEPENDENTS",
+          fiscalYear,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
 
     // Verify invoice belongs to user
     if (invoiceId) {

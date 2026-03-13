@@ -9,6 +9,7 @@ import {
   isIndumentariaTrabajoCategory,
   isSchoolProvider,
 } from "./deduction-mapper";
+import { ARCA_SELECTORS } from "./selectors";
 import type { ScreenshotCallback } from "./arca-navigator";
 
 export interface InvoiceData {
@@ -824,5 +825,220 @@ export async function submitDeduction(
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error guardando deduccion: ${msg}`);
     return { success: false, error: msg };
+  }
+}
+
+// ── Cargas de Familia extraction ──────────────────────────────
+
+/**
+ * SiRADIG uses numeric codes for document types.
+ * Maps the select option value to our FamilyDependent tipoDoc string.
+ */
+const SIRADIG_TIPO_DOC_MAP: Record<string, string> = {
+  "80": "CUIT",
+  "86": "CUIL",
+  "87": "CDI",
+  "96": "DNI",
+  "89": "LC",
+  "90": "LE",
+};
+
+export function mapSiradigTipoDoc(siradigValue: string): string {
+  return SIRADIG_TIPO_DOC_MAP[siradigValue] ?? siradigValue;
+}
+
+export interface SiradigFamilyDependent {
+  tipoDoc: string;
+  numeroDoc: string;
+  apellido: string;
+  nombre: string;
+  fechaNacimiento: string;
+  parentesco: string;
+  fechaUnion: string;
+  porcentajeDed: string;
+  cuitOtroDed: string;
+  familiaCargo: boolean;
+  residente: boolean;
+  tieneIngresos: boolean;
+  montoIngresos: string;
+  mesDesde: number;
+  mesHasta: number;
+  proximosPeriodos: boolean;
+}
+
+export interface ExtractCargasFamiliaResult {
+  success: boolean;
+  error?: string;
+  dependents: SiradigFamilyDependent[];
+}
+
+/**
+ * Navigate from the F572 form page to the "Cargas de Familia" section
+ * by expanding the "1 - Detalles de las cargas de familia" accordion.
+ *
+ * Prerequisite: page must be on verMenuDeducciones.do (the F572 form page).
+ */
+export async function navigateToCargasFamilia(
+  page: Page,
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback,
+): Promise<FillResult> {
+  const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
+  const sel = ARCA_SELECTORS.siradig.cargasFamilia;
+
+  try {
+    log("Expandiendo seccion de Cargas de Familia...");
+    const accordionLink = page.locator(sel.accordionTab);
+
+    // The accordion tab may use a link inside a heading — click the link text
+    const tabLink = page.getByText("Detalles de las cargas de familia").first();
+    const target = (await accordionLink.isVisible().catch(() => false)) ? accordionLink : tabLink;
+
+    await target.waitFor({ timeout: 15000 });
+    await target.click();
+    await page.waitForTimeout(1500); // accordion animation
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "cargas-familia-section",
+      "Seccion de cargas de familia expandida",
+    );
+
+    // Verify the table container is visible
+    const tableContainer = page.locator(sel.tableContainer);
+    await tableContainer.waitFor({ state: "visible", timeout: 10000 });
+
+    log("Seccion de cargas de familia abierta");
+    return { success: true };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Error desconocido";
+    log(`Error abriendo seccion de cargas de familia: ${msg}`);
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Extract all family dependents from SiRADIG by clicking the edit button
+ * on each row, reading all form fields, then clicking "Volver".
+ *
+ * Prerequisite: the "Cargas de Familia" accordion must already be expanded
+ * (call navigateToCargasFamilia first).
+ */
+export async function extractCargasFamilia(
+  page: Page,
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback,
+): Promise<ExtractCargasFamiliaResult> {
+  const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
+  const sel = ARCA_SELECTORS.siradig.cargasFamilia;
+
+  try {
+    const rows = page.locator(sel.tableRows);
+    const rowCount = await rows.count();
+
+    if (rowCount === 0) {
+      log("No se encontraron cargas de familia en SiRADIG");
+      return { success: true, dependents: [] };
+    }
+
+    log(`Encontradas ${rowCount} cargas de familia. Extrayendo datos...`);
+    const dependents: SiradigFamilyDependent[] = [];
+
+    for (let i = 0; i < rowCount; i++) {
+      log(`Leyendo carga de familia ${i + 1} de ${rowCount}...`);
+
+      // Re-query rows each iteration since the DOM reloads after "Volver"
+      const currentRows = page.locator(sel.tableRows);
+      const editBtn = currentRows.nth(i).locator(sel.editButton);
+      await editBtn.waitFor({ state: "visible", timeout: 10000 });
+      await editBtn.click();
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(500);
+
+      // Read all form fields
+      const data = await page.evaluate((selectors) => {
+        const getSelectValue = (id: string) => {
+          const el = document.querySelector(id) as HTMLSelectElement | null;
+          return el?.value ?? "";
+        };
+        const getInputValue = (id: string) => {
+          const el = document.querySelector(id) as HTMLInputElement | null;
+          return el?.value ?? "";
+        };
+        const getCheckboxChecked = (id: string) => {
+          const el = document.querySelector(id) as HTMLInputElement | null;
+          return el?.checked ?? false;
+        };
+
+        return {
+          tipoDoc: getSelectValue(selectors.formTipoDoc),
+          numeroDoc: getInputValue(selectors.formNumeroDoc),
+          apellido: getInputValue(selectors.formApellido),
+          nombre: getInputValue(selectors.formNombre),
+          fechaNacimiento: getInputValue(selectors.formFechaNacimiento),
+          parentesco: getSelectValue(selectors.formParentesco),
+          fechaCasamiento: getInputValue(selectors.formFechaCasamiento),
+          porcentajeDed: getSelectValue(selectors.formPorcentajeDed),
+          cuitOtroDed: getInputValue(selectors.formCuitOtroDed),
+          familiaCargo: getSelectValue(selectors.formFamiliaCargo),
+          residente: getSelectValue(selectors.formResidente),
+          ingresos: getSelectValue(selectors.formIngresos),
+          montoIngresos: getInputValue(selectors.formMontoIngresos),
+          mesDesde: getSelectValue(selectors.formMesDesde),
+          mesHasta: getSelectValue(selectors.formMesHasta),
+          proximosPeriodos: getCheckboxChecked(selectors.formProximosPeriodos),
+        };
+      }, sel);
+
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        `carga-familia-${i + 1}`,
+        `Carga de familia ${i + 1}: ${data.apellido}, ${data.nombre}`,
+      );
+
+      dependents.push({
+        tipoDoc: mapSiradigTipoDoc(data.tipoDoc),
+        numeroDoc: data.numeroDoc,
+        apellido: data.apellido,
+        nombre: data.nombre,
+        fechaNacimiento: data.fechaNacimiento,
+        parentesco: data.parentesco,
+        fechaUnion: data.fechaCasamiento,
+        porcentajeDed: data.porcentajeDed,
+        cuitOtroDed: data.cuitOtroDed,
+        familiaCargo: data.familiaCargo === "S",
+        residente: data.residente === "S",
+        tieneIngresos: data.ingresos === "S",
+        montoIngresos: data.montoIngresos,
+        mesDesde: parseInt(data.mesDesde, 10) || 1,
+        mesHasta: parseInt(data.mesHasta, 10) || 12,
+        proximosPeriodos: data.proximosPeriodos,
+      });
+
+      log(
+        `Extraida: ${data.apellido}, ${data.nombre} (${mapSiradigTipoDoc(data.tipoDoc)} ${data.numeroDoc})`,
+      );
+
+      // Go back to the table view
+      const volverBtn = page.getByText("Volver", { exact: true }).first();
+      await volverBtn.click();
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(1000);
+    }
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "cargas-familia-extracted",
+      `${dependents.length} cargas de familia extraidas`,
+    );
+
+    log(`Extraccion completada: ${dependents.length} cargas de familia`);
+    return { success: true, dependents };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Error desconocido";
+    log(`Error extrayendo cargas de familia: ${msg}`);
+    return { success: false, error: msg, dependents: [] };
   }
 }

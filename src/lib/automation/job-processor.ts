@@ -1,3 +1,4 @@
+import type { Page } from "playwright";
 import { prismaDirectClient as prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto/encryption";
 import { getContext, releaseContext, enqueueJob } from "./browser-pool";
@@ -6,7 +7,10 @@ import {
   navigateToDeductionSection,
   fillDeductionForm,
   submitDeduction,
+  navigateToCargasFamilia,
+  extractCargasFamilia,
 } from "./siradig-navigator";
+import type { SiradigFamilyDependent } from "./siradig-navigator";
 import {
   saveScreenshot,
   ensureVideoDir,
@@ -64,6 +68,151 @@ async function appendLog(jobId: string, message: string, onLog?: LogCallback) {
     where: { id: jobId },
     data: {
       logs: logs,
+    },
+  });
+}
+
+/**
+ * Upsert extracted SiRADIG family dependents into the database.
+ * Matches by (userId, fiscalYear, numeroDoc). Returns counts of created/updated.
+ */
+async function upsertFamilyDependents(
+  userId: string,
+  fiscalYear: number,
+  dependents: SiradigFamilyDependent[],
+): Promise<{ created: number; updated: number }> {
+  let created = 0;
+  let updated = 0;
+
+  for (const dep of dependents) {
+    const existing = await prisma.familyDependent.findFirst({
+      where: { userId, fiscalYear, numeroDoc: dep.numeroDoc },
+    });
+
+    const data = {
+      tipoDoc: dep.tipoDoc,
+      numeroDoc: dep.numeroDoc,
+      apellido: dep.apellido,
+      nombre: dep.nombre,
+      fechaNacimiento: dep.fechaNacimiento || null,
+      parentesco: dep.parentesco,
+      fechaUnion: dep.fechaUnion || null,
+      porcentajeDed: dep.porcentajeDed || null,
+      cuitOtroDed: dep.cuitOtroDed || null,
+      familiaCargo: dep.familiaCargo,
+      residente: dep.residente,
+      tieneIngresos: dep.tieneIngresos,
+      montoIngresos: dep.montoIngresos ? dep.montoIngresos : null,
+      mesDesde: dep.mesDesde,
+      mesHasta: dep.mesHasta,
+      proximosPeriodos: dep.proximosPeriodos,
+    };
+
+    if (existing) {
+      await prisma.familyDependent.update({
+        where: { id: existing.id },
+        data,
+      });
+      updated++;
+    } else {
+      await prisma.familyDependent.create({
+        data: { ...data, userId, fiscalYear },
+      });
+      created++;
+    }
+  }
+
+  return { created, updated };
+}
+
+/**
+ * Process a PULL_FAMILY_DEPENDENTS job:
+ * navigate to cargas de familia section, extract all rows, upsert into DB.
+ */
+async function processPullFamilyDependents(
+  siradigPage: Page,
+  job: { userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  // Navigate to "Carga de Formulario" and expand cargas de familia
+  const navResult = await navigateToDeductionSection(
+    siradigPage,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!navResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Expand the cargas de familia accordion
+  const cfNavResult = await navigateToCargasFamilia(
+    siradigPage,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!cfNavResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: cfNavResult.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Extract all family dependents
+  const extractResult = await extractCargasFamilia(
+    siradigPage,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!extractResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: extractResult.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Upsert into database
+  await appendLogFn(jobId, "Sincronizando cargas de familia con la base de datos...", onLog);
+  const { created, updated } = await upsertFamilyDependents(
+    job.userId,
+    fiscalYear,
+    extractResult.dependents,
+  );
+
+  const summary = `Importacion completada: ${created} creadas, ${updated} actualizadas`;
+  await appendLogFn(jobId, summary, onLog);
+
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData: JSON.parse(
+        JSON.stringify({
+          created,
+          updated,
+          total: extractResult.dependents.length,
+          dependents: extractResult.dependents,
+        }),
+      ),
     },
   });
 }
@@ -166,6 +315,19 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               completedAt: new Date(),
             },
           });
+          return;
+        }
+
+        // ── PULL_FAMILY_DEPENDENTS flow ──
+        if (job.jobType === "PULL_FAMILY_DEPENDENTS") {
+          await processPullFamilyDependents(
+            siradigPage,
+            job,
+            jobId,
+            onLog,
+            onScreenshot,
+            appendLog,
+          );
           return;
         }
 

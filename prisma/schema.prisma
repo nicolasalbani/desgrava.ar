@@ -129,6 +129,8 @@ model AutomationJob {
   logs          Json          @default("[]")
   screenshotUrl String?
   errorMessage  String?
+  resultData    Json?
+  fiscalYear    Int?
   startedAt     DateTime?
   completedAt   DateTime?
   createdAt     DateTime      @default(now())
@@ -218,6 +220,7 @@ enum JobType {
   VALIDATE_CREDENTIALS
   SUBMIT_INVOICE
   BULK_SUBMIT
+  PULL_FAMILY_DEPENDENTS
 }
 
 enum JobStatus {

@@ -39,6 +39,34 @@ export const ARCA_SELECTORS = {
     confirmButton: "button:has-text('Confirmar'), button:has-text('Aceptar')",
     successMessage: ".alert-success, .mensaje-exito",
     errorContainer: ".alert-danger, .mensaje-error",
+
+    // Cargas de familia section
+    cargasFamilia: {
+      accordionTab: "#header_cargas_familia",
+      sectionContainer: "#seccion_cargas_familia",
+      tableContainer: "#div_tabla_cargas_familia",
+      table: "#nueva_tabla_cargas_familia",
+      tableRows: "#nueva_tabla_cargas_familia tbody tr",
+      editButton: ".act_editar",
+      // Edit form fields
+      formTipoDoc: "#idTipoDoc",
+      formNumeroDoc: "#numeroDoc",
+      formApellido: "#apellido",
+      formNombre: "#nombre",
+      formFechaNacimiento: "#fechaNacimiento",
+      formParentesco: "#idParentesco",
+      formFechaCasamiento: "#fechaCasamiento",
+      formPorcentajeDed: "#porcentajeDed",
+      formCuitOtroDed: "#cuitOtroDed",
+      formFamiliaCargo: "#familiaCargo",
+      formResidente: "#residente",
+      formIngresos: "#ingresos",
+      formMontoIngresos: "#montoIngresos",
+      formMesDesde: "#mesDesde",
+      formMesHasta: "#mesHasta",
+      formProximosPeriodos: "#proximosPeriodos",
+      formVolverBtn: "#btn_volver, button:has-text('Volver')",
+    },
   },
 } as const;
 
@@ -52,4 +80,7 @@ export const SELECTOR_DESCRIPTIONS: Record<string, string> = {
   "siradig.cuitProviderInput": "Campo CUIT del proveedor",
   "siradig.amountInput": "Campo de monto",
   "siradig.saveButton": "Boton Guardar",
+  "siradig.cargasFamilia.accordionTab": "Seccion Cargas de Familia (accordion)",
+  "siradig.cargasFamilia.table": "Tabla de cargas de familia",
+  "siradig.cargasFamilia.editButton": "Boton editar carga de familia",
 };

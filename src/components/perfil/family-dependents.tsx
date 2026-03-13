@@ -33,8 +33,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Pencil, Trash2, Users } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Users, Download } from "lucide-react";
 import { toast } from "sonner";
+import { useRef, useCallback } from "react";
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -515,6 +516,89 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Import from SiRADIG state
+  const [importing, setImporting] = useState(false);
+  const [importLogs, setImportLogs] = useState<string[]>([]);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [highlightedIds, setHighlightedIds] = useState<Map<string, "created" | "updated">>(
+    new Map(),
+  );
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const dependentsRef = useRef<FamilyDependent[]>([]);
+
+  // Keep ref in sync for use in SSE callbacks
+  useEffect(() => {
+    dependentsRef.current = dependents;
+  }, [dependents]);
+
+  // Connect to SSE for a given job and handle completion
+  const connectToJobSSE = useCallback(
+    (jobId: string) => {
+      eventSourceRef.current?.close();
+
+      const es = new EventSource(`/api/automatizacion/${jobId}/logs`);
+      eventSourceRef.current = es;
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.log) {
+            setImportLogs((prev) => [...prev, data.log]);
+          }
+          if (data.status) {
+            setImportStatus(data.status);
+          }
+          if (data.done) {
+            es.close();
+            eventSourceRef.current = null;
+
+            if (data.status === "COMPLETED") {
+              fetch(`/api/cargas-familia?year=${fiscalYear}`)
+                .then((r) => r.json())
+                .then((d) => {
+                  const newDeps: FamilyDependent[] = d.dependents ?? [];
+                  const oldDocNums = new Set(dependentsRef.current.map((dep) => dep.numeroDoc));
+                  const highlights = new Map<string, "created" | "updated">();
+                  for (const dep of newDeps) {
+                    if (!oldDocNums.has(dep.numeroDoc)) {
+                      highlights.set(dep.id, "created");
+                    } else {
+                      const old = dependentsRef.current.find(
+                        (dd) => dd.numeroDoc === dep.numeroDoc,
+                      );
+                      if (old && JSON.stringify(old) !== JSON.stringify(dep)) {
+                        highlights.set(dep.id, "updated");
+                      }
+                    }
+                  }
+                  setDependents(newDeps);
+                  setHighlightedIds(highlights);
+                  setTimeout(() => setHighlightedIds(new Map()), 3000);
+                });
+
+              toast.success("Cargas de familia importadas desde SiRADIG");
+            } else {
+              toast.error("Error al importar cargas de familia");
+            }
+            setImporting(false);
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      es.onerror = () => {
+        es.close();
+        eventSourceRef.current = null;
+        setImporting(false);
+        setImportStatus("FAILED");
+        toast.error("Se perdio la conexion con el servidor");
+      };
+    },
+    [fiscalYear],
+  );
+
   useEffect(() => {
     setLoading(true);
     fetch(`/api/cargas-familia?year=${fiscalYear}`)
@@ -523,6 +607,48 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
       .catch(() => toast.error("Error al cargar las cargas de familia"))
       .finally(() => setLoading(false));
   }, [fiscalYear]);
+
+  // On mount, check for an active PULL_FAMILY_DEPENDENTS job and reconnect
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkActiveJob() {
+      try {
+        const res = await fetch("/api/automatizacion");
+        if (!res.ok) return;
+        const { jobs } = await res.json();
+        const activeJob = jobs.find(
+          (j: { jobType: string; fiscalYear?: number | null; status: string }) =>
+            j.jobType === "PULL_FAMILY_DEPENDENTS" &&
+            j.fiscalYear === fiscalYear &&
+            (j.status === "PENDING" || j.status === "RUNNING"),
+        );
+        if (activeJob && !cancelled) {
+          setImporting(true);
+          // Restore existing logs from DB
+          if (Array.isArray(activeJob.logs) && activeJob.logs.length > 0) {
+            setImportLogs(activeJob.logs);
+          }
+          setImportStatus(activeJob.status);
+          connectToJobSSE(activeJob.id);
+        }
+      } catch {
+        // Best-effort; don't block the page
+      }
+    }
+
+    checkActiveJob();
+    return () => {
+      cancelled = true;
+    };
+  }, [fiscalYear, connectToJobSSE]);
+
+  // Clean up SSE on unmount
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+    };
+  }, []);
 
   function openAdd() {
     setEditing(null);
@@ -561,63 +687,145 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
     }
   }
 
+  const handleImportFromSiradig = useCallback(async () => {
+    setImporting(true);
+    setImportLogs([]);
+    setImportStatus(null);
+    setHighlightedIds(new Map());
+
+    try {
+      const res = await fetch("/api/automatizacion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobType: "PULL_FAMILY_DEPENDENTS",
+          fiscalYear,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Error al iniciar importacion");
+      }
+
+      const { job } = await res.json();
+      connectToJobSSE(job.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al importar");
+      setImporting(false);
+    }
+  }, [fiscalYear, connectToJobSSE]);
+
   return (
     <div className="space-y-4">
       {loading ? (
         <div className="flex justify-center py-6">
           <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
         </div>
-      ) : dependents.length === 0 ? (
+      ) : dependents.length === 0 && !importing ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">
           <div className="bg-muted mb-3 flex h-10 w-10 items-center justify-center rounded-full">
             <Users className="text-muted-foreground/50 h-5 w-5" />
           </div>
           <p className="text-muted-foreground/60 text-sm">
-            No declaraste cargas de familia todavía.
+            No declaraste cargas de familia todavia.
           </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {dependents.map((dep) => (
-            <div
-              key={dep.id}
-              className="border-border bg-muted/20 flex items-center justify-between rounded-xl border px-4 py-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {dep.apellido}, {dep.nombre}
-                </p>
-                <p className="text-muted-foreground/60 mt-0.5 text-xs">
-                  {parentescoLabel(dep.parentesco)} · {dep.tipoDoc} {dep.numeroDoc}
-                </p>
+          {dependents.map((dep) => {
+            const highlight = highlightedIds.get(dep.id);
+            return (
+              <div
+                key={dep.id}
+                className={`flex items-center justify-between rounded-xl border px-4 py-3 transition-all duration-700 ${
+                  highlight === "created"
+                    ? "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30"
+                    : highlight === "updated"
+                      ? "border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30"
+                      : "border-border bg-muted/20"
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium">
+                      {dep.apellido}, {dep.nombre}
+                    </p>
+                    {highlight === "created" && (
+                      <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/50 dark:text-green-400">
+                        nuevo
+                      </span>
+                    )}
+                    {highlight === "updated" && (
+                      <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/50 dark:text-blue-400">
+                        actualizado
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-muted-foreground/60 mt-0.5 text-xs">
+                    {parentescoLabel(dep.parentesco)} · {dep.tipoDoc} {dep.numeroDoc}
+                  </p>
+                </div>
+                <div className="ml-3 flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-foreground h-8 w-8"
+                    onClick={() => openEdit(dep)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-destructive h-8 w-8"
+                    onClick={() => setDeleteId(dep.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
-              <div className="ml-3 flex shrink-0 items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-foreground h-8 w-8"
-                  onClick={() => openEdit(dep)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-destructive h-8 w-8"
-                  onClick={() => setDeleteId(dep.id)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <Button variant="outline" size="sm" onClick={openAdd}>
-        <Plus className="mr-1.5 h-3.5 w-3.5" />
-        Agregar carga de familia
-      </Button>
+      {/* Import progress */}
+      {importing && (
+        <div className="border-border bg-muted rounded-xl border p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
+            <span className="text-sm font-medium">Importando desde SiRADIG...</span>
+            {importStatus && (
+              <span className="text-muted-foreground text-xs">({importStatus})</span>
+            )}
+          </div>
+          {importLogs.length > 0 && (
+            <div className="bg-card max-h-32 overflow-y-auto rounded-lg p-2">
+              {importLogs.slice(-8).map((log, i) => (
+                <p key={i} className="text-muted-foreground text-xs leading-relaxed">
+                  {log}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={openAdd}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Agregar carga de familia
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleImportFromSiradig} disabled={importing}>
+          {importing ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          Importar desde SiRADIG
+        </Button>
+      </div>
 
       <DependentDialog
         open={dialogOpen}
@@ -632,7 +840,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
           <AlertDialogHeader>
             <AlertDialogTitle>Eliminar carga de familia</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará esta carga de familia. Esta acción no se puede deshacer.
+              Se eliminara esta carga de familia. Esta accion no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
