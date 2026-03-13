@@ -15,7 +15,7 @@ import { useState, useEffect } from "react";
 const themeIcons = { light: Sun, dark: Moon, system: Monitor } as const;
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_OPTIONS = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
+const YEAR_OPTIONS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
 
 export function DashboardHeader() {
   const { data: session } = useSession();
