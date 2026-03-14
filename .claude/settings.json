@@ -47,7 +47,16 @@
       "Bash(agent-browser click:*)",
       "Bash(agent-browser wait:*)",
       "Bash(agent-browser eval:*)",
-      "Bash(agent-browser scroll:*)"
+      "Bash(agent-browser scroll:*)",
+      "Bash(agent-browser --headed --session arca-assisted open https://auth.afip.gob.ar/contribuyente_/login.xhtml)",
+      "Bash(agent-browser navigate:*)",
+      "Bash(agent-browser --headed --session arca-mis-comprobantes open https://auth.afip.gob.ar/contribuyente_/login.xhtml)",
+      "Bash(agent-browser --version)",
+      "Bash(agent-browser --headed --session arca-assisted --profile /Users/nicolasalbani/Github/desgrava.ar/.automation-data/browser-profile open https://auth.afip.gob.ar/contribuyente_/login.xhtml)",
+      "Bash(agent-browser --session arca-assisted snapshot -i)",
+      "Bash(agent-browser --headed --profile /Users/nicolasalbani/Github/desgrava.ar/.automation-data/browser-profile open https://auth.afip.gob.ar/contribuyente_/login.xhtml)",
+      "Bash(agent-browser fill:*)",
+      "Bash(agent-browser find:*)"
     ],
     "deny": ["Bash(git push --force*)", "Bash(git reset --hard*)", "Bash(git clean -f*)"],
     "additionalDirectories": [
