@@ -15,6 +15,7 @@ import type { SiradigFamilyDependent } from "./siradig-navigator";
 import { navigateToMisComprobantes } from "./mis-comprobantes-navigator";
 import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } from "./csv-parser";
 import { classifyCategory } from "@/lib/ocr/category-classifier";
+import { resolveCategory, getCatalogEntry } from "@/lib/catalog/provider-catalog";
 import {
   saveScreenshot,
   ensureVideoDir,
@@ -464,6 +465,9 @@ async function processPullComprobantes(
   let skipped = 0;
   let errors = 0;
 
+  // Batch cache: resolve each CUIT once via catalog, reuse for all invoices from same provider
+  const categoryCache = new Map<string, string>();
+
   for (let i = 0; i < comprobantes.length; i++) {
     const comp = comprobantes[i];
     const key = invoiceDedupeKey(comp.providerCuit, comp.invoiceNumber, comp.fiscalYear);
@@ -474,12 +478,17 @@ async function processPullComprobantes(
     }
 
     try {
-      // Classify category using AI
-      const classificationText = [comp.providerName, comp.invoiceType, `Monto: $${comp.amount}`]
-        .filter(Boolean)
-        .join(" | ");
-
-      const category = await classifyCategory(classificationText);
+      // Resolve category via catalog (cached per CUIT within this batch)
+      let category = categoryCache.get(comp.providerCuit);
+      if (!category) {
+        category = await resolveCategory({
+          cuit: comp.providerCuit,
+          providerName: comp.providerName,
+          invoiceType: comp.invoiceType,
+          amount: comp.amount,
+        });
+        categoryCache.set(comp.providerCuit, category);
+      }
 
       await prisma.invoice.create({
         data: {

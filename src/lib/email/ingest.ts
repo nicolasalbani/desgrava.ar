@@ -3,6 +3,7 @@ import { simpleParser } from "mailparser";
 import { prisma } from "@/lib/prisma";
 import { processDocument } from "@/lib/ocr/pipeline";
 import { classifyCategory } from "@/lib/ocr/category-classifier";
+import { resolveCategory } from "@/lib/catalog/provider-catalog";
 import { extractTokenFromEmail } from "@/lib/email/token";
 import { Prisma, DeductionCategory, InvoiceType } from "@/generated/prisma/client";
 import {
@@ -477,8 +478,16 @@ export async function processInboundEmail(
         // Run OCR pipeline
         const ocrResult = await processDocument(buffer, attachment.contentType);
 
-        // Run AI category classification
-        const categoryStr = await classifyCategory(ocrResult.text);
+        // Resolve category via global catalog (falls back to AI classification)
+        const cuit = ocrResult.fields.cuit?.replace(/[-\s]/g, "") ?? "";
+        const categoryStr =
+          cuit.length >= 10
+            ? await resolveCategory({
+                cuit,
+                providerName: ocrResult.fields.providerName ?? undefined,
+                pdfText: ocrResult.text,
+              })
+            : await classifyCategory(ocrResult.text);
         const category = (
           Object.values(DeductionCategory).includes(categoryStr as DeductionCategory)
             ? categoryStr

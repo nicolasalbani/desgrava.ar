@@ -47,6 +47,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `ocr/` — Document processing pipeline (pdf-parse first, Tesseract fallback) + field extraction
 - `automation/` — Playwright-based ARCA/SiRADIG automation: job processor, browser pool, navigators, CSS selectors, deduction mapper
 - `crypto/encryption.ts` — AES-256-GCM for ARCA credentials (encrypt/decrypt at API boundary)
+- `catalog/` — Global provider catalog: CUIT → deduction category lookup with sistemas360.ar enrichment
 - `validators/` — Zod schemas for invoices, credentials, CUIT format
 
 **UI components** (`src/components/`) are split by feature domain (`facturas/`, `automatizacion/`, `credenciales/`, `simulador/`, `landing/`) with shared shadcn components in `ui/` and layout components in `layout/`.
@@ -59,7 +60,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - **ARCA login** (`arca-navigator.ts`) uses `domcontentloaded` + explicit element waits (not `networkidle`) because ARCA's login pages have persistent connections that cause `networkidle` to hang, especially from remote servers. The ARCA portal and SiRADIG popup use `networkidle` for their `goto`/load since they are SPAs that render content via AJAX after the `load` event fires.
 - **SiRADIG** is a single-page jQuery app. After the initial page load, all interactions are AJAX. Use `networkidle` for waits inside SiRADIG (it works because AJAX requests are finite), but never for ARCA login page navigation.
 - **OCR pipeline** tries pdf-parse for text-based PDFs, falls back to Tesseract for scanned documents.
-- **AI category classification** uses OpenAI to auto-detect invoice deduction categories when users upload or create invoices.
+- **AI category classification** uses OpenAI to auto-detect invoice deduction categories when users upload or create invoices. The global `ProviderCatalog` table caches categories by CUIT — once a provider is classified, all users benefit. For unknown CUITs without PDF text, the system enriches classification context by fetching business activity data from `sistemas360.ar/cuit/{cuit}`.
 - **Invoice management** uses Dialog modals for upload and manual entry, with multi-select popover filters (categories, statuses) on the table view.
 - **Credential validation** calls `/api/credenciales/validar` after saving to verify ARCA credentials work.
 - **Path alias**: `@/*` maps to `./src/*`.
@@ -79,6 +80,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `crypto/` — encryption round-trip and tamper detection (17 tests)
 - `automation/` — deduction-mapper, selectors (96 tests)
 - `ocr/` — field-extractor, pipeline (22 tests)
+- `catalog/` — provider-catalog HTML parser (8 tests)
 - `invite-codes` — token creation and validation (15 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.

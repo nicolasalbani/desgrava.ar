@@ -37,8 +37,16 @@ import {
   Mail,
   Upload,
   Download,
+  Tags,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { InvoiceForm } from "./invoice-form";
 import { formatCuit } from "@/lib/validators/cuit";
 import { DEDUCTION_CATEGORIES, DEDUCTION_CATEGORY_LABELS } from "@/lib/validators/invoice";
@@ -114,6 +122,9 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkCategoryUpdating, setBulkCategoryUpdating] = useState(false);
   const [editTarget, setEditTarget] = useState<Invoice | null>(null);
   const [dependents, setDependents] = useState<FamilyDependentRef[]>([]);
 
@@ -315,6 +326,47 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
     }
   }
 
+  async function handleBulkCategoryChange() {
+    if (!bulkCategory || selectedIds.size === 0) return;
+    setBulkCategoryUpdating(true);
+    try {
+      const res = await fetch("/api/facturas/bulk-category", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceIds: Array.from(selectedIds),
+          deductionCategory: bulkCategory,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error ?? "Error al actualizar categorías");
+        return;
+      }
+      const { updated } = await res.json();
+      const label =
+        DEDUCTION_CATEGORY_LABELS[bulkCategory as keyof typeof DEDUCTION_CATEGORY_LABELS] ??
+        bulkCategory;
+      toast.success(
+        `${updated} comprobante${updated === 1 ? "" : "s"} actualizado${updated === 1 ? "" : "s"} a ${label}`,
+      );
+
+      // Update local state
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          selectedIds.has(inv.id) ? { ...inv, deductionCategory: bulkCategory } : inv,
+        ),
+      );
+      setSelectedIds(new Set());
+      setBulkCategoryOpen(false);
+      setBulkCategory("");
+    } catch {
+      toast.error("Error de conexión al actualizar categorías");
+    } finally {
+      setBulkCategoryUpdating(false);
+    }
+  }
+
   async function handleSubmitToSiradig() {
     if (selectedIds.size === 0) return;
     if (fiscalYear === null) {
@@ -436,6 +488,38 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
             )}
             Enviar a SiRADIG
           </Button>
+          <Popover open={bulkCategoryOpen} onOpenChange={setBulkCategoryOpen}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="ghost" disabled={submitting || bulkDeleting}>
+                <Tags className="mr-2 h-4 w-4" />
+                Cambiar categoría
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 space-y-3">
+              <p className="text-sm font-medium">Nueva categoría</p>
+              <Select value={bulkCategory} onValueChange={setBulkCategory}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Seleccionar categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEDUCTION_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {DEDUCTION_CATEGORY_LABELS[cat as keyof typeof DEDUCTION_CATEGORY_LABELS]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                className="w-full"
+                disabled={!bulkCategory || bulkCategoryUpdating}
+                onClick={handleBulkCategoryChange}
+              >
+                {bulkCategoryUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Aplicar a {selectedIds.size} comprobante{selectedIds.size === 1 ? "" : "s"}
+              </Button>
+            </PopoverContent>
+          </Popover>
           {deletableSelectedCount > 0 && (
             <Button
               size="sm"

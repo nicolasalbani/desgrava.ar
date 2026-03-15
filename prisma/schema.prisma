@@ -300,3 +300,22 @@ enum EmailIngestStatus {
   FAILED
   REJECTED
 }
+
+// ─── Provider Catalog (global) ──────────────────────────────
+
+model ProviderCatalog {
+  id                String            @id @default(cuid())
+  cuit              String            @unique
+  razonSocial       String?
+  deductionCategory DeductionCategory
+  source            CatalogSource     @default(AI_INVOICE)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+enum CatalogSource {
+  AI_PDF
+  AI_WEB_LOOKUP
+  AI_INVOICE
+  MANUAL
+}

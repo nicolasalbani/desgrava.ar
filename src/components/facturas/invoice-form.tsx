@@ -203,7 +203,10 @@ export function InvoiceForm({
           const res = await fetch("/api/facturas/classify-category", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: invoiceRawText }),
+            body: JSON.stringify({
+              text: invoiceRawText,
+              cuit: form.getValues("providerCuit") || undefined,
+            }),
           });
           if (!res.ok) return;
           const { category } = await res.json();
