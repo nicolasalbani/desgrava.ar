@@ -209,6 +209,7 @@ enum InvoiceSource {
   PDF
   OCR
   EMAIL
+  ARCA
 }
 
 enum SiradiqStatus {
@@ -227,6 +228,7 @@ enum JobType {
   BULK_SUBMIT
   PULL_FAMILY_DEPENDENTS
   PUSH_FAMILY_DEPENDENTS
+  PULL_COMPROBANTES
 }
 
 enum JobStatus {

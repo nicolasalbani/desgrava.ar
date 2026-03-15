@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, Suspense, type ElementType } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Upload, PenLine, Mail, Copy, Check, X } from "lucide-react";
+import { Upload, PenLine, Mail, Copy, Check, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +14,7 @@ import {
 import { FileUploader } from "@/components/facturas/file-uploader";
 import { InvoiceForm } from "@/components/facturas/invoice-form";
 import { InvoiceList } from "@/components/facturas/invoice-list";
+import { ImportArcaDialog } from "@/components/facturas/import-arca-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -200,6 +201,7 @@ function FacturasInner() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [importArcaOpen, setImportArcaOpen] = useState(false);
   const [showIntro, setShowIntro] = useState(() => searchParams.get("intro") === "1");
 
   function handleInitialLoad(count: number) {
@@ -252,6 +254,11 @@ function FacturasInner() {
         </div>
         <div className="flex items-center gap-2">
           <ExpandingButton
+            icon={Download}
+            label="Importar desde ARCA"
+            onClick={() => setImportArcaOpen(true)}
+          />
+          <ExpandingButton
             icon={PenLine}
             label="Carga manual"
             onClick={openManual}
@@ -285,6 +292,12 @@ function FacturasInner() {
       </div>
 
       <EmailIngestDialog open={emailOpen} onOpenChange={setEmailOpen} />
+
+      <ImportArcaDialog
+        open={importArcaOpen}
+        onOpenChange={setImportArcaOpen}
+        onImportComplete={() => setRefreshKey((k) => k + 1)}
+      />
 
       {/* Upload dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>

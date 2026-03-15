@@ -68,6 +68,34 @@ export const ARCA_SELECTORS = {
       formVolverBtn: "#btn_volver, button:has-text('Volver')",
     },
   },
+  // Mis Comprobantes service (fes.afip.gob.ar/mcmp/)
+  // Verified with /arca-assisted-navigation on 2026-03-14
+  misComprobantes: {
+    // Portal: service link (inside the "Más utilizados" section)
+    serviceLinkText: "Mis Comprobantes",
+    portalServiceLink: "a.full-width:has-text('Mis Comprobantes')",
+
+    // Landing page: choose Emitidos or Recibidos
+    baseUrl: "https://fes.afip.gob.ar/mcmp/jsp/setearContribuyente.do?idContribuyente=0",
+    comprobantesRecibidosBtn: "#btnRecibidos",
+
+    // Search form (Comprobantes Recibidos)
+    fechaEmisionInput: "#fechaEmision", // jQuery daterangepicker — set via JS API
+    searchButton: "#buscarComprobantes",
+
+    // Results (DataTables)
+    resultsTable: "table.dataTable",
+    resultsInfo: ".dataTables_info",
+    exportCsvButton: "button[title='Exportar como CSV']",
+    noResultsMessage: ".dataTables_empty",
+
+    // History tab (for getting idConsulta after search)
+    historialTab: "a[href='#tabHistorial']",
+    historialRows: "#tablaHistorialConsultas tbody tr",
+
+    // CSV download endpoint (server-side)
+    csvDownloadPath: "descargarComprobantes.do",
+  },
 } as const;
 
 // Human-readable descriptions for logging
@@ -83,4 +111,8 @@ export const SELECTOR_DESCRIPTIONS: Record<string, string> = {
   "siradig.cargasFamilia.accordionTab": "Seccion Cargas de Familia (accordion)",
   "siradig.cargasFamilia.table": "Tabla de cargas de familia",
   "siradig.cargasFamilia.editButton": "Boton editar carga de familia",
+  "misComprobantes.comprobantesRecibidosBtn": "Boton Comprobantes Recibidos",
+  "misComprobantes.searchButton": "Boton Buscar comprobantes",
+  "misComprobantes.exportCsvButton": "Boton Exportar como CSV",
+  "misComprobantes.fechaEmisionInput": "Campo de rango de fechas (daterangepicker)",
 };

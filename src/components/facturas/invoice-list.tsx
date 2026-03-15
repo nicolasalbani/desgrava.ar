@@ -36,6 +36,7 @@ import {
   Pencil,
   Mail,
   Upload,
+  Download,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InvoiceForm } from "./invoice-form";
@@ -787,6 +788,11 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                           {(inv.source === "PDF" || inv.source === "OCR") && (
                             <span title="Cargada por archivo">
                               <Upload className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                            </span>
+                          )}
+                          {inv.source === "ARCA" && (
+                            <span title="Importada desde ARCA">
+                              <Download className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
                             </span>
                           )}
                           <div>

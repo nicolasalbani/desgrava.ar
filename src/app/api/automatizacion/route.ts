@@ -15,6 +15,47 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { invoiceId, jobType = "SUBMIT_INVOICE", fiscalYear, familyDependentId } = body;
 
+    // PULL_COMPROBANTES: import invoices from ARCA's "Mis Comprobantes"
+    if (jobType === "PULL_COMPROBANTES") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+
+      // Prevent concurrent pull jobs
+      const activeJob = await prisma.automationJob.findFirst({
+        where: {
+          userId: session.user.id,
+          jobType: "PULL_COMPROBANTES",
+          status: { in: ["PENDING", "RUNNING"] },
+        },
+      });
+      if (activeJob) {
+        return NextResponse.json(
+          { error: "Ya hay una importación de comprobantes en curso" },
+          { status: 409 },
+        );
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType,
+          fiscalYear,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
+
     // PULL_FAMILY_DEPENDENTS doesn't need an invoice
     if (jobType === "PULL_FAMILY_DEPENDENTS") {
       if (!fiscalYear) {

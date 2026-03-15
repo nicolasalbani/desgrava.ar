@@ -12,6 +12,9 @@ import {
   pushCargasFamilia,
 } from "./siradig-navigator";
 import type { SiradigFamilyDependent } from "./siradig-navigator";
+import { navigateToMisComprobantes } from "./mis-comprobantes-navigator";
+import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } from "./csv-parser";
+import { classifyCategory } from "@/lib/ocr/category-classifier";
 import {
   saveScreenshot,
   ensureVideoDir,
@@ -380,6 +383,160 @@ async function processPushFamilyDependents(
   });
 }
 
+/**
+ * Process a PULL_COMPROBANTES job:
+ * navigate to Mis Comprobantes, export CSV, parse, deduplicate, classify, and bulk import.
+ * This flow does NOT go through SiRADIG — it stays on the ARCA portal.
+ */
+async function processPullComprobantes(
+  page: Page,
+  job: { userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  // Navigate to Mis Comprobantes and export CSV
+  const result = await navigateToMisComprobantes(
+    page,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!result.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: result.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  if (!result.csvContent || result.csvContent.trim() === "") {
+    await appendLogFn(jobId, "No se encontraron comprobantes para importar", onLog);
+    setJobStatus(jobId, "COMPLETED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "COMPLETED",
+        completedAt: new Date(),
+        resultData: JSON.parse(JSON.stringify({ total: 0, imported: 0, skipped: 0, errors: 0 })),
+      },
+    });
+    return;
+  }
+
+  // Parse CSV
+  await appendLogFn(jobId, "Procesando CSV...", onLog);
+  let comprobantes;
+  try {
+    const parsed = parseComprobantesCSV(result.csvContent);
+    comprobantes = mapComprobantesToInvoices(parsed, fiscalYear);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error procesando CSV";
+    await appendLogFn(jobId, `Error al parsear CSV: ${msg}`, onLog);
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: msg, completedAt: new Date() },
+    });
+    return;
+  }
+
+  await appendLogFn(jobId, `${comprobantes.length} comprobantes encontrados en el CSV`, onLog);
+
+  // Build deduplication set from existing invoices
+  const existingInvoices = await prisma.invoice.findMany({
+    where: { userId: job.userId, fiscalYear },
+    select: { providerCuit: true, invoiceNumber: true, fiscalYear: true },
+  });
+
+  const existingKeys = new Set(
+    existingInvoices.map((inv) =>
+      invoiceDedupeKey(inv.providerCuit, inv.invoiceNumber, inv.fiscalYear),
+    ),
+  );
+
+  let imported = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (let i = 0; i < comprobantes.length; i++) {
+    const comp = comprobantes[i];
+    const key = invoiceDedupeKey(comp.providerCuit, comp.invoiceNumber, comp.fiscalYear);
+
+    if (existingKeys.has(key)) {
+      skipped++;
+      continue;
+    }
+
+    try {
+      // Classify category using AI
+      const classificationText = [comp.providerName, comp.invoiceType, `Monto: $${comp.amount}`]
+        .filter(Boolean)
+        .join(" | ");
+
+      const category = await classifyCategory(classificationText);
+
+      await prisma.invoice.create({
+        data: {
+          userId: job.userId,
+          providerCuit: comp.providerCuit,
+          providerName: comp.providerName,
+          invoiceType: comp.invoiceType as import("@/generated/prisma/client").InvoiceType,
+          invoiceNumber: comp.invoiceNumber,
+          invoiceDate: comp.invoiceDate,
+          amount: comp.amount,
+          fiscalYear: comp.fiscalYear,
+          fiscalMonth: comp.fiscalMonth,
+          deductionCategory: category as import("@/generated/prisma/client").DeductionCategory,
+          source: "ARCA",
+        },
+      });
+
+      // Add to dedup set so subsequent duplicates in the same CSV are caught
+      existingKeys.add(key);
+      imported++;
+
+      // Log progress every 10 invoices
+      if ((imported + skipped) % 10 === 0 || i === comprobantes.length - 1) {
+        await appendLogFn(
+          jobId,
+          `Progreso: ${imported} importadas, ${skipped} duplicadas, ${errors} errores (${i + 1}/${comprobantes.length})`,
+          onLog,
+        );
+      }
+    } catch (err) {
+      errors++;
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      await appendLogFn(jobId, `Error importando comprobante ${comp.invoiceNumber}: ${msg}`, onLog);
+    }
+  }
+
+  const summary = `Importacion completada: ${imported} importadas, ${skipped} duplicadas, ${errors} errores de ${comprobantes.length} total`;
+  await appendLogFn(jobId, summary, onLog);
+
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData: JSON.parse(
+        JSON.stringify({
+          total: comprobantes.length,
+          imported,
+          skipped,
+          errors,
+        }),
+      ),
+    },
+  });
+}
+
 export async function processJob(jobId: string, onLog?: LogCallback): Promise<void> {
   return enqueueJob(async () => {
     const job = await prisma.automationJob.findUnique({
@@ -458,6 +615,12 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           if (loginResult.hasCaptcha) {
             await appendLog(jobId, "Job pausado por CAPTCHA. Reintenta mas tarde.", onLog);
           }
+          return;
+        }
+
+        // ── PULL_COMPROBANTES flow (stays on ARCA portal, no SiRADIG) ──
+        if (job.jobType === "PULL_COMPROBANTES") {
+          await processPullComprobantes(page, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
 
