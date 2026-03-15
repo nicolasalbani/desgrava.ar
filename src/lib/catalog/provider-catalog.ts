@@ -47,7 +47,7 @@ export async function resolveCategory(input: ResolveCategoryInput): Promise<stri
     const category = await classifyCategory(classificationText);
     await writeCatalogEntry(
       cuit,
-      webInfo.razonSocial ?? input.providerName ?? null,
+      webInfo.razonSocial || input.providerName || null,
       category,
       "AI_WEB_LOOKUP",
     );
@@ -57,7 +57,7 @@ export async function resolveCategory(input: ResolveCategoryInput): Promise<stri
   // 4. Fallback: classify from invoice metadata alone
   const fallbackText = buildClassificationText(input, null);
   const category = await classifyCategory(fallbackText);
-  await writeCatalogEntry(cuit, input.providerName ?? null, category, "AI_INVOICE");
+  await writeCatalogEntry(cuit, input.providerName || null, category, "AI_INVOICE");
   return category;
 }
 
@@ -82,7 +82,7 @@ async function writeCatalogEntry(
       where: { cuit },
       create: {
         cuit,
-        razonSocial: razonSocial ?? undefined,
+        razonSocial: razonSocial || undefined,
         deductionCategory: category as DeductionCategory,
         source,
       },
@@ -128,7 +128,7 @@ export function parseBusinessInfo(html: string): WebLookupResult | null {
   // Title format: "CUIT 30-12345678-9 - RAZON SOCIAL | Sistemas360"
   // The CUIT part has format XX-XXXXXXXX-X, so we skip past the last "- " before the name
   const titleMatch = html.match(/<title>CUIT\s+[\d-]+\s+-\s+(.+?)\s*\|/i);
-  const razonSocial = titleMatch?.[1]?.trim() ?? null;
+  const razonSocial = titleMatch?.[1]?.trim() || null;
 
   // Extract activities from the list items in the "Actividades" section
   // The page uses <li> tags for each activity description
@@ -217,7 +217,7 @@ export function parseCuitOnlineSearch(
   if (linkMatch) {
     const nameRegex = new RegExp(`detalle/${cuit}/[\\w-]+\\.html[^>]*>\\s*([^<]+)`, "i");
     const nameMatch = html.match(nameRegex);
-    razonSocial = nameMatch?.[1]?.trim() ?? null;
+    razonSocial = nameMatch?.[1]?.trim() || null;
   }
 
   if (!razonSocial && !detailSlug) return null;
