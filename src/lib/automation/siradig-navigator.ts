@@ -36,6 +36,8 @@ export interface InvoiceData {
 export interface FillResult {
   success: boolean;
   error?: string;
+  /** True when the error indicates the comprobante already exists in SiRADIG */
+  isDuplicate?: boolean;
   screenshotBuffer?: Buffer;
 }
 
@@ -392,6 +394,7 @@ async function fillAlquilerLocatarioForm(
     await cmpAgregarBtn.waitFor({ state: "visible", timeout: 5000 });
     await cmpAgregarBtn.click();
     await page.waitForTimeout(1500);
+    await dismissDialogOverlay(page);
   } catch (err) {
     log(
       `Advertencia: no se pudo agregar el comprobante (${err instanceof Error ? err.message : err}). Continuando con Guardar...`,
@@ -745,6 +748,7 @@ export async function fillDeductionForm(
     const agregarBtn = page.locator(".ui-dialog-buttonset").getByText("Agregar");
     await agregarBtn.click();
     await page.waitForTimeout(1500); // Wait for dialog to close and table update
+    await dismissDialogOverlay(page);
 
     // Take final screenshot showing the form with the added comprobante
     const screenshotBuffer = await page.screenshot({ fullPage: true });
@@ -781,6 +785,10 @@ export async function submitDeduction(
 
   try {
     log("Guardando deduccion...");
+
+    // Dismiss any lingering dialog overlay before clicking Guardar
+    await dismissDialogOverlay(page);
+
     const saveButton = page.locator("#btn_guardar");
     await saveButton.waitFor({ state: "visible", timeout: 15000 });
     await saveButton.click();
@@ -819,13 +827,18 @@ export async function submitDeduction(
         if (text?.trim()) messages.push(text.trim());
       }
       const errorMsg = messages.join(" | ") || "Error de validacion desconocido";
+      const isDuplicate = isDuplicateError(errorMsg);
       await capture(
         await page.screenshot({ fullPage: true }),
-        "submission-error",
-        "Error al guardar",
+        isDuplicate ? "duplicate-detected" : "submission-error",
+        isDuplicate ? "Comprobante duplicado detectado" : "Error al guardar",
       );
-      log(`Error al guardar: ${errorMsg}`);
-      return { success: false, error: errorMsg };
+      log(
+        isDuplicate
+          ? `Comprobante ya existe en SiRADIG: ${errorMsg}`
+          : `Error al guardar: ${errorMsg}`,
+      );
+      return { success: false, error: errorMsg, isDuplicate };
     }
 
     if (outcome === "success") {
@@ -1540,4 +1553,414 @@ async function fillCargaFamiliaForm(
   await setCheckbox(sel.formProximosPeriodos, dep.proximosPeriodos, "proximos periodos");
 
   log(`  Formulario completado para ${dep.apellido}, ${dep.nombre}`);
+}
+
+// ── Duplicate detection & edit flow ─────────────────────────
+
+/**
+ * Patterns in SiRADIG error messages that indicate a duplicate comprobante.
+ * These are matched case-insensitively against the concatenated error text.
+ */
+const DUPLICATE_PATTERNS = [
+  "ya fue informado",
+  "ya fue cargado",
+  "ya existe",
+  "comprobante existente",
+  "datos duplicados",
+  "comprobante ya",
+  "duplicado",
+];
+
+/**
+ * Check if a SiRADIG error message indicates a duplicate comprobante.
+ */
+export function isDuplicateError(errorMsg: string): boolean {
+  const lower = errorMsg.toLowerCase();
+  return DUPLICATE_PATTERNS.some((pattern) => lower.includes(pattern));
+}
+
+/**
+ * Attempt to find and edit an existing deduction entry in SiRADIG
+ * after a duplicate was detected during submission.
+ *
+ * Dispatches to per-category edit handlers. Categories without a specific
+ * handler return a descriptive error asking the user to edit manually.
+ *
+ * Flow:
+ *  1. Navigate back to the deduction list (#div_listado)
+ *  2. Find the matching row in the category's deduction table
+ *  3. Click edit → fill updated values → save
+ */
+export async function findAndEditExisting(
+  page: Page,
+  invoice: InvoiceData,
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback,
+): Promise<FillResult> {
+  const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
+
+  try {
+    log("Comprobante ya existe en SiRADIG — intentando actualizar...");
+
+    // Step 1: Go back to the deduction list view
+    const volverBtn = page.locator(ARCA_SELECTORS.siradigEdit.editVolverBtn);
+    await volverBtn.click().catch(() => {
+      // Volver might not exist if we're already on the list view
+    });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(1000);
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "edit-list-view",
+      "Lista de deducciones existentes",
+    );
+
+    // Step 2: Dispatch to per-category edit handler
+    switch (invoice.deductionCategory) {
+      case "GASTOS_MEDICOS":
+        return await editStandardDeductionEntry(
+          page,
+          invoice,
+          ARCA_SELECTORS.siradigEdit.gastosMedicosTable as string,
+          "Gastos Medicos",
+          log,
+          capture,
+        );
+
+      case "GASTOS_INDUMENTARIA_TRABAJO":
+        return await editStandardDeductionEntry(
+          page,
+          invoice,
+          ARCA_SELECTORS.siradigEdit.gastosIndumentariaTable as string,
+          "Gastos de Indumentaria",
+          log,
+          capture,
+        );
+
+      case "GASTOS_EDUCATIVOS":
+        return await editStandardDeductionEntry(
+          page,
+          invoice,
+          ARCA_SELECTORS.siradigEdit.gastosEducativosTable as string,
+          "Gastos de Educacion",
+          log,
+          capture,
+        );
+
+      default:
+        log(
+          `Flujo de edicion aun no implementado para categoria: ${invoice.deductionCategory}. ` +
+            `Editar manualmente en SiRADIG.`,
+        );
+        return {
+          success: false,
+          error:
+            `Comprobante duplicado — edicion automatica no disponible para ${invoice.deductionCategory}. ` +
+            `Editar manualmente en SiRADIG.`,
+        };
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Error desconocido";
+    log(`Error al intentar editar comprobante existente: ${msg}`);
+    try {
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "edit-error",
+        "Error editando comprobante existente",
+      );
+    } catch {
+      /* screenshot may fail too */
+    }
+    return { success: false, error: `Error al editar existente: ${msg}` };
+  }
+}
+
+const MONTH_NAMES = [
+  "",
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+/**
+ * Edit an existing standard deduction entry in SiRADIG.
+ * Works for categories whose edit form follows the common pattern:
+ *   - CUIT + monto are read-only
+ *   - Comprobantes sub-table with add/delete
+ *   - Matching by CUIT + Periodo (month name) in the list table
+ *
+ * Verified for: Gastos Médicos (#nueva_tabla_deducciones7),
+ *               Gastos de Educación (#nueva_tabla_deducciones32)
+ * Recorded via /arca-assisted-navigation on 2026-03-15.
+ */
+async function editStandardDeductionEntry(
+  page: Page,
+  invoice: InvoiceData,
+  tableSelector: string,
+  categoryLabel: string,
+  log: (msg: string) => void,
+  capture: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+): Promise<FillResult> {
+  const sel = ARCA_SELECTORS.siradigEdit;
+  const monthName = MONTH_NAMES[invoice.fiscalMonth] || "";
+  const cuitDigits = invoice.providerCuit.replace(/[-\s]/g, "");
+
+  log(`Buscando entrada existente: CUIT ${cuitDigits} / ${monthName} en ${categoryLabel}...`);
+
+  // Find the matching row in the deduction list table
+  const rowIndex = await page.evaluate(
+    ({ tableSelector, listRowSelector, cuit, month }) => {
+      const table = document.querySelector(tableSelector);
+      if (!table) return -1;
+      const rows = table.querySelectorAll(listRowSelector);
+      for (let i = 0; i < rows.length; i++) {
+        const text = rows[i].textContent || "";
+        if (text.includes(cuit) && text.includes(month)) return i;
+      }
+      return -1;
+    },
+    {
+      tableSelector,
+      listRowSelector: sel.listRow as string,
+      cuit: cuitDigits,
+      month: monthName,
+    },
+  );
+
+  if (rowIndex === -1) {
+    log(
+      `No se encontro entrada para CUIT ${cuitDigits} / ${monthName} en la tabla de ${categoryLabel}`,
+    );
+    return {
+      success: false,
+      error: `No se encontro la entrada existente para CUIT ${cuitDigits} / ${monthName}`,
+    };
+  }
+
+  log(`Entrada encontrada en fila ${rowIndex + 1}. Abriendo formulario de edicion...`);
+
+  // Click the edit button on the matching row
+  await page.evaluate(
+    ({ tableSelector, listRowSelector, editBtnSelector, idx }) => {
+      const table = document.querySelector(tableSelector);
+      const rows = table!.querySelectorAll(listRowSelector);
+      const editBtn = rows[idx].querySelector(editBtnSelector);
+      if (editBtn) (editBtn as HTMLElement).click();
+    },
+    {
+      tableSelector: sel.gastosMedicosTable as string,
+      listRowSelector: sel.listRow as string,
+      editBtnSelector: sel.editButton as string,
+      idx: rowIndex,
+    },
+  );
+
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(2000);
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "edit-form-open",
+    "Formulario de edicion abierto",
+  );
+
+  // Verify we're in the edit form by checking for the comprobantes table
+  const hasCompTable = await page
+    .locator(sel.comprobantesTable)
+    .isVisible()
+    .catch(() => false);
+
+  if (!hasCompTable) {
+    log("No se detecto el formulario de edicion (tabla de comprobantes no visible)");
+    return {
+      success: false,
+      error: `No se pudo abrir el formulario de edicion de ${categoryLabel}`,
+    };
+  }
+
+  // Check if the invoice's comprobante already exists in the edit form's table.
+  // SiRADIG rejects re-adding a comprobante with the same number (server-side dedup),
+  // so we only delete+re-add if the number differs. If it matches, just save as-is.
+  const invoiceNumber = invoice.invoiceNumber ?? "";
+  const existingComprobantes = await page.evaluate((tableSelector) => {
+    const table = document.querySelector(tableSelector);
+    if (!table) return [];
+    return Array.from(table.querySelectorAll("tbody tr")).map((tr) => {
+      const cells = Array.from(tr.querySelectorAll("td"));
+      return cells.map((td) => td.textContent?.trim() ?? "");
+    });
+  }, sel.comprobantesTable as string);
+
+  // Check if any existing comprobante matches the invoice number
+  const normalizedInvoiceNum = invoiceNumber.replace(/\s/g, "");
+  const alreadyHasComprobante = existingComprobantes.some((cells) =>
+    cells.some((cell) => cell.replace(/\s/g, "") === normalizedInvoiceNum),
+  );
+
+  if (alreadyHasComprobante) {
+    // Comprobante already exists in this entry — just save without modifying comprobantes.
+    // Deleting and re-adding the same number triggers SiRADIG's duplicate check.
+    log(
+      `Comprobante ${invoiceNumber} ya existe en la entrada — guardando sin modificar comprobantes`,
+    );
+  } else {
+    // Different comprobante — delete existing ones and add the new one
+    log("Eliminando comprobantes existentes...");
+    const deleteCount = await page
+      .locator(`${sel.comprobantesTable} ${sel.deleteComprobanteBtn}`)
+      .count();
+
+    for (let i = 0; i < deleteCount; i++) {
+      await page.locator(`${sel.comprobantesTable} ${sel.deleteComprobanteBtn}`).first().click();
+      await page.waitForTimeout(500);
+    }
+
+    log("Agregando comprobante actualizado...");
+    await page.locator(sel.altaComprobanteBtn).click();
+    await page.waitForTimeout(1000);
+    await fillComprobanteDialog(page, invoice, log);
+  }
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "edit-ready-to-save",
+    "Formulario de edicion listo para guardar",
+  );
+
+  // The form is now ready — submitDeduction (called by the job processor) will click Guardar
+  log("Formulario de edicion listo para guardar");
+  return { success: true };
+}
+
+/**
+ * Fill the "Alta de Comprobante" dialog fields and click Agregar.
+ *
+ * Verified selectors via /arca-assisted-navigation on 2026-03-15:
+ *   #cmpFechaEmision, #cmpTipo, #cmpPuntoVenta, #cmpNumero,
+ *   #cmpMontoFacturado, #cmpMontoReintegrado, button "Agregar"
+ */
+async function fillComprobanteDialog(
+  page: Page,
+  invoice: InvoiceData,
+  log: (msg: string) => void,
+): Promise<void> {
+  const sel = ARCA_SELECTORS.siradigEdit;
+
+  // Wait for the dialog to open
+  await page.locator(sel.cmpTipo).waitFor({ state: "visible", timeout: 10000 });
+
+  // Invoice date
+  if (invoice.invoiceDate) {
+    const dateStr = formatDateDDMMYYYY(invoice.invoiceDate);
+    log(`Ingresando fecha: ${dateStr}`);
+    await page.evaluate((d: string) => {
+      (window as any).$("#cmpFechaEmision").val(d).trigger("change");
+    }, dateStr);
+    await page.waitForTimeout(300);
+  }
+
+  // Invoice type select
+  if (invoice.invoiceType) {
+    const typeValue = mapInvoiceTypeToSiradigValue(invoice.invoiceType);
+    if (typeValue) {
+      log(`Seleccionando tipo de comprobante: ${invoice.invoiceType}`);
+      await page.evaluate((val: string) => {
+        (window as any).$("#cmpTipo").val(val).trigger("change");
+      }, typeValue);
+      await page.waitForTimeout(500);
+    }
+  }
+
+  // Invoice number: split "XXXXX-YYYYYYYY" into punto de venta + numero
+  if (invoice.invoiceNumber) {
+    const parts = invoice.invoiceNumber.split("-");
+    if (parts.length === 2) {
+      log(`Ingresando numero: ${invoice.invoiceNumber}`);
+      await page.locator(sel.cmpPuntoVenta).fill(parts[0]);
+      await page.waitForTimeout(200);
+      await page.locator(sel.cmpNumero).fill(parts[1]);
+      await page.waitForTimeout(200);
+    }
+  }
+
+  // Amount
+  if (invoice.amount) {
+    log(`Ingresando monto: $${invoice.amount}`);
+    const montoField = page.locator(sel.cmpMontoFacturado);
+    await montoField.click();
+    await montoField.fill("");
+    await montoField.pressSequentially(invoice.amount, { delay: 30 });
+    await montoField.press("Tab");
+    await page.waitForTimeout(500);
+  }
+
+  // Monto reintegrado: always 0
+  const reintegrado = page.locator(sel.cmpMontoReintegrado);
+  if (await reintegrado.isVisible().catch(() => false)) {
+    await reintegrado.fill("0");
+    await page.waitForTimeout(200);
+  }
+
+  // Click "Agregar" to add the comprobante to the list
+  const agregarBtn = page.getByText("Agregar", { exact: true }).first();
+  await agregarBtn.click();
+  await page.waitForTimeout(1000);
+
+  // Dismiss dialog overlay if it persists
+  await dismissDialogOverlay(page);
+}
+
+/**
+ * Dismiss any lingering jQuery UI dialog overlay that blocks the page.
+ * SiRADIG's "Alta de Comprobante" dialog sometimes leaves the overlay
+ * (`div.ui-widget-overlay`) visible after the dialog closes, blocking
+ * clicks on buttons like Guardar.
+ */
+async function dismissDialogOverlay(page: Page): Promise<void> {
+  // Wait briefly for the dialog to close naturally
+  await page.waitForTimeout(500);
+
+  // Remove any remaining overlays and close any open dialogs via jQuery
+  await page.evaluate(() => {
+    // Remove overlay elements
+    document.querySelectorAll(".ui-widget-overlay").forEach((el) => el.remove());
+    // Close any open jQuery UI dialogs
+    try {
+      (window as any).$(".ui-dialog-content").dialog("close");
+    } catch {
+      // No open dialogs, ignore
+    }
+  });
+  await page.waitForTimeout(300);
+}
+
+/**
+ * Map InvoiceType enum to SiRADIG's tipoComprobante select value.
+ */
+function mapInvoiceTypeToSiradigValue(invoiceType: string): string | null {
+  const map: Record<string, string> = {
+    FACTURA_A: "1",
+    FACTURA_B: "6",
+    FACTURA_C: "11",
+    NOTA_DEBITO_A: "2",
+    NOTA_DEBITO_B: "7",
+    NOTA_DEBITO_C: "12",
+    NOTA_CREDITO_A: "3",
+    NOTA_CREDITO_B: "8",
+    NOTA_CREDITO_C: "13",
+    RECIBO: "4",
+    TICKET: "83",
+  };
+  return map[invoiceType] ?? null;
 }

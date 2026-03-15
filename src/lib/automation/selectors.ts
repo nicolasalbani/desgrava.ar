@@ -96,6 +96,42 @@ export const ARCA_SELECTORS = {
     // CSV download endpoint (server-side)
     csvDownloadPath: "descargarComprobantes.do",
   },
+
+  // SiRADIG deduction edit flow (verified 2026-03-15)
+  siradigEdit: {
+    // Deduction list tables — each category has its own table
+    gastosMedicosTable: "#nueva_tabla_deducciones7",
+    gastosIndumentariaTable: "#nueva_tabla_deducciones21",
+    gastosEducativosTable: "#nueva_tabla_deducciones32",
+
+    // Common selectors for deduction list rows
+    listRow: "tbody tr[data-id-reg]",
+    editButton: "div.act_editar",
+    deleteRowButton: "div.eliminar",
+
+    // Edit form fields (Gastos Médicos y Paramédicos)
+    editCuit: "#numeroDoc", // read-only in edit mode
+    editDenominacion: "#razonSocial", // read-only in edit mode
+    editPeriodo: "#mesDesde", // select dropdown
+    editMontoTotal: "#montoTotal", // read-only, computed from comprobantes
+
+    // Comprobantes sub-table inside edit form
+    comprobantesTable: "#tabla_comprobantes",
+    altaComprobanteBtn: "#btn_alta_comprobante",
+    deleteComprobanteBtn: "div.eliminar span.ui-icon-close",
+
+    // Comprobante dialog fields (inside "Alta de Comprobante" popup)
+    cmpFechaEmision: "#cmpFechaEmision",
+    cmpTipo: "#cmpTipo",
+    cmpPuntoVenta: "#cmpPuntoVenta",
+    cmpNumero: "#cmpNumero",
+    cmpMontoFacturado: "#cmpMontoFacturado",
+    cmpMontoReintegrado: "#cmpMontoReintegrado",
+
+    // Edit form buttons
+    editVolverBtn: "#btn_volver",
+    editGuardarBtn: "#btn_guardar",
+  },
 } as const;
 
 // Human-readable descriptions for logging
