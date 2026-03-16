@@ -612,7 +612,6 @@ async function processPullDomesticReceipts(
         })
       : null;
 
-     
     const receiptData: any = {
       periodo: r.periodo,
       total: new Prisma.Decimal(totalAmount),
