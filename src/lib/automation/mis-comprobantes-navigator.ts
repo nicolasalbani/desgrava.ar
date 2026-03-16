@@ -42,28 +42,36 @@ export async function navigateToMisComprobantes(
   const sel = ARCA_SELECTORS.misComprobantes;
 
   try {
-    // Step 1: Navigate to the portal services page
-    log("Navegando al portal de servicios...");
-    await page.goto(ARCA_SELECTORS.portal.servicesUrl, {
+    // Step 1: Navigate to "Ver todos" (full services list) — don't rely on the
+    // service appearing in "Más utilizados" tiles on the portal home page.
+    const allServicesUrl = "https://portalcf.cloud.afip.gob.ar/portal/app/mis-servicios";
+    log('Navegando a "Ver todos" (lista completa de servicios)...');
+    await page.goto(allServicesUrl, {
       waitUntil: "networkidle",
       timeout: 30_000,
     });
-    log(`Portal cargado: ${page.url()}`);
+    log(`Pagina de servicios cargada: ${page.url()}`);
 
-    // Step 2: Click "Mis Comprobantes" service link — opens in a new tab
+    // Step 2: Use the search combobox (react-bootstrap-typeahead) to find the
+    // service. Filling the input opens a dropdown with matching options; clicking
+    // the option triggers SSO navigation and opens the service in a new tab.
+    log('Buscando servicio "Mis Comprobantes"...');
+    const searchInput = page.locator(ARCA_SELECTORS.portal.searchService);
+    await searchInput.waitFor({ state: "visible", timeout: 10_000 });
+    await searchInput.fill("Mis Comprobantes");
+
+    const dropdown = page.locator(ARCA_SELECTORS.portal.searchResultsList);
+    await dropdown.waitFor({ state: "visible", timeout: 10_000 });
+
+    const misCompOption = dropdown
+      .locator(ARCA_SELECTORS.portal.searchResultOption)
+      .filter({ hasText: "Mis Comprobantes" });
+    await misCompOption.waitFor({ state: "visible", timeout: 5_000 });
+
     log('Abriendo servicio "Mis Comprobantes"...');
     const [misCompPage] = await Promise.all([
       page.context().waitForEvent("page", { timeout: 15_000 }),
-      page.evaluate((linkText) => {
-        const links = document.querySelectorAll("a.full-width");
-        for (const link of links) {
-          if (link.textContent?.includes(linkText)) {
-            (link as HTMLElement).click();
-            return;
-          }
-        }
-        throw new Error(`Link "${linkText}" not found`);
-      }, sel.serviceLinkText as string),
+      misCompOption.click(),
     ]);
 
     // Wait for the new tab to load

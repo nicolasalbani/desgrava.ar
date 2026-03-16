@@ -114,45 +114,45 @@ export async function navigateToSiradig(
   const capture = onScreenshot ?? (async () => {});
 
   try {
-    log("Navegando al portal de servicios...");
-    await page.goto(ARCA_SELECTORS.portal.servicesUrl, {
-      waitUntil: "domcontentloaded",
+    // Navigate to "Ver todos" (full services list) — don't rely on the service
+    // appearing in the "Más utilizados" tiles on the portal home page.
+    const allServicesUrl = "https://portalcf.cloud.afip.gob.ar/portal/app/mis-servicios";
+    log('Navegando a "Ver todos" (lista completa de servicios)...');
+    await page.goto(allServicesUrl, {
+      waitUntil: "networkidle",
+      timeout: 30_000,
     });
-    // Wait for the portal UI to render instead of networkidle (ARCA keeps persistent connections)
-    await page.waitForSelector(
-      `${ARCA_SELECTORS.portal.searchService}, ${ARCA_SELECTORS.portal.siradigLink}`,
-      { timeout: 30000 },
+    log(`Pagina de servicios cargada: ${page.url()}`);
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "portal-all-services",
+      "Lista completa de servicios ARCA",
     );
-    log(`Portal cargado: ${page.url()}`);
 
-    await capture(await page.screenshot({ fullPage: true }), "portal", "Portal de servicios ARCA");
+    // Use the search combobox (react-bootstrap-typeahead) to find the service.
+    // Filling the input opens a dropdown (#resBusqueda) with matching options;
+    // clicking the option triggers SSO navigation and opens the service in a new tab.
+    log('Buscando servicio "SiRADIG - Trabajador"...');
+    const searchInput = page.locator(ARCA_SELECTORS.portal.searchService);
+    await searchInput.waitFor({ state: "visible", timeout: 10_000 });
+    await searchInput.fill("SiRADIG");
 
-    // Try to find SiRADIG link directly or search for it
-    let siradigLink = await page.$(ARCA_SELECTORS.portal.siradigLink);
+    // Wait for the typeahead dropdown to appear with matching results
+    const dropdown = page.locator(ARCA_SELECTORS.portal.searchResultsList);
+    await dropdown.waitFor({ state: "visible", timeout: 10_000 });
 
-    if (!siradigLink) {
-      log("Buscando SiRADIG en el portal...");
-      const searchInput = await page.$(ARCA_SELECTORS.portal.searchService);
-      if (searchInput) {
-        await page.fill(ARCA_SELECTORS.portal.searchService, "SiRADIG");
-        await page.waitForTimeout(2000);
-        siradigLink = await page.$(ARCA_SELECTORS.portal.siradigLink);
-      }
-    }
+    const siradigOption = dropdown
+      .locator(ARCA_SELECTORS.portal.searchResultOption)
+      .filter({ hasText: "SiRADIG - Trabajador" });
+    await siradigOption.waitFor({ state: "visible", timeout: 5_000 });
 
-    if (!siradigLink) {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "no-siradig",
-        "SiRADIG no encontrado en portal",
-      );
-      log(`No se encontro el acceso a SiRADIG. URL: ${page.url()}`);
-      return null;
-    }
-
-    // SiRADIG opens in a new tab — capture the popup
+    // Clicking the dropdown option opens the service in a new tab via SSO
     log("Accediendo a SiRADIG - Trabajador...");
-    const [siradigPage] = await Promise.all([page.waitForEvent("popup"), siradigLink.click()]);
+    const [siradigPage] = await Promise.all([
+      page.context().waitForEvent("page", { timeout: 15_000 }),
+      siradigOption.click(),
+    ]);
     await siradigPage.waitForLoadState("domcontentloaded");
     log(`SiRADIG URL: ${siradigPage.url()}`);
 

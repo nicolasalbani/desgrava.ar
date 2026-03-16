@@ -136,6 +136,113 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ job }, { status: 201 });
     }
 
+    // PULL_DOMESTIC_WORKERS: import only worker data from ARCA "Personal de Casas Particulares"
+    if (jobType === "PULL_DOMESTIC_WORKERS") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+
+      const activeJob = await prisma.automationJob.findFirst({
+        where: {
+          userId: session.user.id,
+          jobType: { in: ["PULL_DOMESTIC_WORKERS", "PULL_DOMESTIC_RECEIPTS"] },
+          status: { in: ["PENDING", "RUNNING"] },
+        },
+      });
+      if (activeJob) {
+        return NextResponse.json(
+          { error: "Ya hay una importación de trabajadores domésticos en curso" },
+          { status: 409 },
+        );
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType,
+          fiscalYear,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
+
+    // PULL_DOMESTIC_RECEIPTS: import workers and receipts from ARCA "Personal de Casas Particulares"
+    if (jobType === "PULL_DOMESTIC_RECEIPTS") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+
+      // Prevent concurrent pull jobs
+      const activeJob = await prisma.automationJob.findFirst({
+        where: {
+          userId: session.user.id,
+          jobType: "PULL_DOMESTIC_RECEIPTS",
+          status: { in: ["PENDING", "RUNNING"] },
+        },
+      });
+      if (activeJob) {
+        return NextResponse.json(
+          { error: "Ya hay una importación de recibos domésticos en curso" },
+          { status: 409 },
+        );
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType,
+          fiscalYear,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
+
+    // SUBMIT_DOMESTIC_DEDUCTION: submit domestic worker deduction to SiRADIG
+    if (jobType === "SUBMIT_DOMESTIC_DEDUCTION") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType,
+          fiscalYear,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
+
     // Verify invoice belongs to user
     if (invoiceId) {
       const invoice = await prisma.invoice.findFirst({

@@ -39,7 +39,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `(auth)/` — login flow (Google OAuth)
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
-**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`. All protected routes validate `session?.user?.id`.
+**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`. All protected routes validate `session?.user?.id`.
 
 **Business logic** lives in `src/lib/`, organized by domain:
 
@@ -48,9 +48,10 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `automation/` — Playwright-based ARCA/SiRADIG automation: job processor, browser pool, navigators, CSS selectors, deduction mapper
 - `crypto/encryption.ts` — AES-256-GCM for ARCA credentials (encrypt/decrypt at API boundary)
 - `catalog/` — Global provider catalog: CUIT → deduction category lookup with sistemas360.ar enrichment
-- `validators/` — Zod schemas for invoices, credentials, CUIT format
+- `validators/` — Zod schemas for invoices, credentials, CUIT format, domestic workers/receipts
+- `domestic/` — Domestic workers domain logic (schemas, validators)
 
-**UI components** (`src/components/`) are split by feature domain (`facturas/`, `automatizacion/`, `credenciales/`, `simulador/`, `landing/`) with shared shadcn components in `ui/` and layout components in `layout/`.
+**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `landing/`) with shared shadcn components in `ui/` and layout components in `layout/`.
 
 ## Key Patterns
 
@@ -69,7 +70,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 ## Testing
 
-**Framework**: Vitest with 330+ tests across 13 test files.
+**Framework**: Vitest with 500+ tests across 20 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -81,6 +82,8 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `automation/` — deduction-mapper, selectors (96 tests)
 - `ocr/` — field-extractor, pipeline (22 tests)
 - `catalog/` — provider-catalog HTML parser (8 tests)
+- `ocr/` — receipt-extractor for domestic worker salary receipts (26 tests)
+- `validators/` — domestic worker and receipt schemas (32 tests)
 - `invite-codes` — token creation and validation (15 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.

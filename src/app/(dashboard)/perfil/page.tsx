@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { FamilyDependentsSection } from "@/components/perfil/family-dependents";
+import { DomesticWorkersSection } from "@/components/trabajadores/domestic-workers-section";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -101,6 +102,25 @@ export default function PerfilPage() {
           </p>
         </div>
         <FamilyDependentsSection fiscalYear={year} />
+      </div>
+
+      <div
+        className="border-border animate-in fade-in border-t duration-500"
+        style={{ animationDelay: "240ms", animationFillMode: "backwards" }}
+      />
+
+      {/* Trabajadores a cargo */}
+      <div
+        className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
+        style={{ animationDelay: "240ms", animationFillMode: "backwards" }}
+      >
+        <div>
+          <h2 className="text-base font-semibold">Trabajadores a cargo</h2>
+          <p className="text-muted-foreground/70 mt-0.5 text-sm">
+            Personal de casas particulares para deducir en SiRADIG
+          </p>
+        </div>
+        <DomesticWorkersSection fiscalYear={year} />
       </div>
     </div>
   );

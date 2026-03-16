@@ -245,6 +245,15 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
     });
   }
 
+  const uniqueCategories = useMemo(() => {
+    const cats = new Set<string>();
+    for (const inv of invoices) {
+      if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) continue;
+      cats.add(inv.deductionCategory);
+    }
+    return DEDUCTION_CATEGORIES.filter((cat) => cats.has(cat));
+  }, [invoices, fiscalYear]);
+
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {
       if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) return false;
@@ -613,7 +622,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                             )}
                           </div>
                           <div className="max-h-48 space-y-1 overflow-y-auto">
-                            {DEDUCTION_CATEGORIES.map((cat) => (
+                            {uniqueCategories.map((cat) => (
                               <label
                                 key={cat}
                                 className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
@@ -824,7 +833,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                   </div>
                 </TableHead>
 
-                <TableHead className="w-20" />
+                <TableHead className="w-20 text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

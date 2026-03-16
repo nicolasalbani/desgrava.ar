@@ -1,0 +1,31 @@
+import { NextRequest } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return new Response("No autorizado", { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const receipt = await prisma.domesticReceipt.findFirst({
+    where: { id, userId: session.user.id },
+    select: { fileData: true, fileMimeType: true, originalFilename: true },
+  });
+
+  if (!receipt || !receipt.fileData) {
+    return new Response("Archivo no encontrado", { status: 404 });
+  }
+
+  const filename = receipt.originalFilename ?? `recibo-${id}`;
+
+  return new Response(receipt.fileData, {
+    headers: {
+      "Content-Type": receipt.fileMimeType ?? "application/octet-stream",
+      "Content-Disposition": `inline; filename="${filename}"`,
+    },
+  });
+}

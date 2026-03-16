@@ -29,6 +29,8 @@ model User {
   yearPreferences  UserYearPreference[]
   emailIngestLogs  EmailIngestLog[]
   familyDependents FamilyDependent[]
+  domesticWorkers  DomesticWorker[]
+  domesticReceipts DomesticReceipt[]
 }
 
 model Account {
@@ -229,6 +231,9 @@ enum JobType {
   PULL_FAMILY_DEPENDENTS
   PUSH_FAMILY_DEPENDENTS
   PULL_COMPROBANTES
+  PULL_DOMESTIC_WORKERS
+  PULL_DOMESTIC_RECEIPTS
+  SUBMIT_DOMESTIC_DEDUCTION
 }
 
 enum JobStatus {
@@ -318,4 +323,70 @@ enum CatalogSource {
   AI_WEB_LOOKUP
   AI_INVOICE
   MANUAL
+}
+
+// ─── Personal de Casas Particulares ─────────────────────────
+
+model DomesticWorker {
+  id                   String   @id @default(cuid())
+  userId               String
+  fiscalYear           Int
+  cuil                 String // 11 digits, no dashes
+  apellidoNombre       String // Full name as shown in ARCA
+  tipoTrabajo          String // "Personal para tareas generales", "Asistencia y cuidado de personas"
+  domicilioLaboral     String?
+  horasSemanales       String? // "Menos de 12 horas", "De 12 a menos de 16 horas", "Desde 16 a más h"
+  condicion            String   @default("Activo") // "Activo", "Baja"
+  obraSocial           String?
+  fechaNacimiento      String? // dd/mm/yyyy
+  fechaIngreso         String? // dd/mm/yyyy
+  modalidadPago        String? // "Diaria", "Mensual"
+  modalidadTrabajo     String? // "Con retiro para distintos empleadores", "Con retiro para un solo empleador", "Sin retiro"
+  remuneracionPactada  Decimal? @db.Decimal(12, 2)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  receipts DomesticReceipt[]
+
+  @@unique([userId, fiscalYear, cuil])
+  @@index([userId, fiscalYear])
+}
+
+model DomesticReceipt {
+  id                   String        @id @default(cuid())
+  userId               String
+  domesticWorkerId     String?
+  fiscalYear           Int
+  fiscalMonth          Int // 1-12
+  periodo              String // "Febrero 2026"
+  categoriaProfesional String?
+  modalidadPrestacion  String?
+  horasSemanales       String?
+  modalidadLiquidacion String?
+  totalHorasTrabajadas String?
+  basico               Decimal?      @db.Decimal(12, 2)
+  antiguedad           Decimal?      @db.Decimal(12, 2)
+  viaticos             Decimal?      @db.Decimal(12, 2)
+  presentismo          Decimal?      @db.Decimal(12, 2)
+  otros                Decimal?      @db.Decimal(12, 2)
+  total                Decimal       @db.Decimal(12, 2) // Total salary (retribución)
+  paymentDetails       Json?         // Array of { tipoPago, importe, fechaPago } from ARCA's "Detalle del Pago"
+  contributionAmount   Decimal?      @db.Decimal(12, 2) // APORTES + CONTRIBUCIONES (for SiRADIG)
+  contributionDate     String?       // Payment date for contributions (dd/mm/yyyy)
+  source               InvoiceSource @default(MANUAL)
+  ocrConfidence        Float?
+  siradiqStatus        SiradiqStatus @default(PENDING)
+  originalFilename     String?
+  fileData             Bytes?
+  fileMimeType         String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domesticWorker  DomesticWorker? @relation(fields: [domesticWorkerId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, domesticWorkerId, fiscalYear, fiscalMonth])
+  @@index([userId, fiscalYear])
+  @@index([userId, siradiqStatus])
 }

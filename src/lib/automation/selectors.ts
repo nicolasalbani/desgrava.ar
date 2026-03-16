@@ -20,6 +20,8 @@ export const ARCA_SELECTORS = {
     servicesUrl: "https://portalcf.cloud.afip.gob.ar/portal/app/",
     siradigLink: "a:has-text('SiRADIG - Trabajador'), a[href*='siradig'], a[title*='SiRADIG']",
     searchService: "#buscadorInput",
+    searchResultsList: "#resBusqueda",
+    searchResultOption: '[role="option"]',
   },
 
   // SiRADIG application
@@ -97,6 +99,31 @@ export const ARCA_SELECTORS = {
     csvDownloadPath: "descargarComprobantes.do",
   },
 
+  // Personal de Casas Particulares (verified 2026-03-15)
+  domestico: {
+    baseUrl: "https://serviciossegsoc.afip.gob.ar/RegimenesEspeciales/app/DomesticoP/index.aspx",
+    // Worker cards on home page
+    workerCard: ".card, .trabajador-card",
+    workerName: "h5, .card-title",
+    workerCuil: "CUIL:",
+    // Navigation buttons per worker
+    datosDelTrabajadorBtn: "a:has-text('DATOS DEL TRABAJADOR')",
+    pagosYRecibosBtn: "a:has-text('PAGOS Y RECIBOS')",
+    // Worker detail page
+    modificarDatosBtn: "a:has-text('MODIFICAR DATOS')",
+    // Pagos y Recibos table
+    pagosTable: "table",
+    verReciboBtn: "a:has-text('VER RECIBO')",
+    detallePagoBtn: "a:has-text('Detalle de pago'), a:has-text('DETALLE DE PAGO')",
+    constanciaPagoBtn: "button:has-text('Constancia de pago')",
+    // Pagination
+    paginationNext: "a:has-text('Next'), a:has-text('»')",
+    paginationLast: "a:has-text('Ultimo')",
+    // Sidebar
+    inicioLink: "a:has-text('Inicio')",
+    historicosLink: "a:has-text('VER TRABAJADORES HISTÓRICOS')",
+  },
+
   // SiRADIG deduction edit flow (verified 2026-03-15)
   siradigEdit: {
     // Deduction list tables — each category has its own table
@@ -131,6 +158,35 @@ export const ARCA_SELECTORS = {
     // Edit form buttons
     editVolverBtn: "#btn_volver",
     editGuardarBtn: "#btn_guardar",
+  },
+
+  // SiRADIG "Deducción del Personal Doméstico" form (verified 2026-03-15)
+  siradigDomestico: {
+    // Accordion section
+    deduccionesAccordion: "#header_deducciones, :has-text('Deducciones y desgravaciones')",
+    agregarDeduccionBtn: "button:has-text('Agregar Deducciones y Desgravaciones')",
+    deduccionDomesticoLink: "a:has-text('Deducción del personal doméstico')",
+    // Form fields
+    formCuit: "#numeroDoc",
+    formApellidoNombre: "#razonSocial",
+    formMesDesde: "#mesDesde",
+    formMesHasta: "#mesHasta",
+    formMontoTotal: "#montoTotal",
+    // Detalle mensual
+    agregarDetalleBtn: "a:has-text('Agregar Detalle de Pagos'), #btn_alta_detalle",
+    detalleMes: "#detMes, select[name*='mes']",
+    detalleContribucionMonto: "#detContribucionMonto, input[name*='contribucionMonto']",
+    detalleContribucionFecha: "#detContribucionFecha, input[name*='contribucionFecha']",
+    detalleRetribucionMonto: "#detRetribucionMonto, input[name*='retribucionMonto']",
+    detalleRetribucionFecha: "#detRetribucionFecha, input[name*='retribucionFecha']",
+    detalleAgregarBtn: "button:has-text('Agregar')",
+    detalleCancelarBtn: "button:has-text('Cancelar')",
+    // Form buttons
+    formVolverBtn: "#btn_volver, button:has-text('Volver')",
+    formGuardarBtn: "#btn_guardar, button:has-text('Guardar')",
+    // Existing deduction table
+    domesticoTable: "#nueva_tabla_deducciones10",
+    existingEditButton: "div.act_editar",
   },
 } as const;
 

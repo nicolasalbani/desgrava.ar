@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import { prismaDirectClient as prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { decrypt } from "@/lib/crypto/encryption";
 import { getContext, releaseContext, enqueueJob } from "./browser-pool";
 import { loginToArca, navigateToSiradig } from "./arca-navigator";
@@ -14,6 +15,8 @@ import {
 } from "./siradig-navigator";
 import type { SiradigFamilyDependent } from "./siradig-navigator";
 import { navigateToMisComprobantes } from "./mis-comprobantes-navigator";
+import { pullDomesticReceipts, pullDomesticWorkersOnly } from "./domestic-navigator";
+import { extractReceiptFields } from "@/lib/ocr/receipt-extractor";
 import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } from "./csv-parser";
 import { classifyCategory } from "@/lib/ocr/category-classifier";
 import { resolveCategory, getCatalogEntry } from "@/lib/catalog/provider-catalog";
@@ -386,6 +389,284 @@ async function processPushFamilyDependents(
 }
 
 /**
+ * Process a PULL_DOMESTIC_WORKERS job:
+ * navigate to "Personal de Casas Particulares", pull worker info only (no receipts), upsert into DB.
+ * Used by "Importar desde ARCA" on the Perfil Impositivo page.
+ */
+async function processPullDomesticWorkers(
+  page: Page,
+  job: { userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  await appendLogFn(jobId, "Iniciando importacion de trabajadores domesticos...", onLog);
+
+  const workers = await pullDomesticWorkersOnly(
+    page,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  let workersCreated = 0;
+  let workersUpdated = 0;
+
+  for (const w of workers) {
+    const existing = await prisma.domesticWorker.findFirst({
+      where: { userId: job.userId, fiscalYear, cuil: w.cuil },
+    });
+
+    if (existing) {
+      await prisma.domesticWorker.update({
+        where: { id: existing.id },
+        data: {
+          apellidoNombre: w.apellidoNombre,
+          tipoTrabajo: w.tipoTrabajo,
+          domicilioLaboral: w.domicilioLaboral,
+          horasSemanales: w.horasSemanales,
+          condicion: w.condicion,
+          obraSocial: w.obraSocial,
+          fechaNacimiento: w.fechaNacimiento,
+          fechaIngreso: w.fechaIngreso,
+          modalidadPago: w.modalidadPago,
+          modalidadTrabajo: w.modalidadTrabajo,
+          remuneracionPactada: w.remuneracionPactada ? parseFloat(w.remuneracionPactada) : null,
+        },
+      });
+      workersUpdated++;
+    } else {
+      await prisma.domesticWorker.create({
+        data: {
+          userId: job.userId,
+          fiscalYear,
+          cuil: w.cuil,
+          apellidoNombre: w.apellidoNombre,
+          tipoTrabajo: w.tipoTrabajo,
+          domicilioLaboral: w.domicilioLaboral,
+          horasSemanales: w.horasSemanales,
+          condicion: w.condicion,
+          obraSocial: w.obraSocial,
+          fechaNacimiento: w.fechaNacimiento,
+          fechaIngreso: w.fechaIngreso,
+          modalidadPago: w.modalidadPago,
+          modalidadTrabajo: w.modalidadTrabajo,
+          remuneracionPactada: w.remuneracionPactada ? parseFloat(w.remuneracionPactada) : null,
+        },
+      });
+      workersCreated++;
+    }
+  }
+
+  await appendLogFn(
+    jobId,
+    `Trabajadores: ${workersCreated} nuevos, ${workersUpdated} actualizados`,
+    onLog,
+  );
+
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData: { workersCreated, workersUpdated },
+    },
+  });
+}
+
+/**
+ * Process a PULL_DOMESTIC_RECEIPTS job:
+ * Read workers from DB, navigate to "Personal de Casas Particulares",
+ * go to "PAGOS Y RECIBOS" for each worker, download receipts for the fiscal year.
+ *
+ * Workers must be imported first via "Importar desde ARCA" on the Perfil Impositivo page
+ * (PULL_DOMESTIC_WORKERS job). This job only pulls receipts for those existing workers.
+ */
+async function processPullDomesticReceipts(
+  page: Page,
+  job: { userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  // Read workers from DB — only pull receipts for workers the user has registered
+  const dbWorkers = await prisma.domesticWorker.findMany({
+    where: { userId: job.userId, fiscalYear },
+    select: { id: true, cuil: true, apellidoNombre: true },
+  });
+
+  if (dbWorkers.length === 0) {
+    await appendLogFn(
+      jobId,
+      "No hay trabajadores registrados para este año fiscal. Importa trabajadores primero desde Perfil Impositivo.",
+      onLog,
+    );
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "FAILED",
+        errorMessage:
+          "No hay trabajadores registrados. Importa trabajadores primero desde Perfil Impositivo.",
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
+  const workerCuils = dbWorkers.map((w) => w.cuil);
+  const cuilToId = new Map(dbWorkers.map((w) => [w.cuil, w.id]));
+
+  await appendLogFn(
+    jobId,
+    `Importando recibos ${fiscalYear} para ${dbWorkers.length} trabajador(es): ${dbWorkers.map((w) => w.apellidoNombre).join(", ")}`,
+    onLog,
+  );
+
+  const receiptsData = await pullDomesticReceipts(
+    page,
+    workerCuils,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  // Upsert receipts
+  let receiptsCreated = 0;
+  let receiptsUpdated = 0;
+
+  for (const r of receiptsData) {
+    const domesticWorkerId = cuilToId.get(r.workerCuil) ?? null;
+
+    // Extract additional fields from PDF if available
+    let ocrFields: Record<string, unknown> = {};
+    if (r.pdfBuffer) {
+      try {
+        const { processDocument } = await import("@/lib/ocr/pipeline");
+        const ocrResult = await processDocument(r.pdfBuffer, "application/pdf");
+        const extracted = extractReceiptFields(ocrResult.text);
+        ocrFields = {
+          categoriaProfesional: extracted.categoriaProfesional,
+          modalidadPrestacion: extracted.modalidadPrestacion,
+          horasSemanales: extracted.horasSemanales,
+          modalidadLiquidacion: extracted.modalidadLiquidacion,
+          totalHorasTrabajadas: extracted.totalHorasTrabajadas,
+          basico: extracted.basico,
+          antiguedad: extracted.antiguedad,
+          viaticos: extracted.viaticos,
+          presentismo: extracted.presentismo,
+          otros: extracted.otros,
+          ocrConfidence: extracted.confidence,
+        };
+
+        if (extracted.total && extracted.total > 0) {
+          ocrFields.total = extracted.total;
+        }
+      } catch {
+        // OCR is best-effort
+      }
+    }
+
+    // Calculate contribution amount from payment details
+    const contributionAmount = r.paymentDetails
+      .filter((d) => d.tipoPago === "APORTES" || d.tipoPago === "CONTRIBUCIONES")
+      .reduce((sum, d) => sum + d.importe, 0);
+
+    const contributionDate =
+      r.paymentDetails.find((d) => d.tipoPago === "APORTES")?.fechaPago ?? null;
+
+    const totalAmount = (ocrFields.total as number) ?? r.sueldo;
+    const contribAmount = contributionAmount || r.pago;
+
+    // Build decimal fields from OCR
+    const decimalOcrFields: Record<string, unknown> = {};
+    for (const key of ["basico", "antiguedad", "viaticos", "presentismo", "otros"] as const) {
+      const val = ocrFields[key] as number | undefined;
+      if (val != null) decimalOcrFields[key] = new Prisma.Decimal(val);
+    }
+    for (const key of [
+      "ocrConfidence",
+      "categoriaProfesional",
+      "modalidadPrestacion",
+      "horasSemanales",
+      "modalidadLiquidacion",
+      "totalHorasTrabajadas",
+    ] as const) {
+      if (ocrFields[key] != null) decimalOcrFields[key] = ocrFields[key];
+    }
+
+    const existing = domesticWorkerId
+      ? await prisma.domesticReceipt.findFirst({
+          where: {
+            userId: job.userId,
+            domesticWorkerId,
+            fiscalYear: r.fiscalYear,
+            fiscalMonth: r.fiscalMonth,
+          },
+        })
+      : null;
+
+     
+    const receiptData: any = {
+      periodo: r.periodo,
+      total: new Prisma.Decimal(totalAmount),
+      contributionAmount: new Prisma.Decimal(contribAmount),
+      contributionDate,
+      paymentDetails: r.paymentDetails.length > 0 ? r.paymentDetails : Prisma.JsonNull,
+      source: "ARCA",
+      ...decimalOcrFields,
+    };
+
+    if (r.pdfBuffer) {
+      receiptData.fileData = Buffer.from(r.pdfBuffer);
+      receiptData.fileMimeType = "application/pdf";
+      receiptData.originalFilename = r.pdfFilename;
+    }
+
+    if (existing) {
+      await prisma.domesticReceipt.update({
+        where: { id: existing.id },
+        data: receiptData,
+      });
+      receiptsUpdated++;
+    } else {
+      await prisma.domesticReceipt.create({
+        data: {
+          userId: job.userId,
+          domesticWorkerId,
+          fiscalYear: r.fiscalYear,
+          fiscalMonth: r.fiscalMonth,
+          ...receiptData,
+        },
+      });
+      receiptsCreated++;
+    }
+  }
+
+  await appendLogFn(
+    jobId,
+    `Recibos: ${receiptsCreated} nuevos, ${receiptsUpdated} actualizados`,
+    onLog,
+  );
+
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData: { receiptsCreated, receiptsUpdated },
+    },
+  });
+}
+
+/**
  * Process a PULL_COMPROBANTES job:
  * navigate to Mis Comprobantes, export CSV, parse, deduplicate, classify, and bulk import.
  * This flow does NOT go through SiRADIG — it stays on the ARCA portal.
@@ -631,6 +912,18 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         // ── PULL_COMPROBANTES flow (stays on ARCA portal, no SiRADIG) ──
         if (job.jobType === "PULL_COMPROBANTES") {
           await processPullComprobantes(page, job, jobId, onLog, onScreenshot, appendLog);
+          return;
+        }
+
+        // ── PULL_DOMESTIC_WORKERS flow (workers only, no receipts) ──
+        if (job.jobType === "PULL_DOMESTIC_WORKERS") {
+          await processPullDomesticWorkers(page, job, jobId, onLog, onScreenshot, appendLog);
+          return;
+        }
+
+        // ── PULL_DOMESTIC_RECEIPTS flow (workers + receipts) ──
+        if (job.jobType === "PULL_DOMESTIC_RECEIPTS") {
+          await processPullDomesticReceipts(page, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
 
