@@ -141,8 +141,8 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
     }
   }, [fiscalYear]);
 
-  async function fetchInvoices() {
-    setLoading(true);
+  async function fetchInvoices(showLoading = true) {
+    if (showLoading) setLoading(true);
     try {
       const res = await fetch("/api/facturas");
       const data = await res.json();
@@ -156,6 +156,26 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
       setLoading(false);
     }
   }
+
+  // Poll for status updates while any invoice is QUEUED or PROCESSING
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    const hasInFlight = invoices.some(
+      (inv) => inv.siradiqStatus === "QUEUED" || inv.siradiqStatus === "PROCESSING",
+    );
+    if (hasInFlight && !pollRef.current) {
+      pollRef.current = setInterval(() => fetchInvoices(false), 5_000);
+    } else if (!hasInFlight && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [invoices]);
 
   async function handleLinkDependent(invoiceId: string, dependentId: string | null) {
     const res = await fetch(`/api/facturas/${invoiceId}`, {
