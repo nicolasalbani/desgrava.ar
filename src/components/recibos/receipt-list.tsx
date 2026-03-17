@@ -159,6 +159,14 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
     return Array.from(cats).sort();
   }, [receipts]);
 
+  // Derive unique statuses from data — only show statuses that exist in receipts
+  const uniqueStatuses = useMemo(() => {
+    const sts = new Set<string>();
+    for (const r of receipts) sts.add(r.siradiqStatus);
+    // Preserve STATUS_LABELS order
+    return Object.keys(STATUS_LABELS).filter((k) => sts.has(k));
+  }, [receipts]);
+
   const filtered = useMemo(() => {
     return receipts.filter((r) => {
       if (
@@ -646,7 +654,7 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
                           )}
                         </div>
                         <div className="space-y-1">
-                          {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                          {uniqueStatuses.map((key) => (
                             <label
                               key={key}
                               className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
@@ -665,7 +673,7 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
                                   });
                                 }}
                               />
-                              <span className="text-xs">{label}</span>
+                              <span className="text-xs">{STATUS_LABELS[key] ?? key}</span>
                             </label>
                           ))}
                         </div>

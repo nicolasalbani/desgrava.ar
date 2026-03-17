@@ -246,9 +246,135 @@ export async function pullDomesticReceipts(
     // Go back to home
     onLog("Volviendo a la pagina principal...");
     await servicePage.goto(homeUrl, { waitUntil: "networkidle" });
+
+    // Track which CUILs were processed
+    cuilSet.delete(rawCuil);
+  }
+
+  // Check for remaining CUILs not found among active workers — look in historical
+  if (cuilSet.size > 0) {
+    onLog(
+      `${cuilSet.size} trabajador(es) no encontrados en activos: ${[...cuilSet].join(", ")}. Buscando en historicos...`,
+    );
+
+    const historicReceipts = await pullHistoricWorkerReceipts(
+      servicePage,
+      homeUrl,
+      cuilSet,
+      fiscalYear,
+      onLog,
+      onScreenshot,
+    );
+    receipts.push(...historicReceipts);
   }
 
   onLog(`Total: ${receipts.length} recibos importados`);
+  return receipts;
+}
+
+/**
+ * Pull receipts for terminated workers from "VER TRABAJADORES HISTÓRICOS".
+ *
+ * Historical workers don't have a "PAGOS Y RECIBOS" link on the main page.
+ * Instead we click "VER TRABAJADORES HISTÓRICOS", match CUILs to
+ * "DATOS DEL TRABAJADOR" links, and navigate to VerTrabajador.aspx which
+ * contains the same #PagosTable as active workers.
+ */
+async function pullHistoricWorkerReceipts(
+  servicePage: Page,
+  homeUrl: string,
+  cuilSet: Set<string>,
+  fiscalYear: number,
+  onLog: (msg: string) => void,
+  onScreenshot: ScreenshotCallback,
+): Promise<DomesticReceiptData[]> {
+  const receipts: DomesticReceiptData[] = [];
+
+  // Click "VER TRABAJADORES HISTÓRICOS"
+  const historicLink = servicePage.locator("a:has-text('VER TRABAJADORES HISTÓRICOS')");
+  if ((await historicLink.count()) === 0) {
+    onLog("No se encontro el link VER TRABAJADORES HISTORICOS");
+    return receipts;
+  }
+
+  await historicLink.click();
+  await servicePage.waitForLoadState("networkidle");
+  const historicUrl = servicePage.url();
+
+  await onScreenshot(
+    await servicePage.screenshot({ fullPage: true }),
+    "historic-workers",
+    "Trabajadores historicos",
+  );
+
+  // Extract CUILs and their corresponding "DATOS DEL TRABAJADOR" link hrefs.
+  // Each historical worker card shows CUIL text + has a DATOS DEL TRABAJADOR link.
+  // We use page.evaluate to pair them by position in the DOM.
+  const historicWorkers = await servicePage.evaluate(() => {
+    const body = document.body.textContent || "";
+    const cuilMatches = [...body.matchAll(/CUIL:\s*([\d-]+)/g)];
+    const datosLinks = document.querySelectorAll("a");
+    const datosHrefs: string[] = [];
+    for (let i = 0; i < datosLinks.length; i++) {
+      if (datosLinks[i].textContent?.trim() === "DATOS DEL TRABAJADOR") {
+        datosHrefs.push(datosLinks[i].href);
+      }
+    }
+    // Pair CUILs with DATOS links by position (1:1 correspondence)
+    const result: { cuil: string; href: string }[] = [];
+    for (let i = 0; i < Math.min(cuilMatches.length, datosHrefs.length); i++) {
+      result.push({ cuil: cuilMatches[i][1].replace(/-/g, ""), href: datosHrefs[i] });
+    }
+    return result;
+  });
+
+  onLog(`Encontrados ${historicWorkers.length} trabajadores historicos`);
+
+  for (const hw of historicWorkers) {
+    if (!cuilSet.has(hw.cuil)) continue;
+
+    onLog(`--- Procesando recibos del trabajador historico CUIL ${hw.cuil} ---`);
+
+    // Navigate directly to the worker detail page via its href
+    await servicePage.goto(hw.href, { waitUntil: "networkidle" });
+
+    if (await isSessionExpiredPage(servicePage)) {
+      onLog("Sesion expirada — recuperando...");
+      await servicePage.goto(historicUrl, { waitUntil: "networkidle" });
+      continue;
+    }
+
+    const workerPageUrl = servicePage.url();
+
+    await onScreenshot(
+      await servicePage.screenshot({ fullPage: true }),
+      `historic-worker-${hw.cuil}-pagos`,
+      `Pagos y recibos de trabajador historico ${hw.cuil}`,
+    );
+
+    const workerReceipts = await extractReceiptsFromTable(
+      servicePage,
+      hw.cuil,
+      workerPageUrl,
+      fiscalYear,
+      onLog,
+    );
+    receipts.push(...workerReceipts);
+
+    cuilSet.delete(hw.cuil);
+
+    // Go back to historic workers page
+    onLog("Volviendo a trabajadores historicos...");
+    await servicePage.goto(historicUrl, { waitUntil: "networkidle" });
+  }
+
+  if (cuilSet.size > 0) {
+    onLog(`Trabajadores no encontrados en activos ni historicos: ${[...cuilSet].join(", ")}`);
+  }
+
+  // Go back to home
+  await servicePage.goto(homeUrl, { waitUntil: "networkidle" });
+
   return receipts;
 }
 
