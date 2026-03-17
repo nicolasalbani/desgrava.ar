@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -107,21 +107,48 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (fiscalYear) params.set("fiscalYear", String(fiscalYear));
+  const fetchReceipts = useCallback(
+    (showLoading = true) => {
+      if (showLoading) setLoading(true);
+      const params = new URLSearchParams();
+      if (fiscalYear) params.set("fiscalYear", String(fiscalYear));
 
-    fetch(`/api/recibos?${params}`)
-      .then((r) => r.json())
-      .then((d) => {
-        const list = d.receipts ?? [];
-        setReceipts(list);
-        onInitialLoad?.(list.length);
-      })
-      .catch(() => toast.error("Error al cargar recibos"))
-      .finally(() => setLoading(false));
-  }, [fiscalYear, onInitialLoad]);
+      fetch(`/api/recibos?${params}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const list = d.receipts ?? [];
+          setReceipts(list);
+          onInitialLoad?.(list.length);
+        })
+        .catch(() => toast.error("Error al cargar recibos"))
+        .finally(() => setLoading(false));
+    },
+    [fiscalYear, onInitialLoad],
+  );
+
+  useEffect(() => {
+    fetchReceipts();
+  }, [fetchReceipts]);
+
+  // Poll for status updates while any receipt is QUEUED or PROCESSING
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    const hasInFlight = receipts.some(
+      (r) => r.siradiqStatus === "QUEUED" || r.siradiqStatus === "PROCESSING",
+    );
+    if (hasInFlight && !pollRef.current) {
+      pollRef.current = setInterval(() => fetchReceipts(false), 5_000);
+    } else if (!hasInFlight && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [receipts, fetchReceipts]);
 
   // Derive unique categories from data
   const uniqueCategories = useMemo(() => {

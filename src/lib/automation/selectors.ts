@@ -184,8 +184,9 @@ export const ARCA_SELECTORS = {
     // Form buttons
     formVolverBtn: "#btn_volver, button:has-text('Volver')",
     formGuardarBtn: "#btn_guardar, button:has-text('Guardar')",
-    // Existing deduction table
-    domesticoTable: "#nueva_tabla_deducciones10",
+    // Existing deduction table — NOTE: table ID is dynamic (e.g., #nueva_tabla_deducciones8).
+    // Find by fieldset legend text "Deducción del Personal Doméstico" instead.
+    domesticoFieldsetLegend: "personal doméstico",
     existingEditButton: "div.act_editar",
   },
 } as const;

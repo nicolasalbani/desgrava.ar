@@ -1986,12 +1986,8 @@ export interface DomesticWorkerDeduction {
  * Assumes the page is already on the F572 Web "Carga de Formulario" page
  * with the "3 - Deducciones y desgravaciones" accordion expanded.
  *
- * Steps:
- * 1. Click "Agregar Deducciones y Desgravaciones" dropdown toggle
- * 2. Click "Deducción del personal doméstico" link
- * 3. Fill CUIL and Apellido y Nombre
- * 4. For each month: click "Agregar Detalle de Pagos", fill dialog fields, click "Agregar"
- * 5. Click "Guardar"
+ * If an entry for this CUIL already exists, edits it (adds new monthly details).
+ * Otherwise creates a new entry.
  */
 export async function fillDomesticDeductionForm(
   page: Page,
@@ -2004,20 +2000,85 @@ export async function fillDomesticDeductionForm(
   const sel = ARCA_SELECTORS.siradigDomestico;
 
   try {
-    // Step 1: Click "Agregar Deducciones y Desgravaciones"
-    log("Abriendo dropdown de deducciones...");
-    const addDeductionToggle = page.locator("#btn_agregar_deducciones");
-    await addDeductionToggle.waitFor({ state: "visible", timeout: 10_000 });
-    await addDeductionToggle.click();
-    await page.waitForTimeout(500);
+    // Check if an entry already exists for this CUIL in the domestic deductions table.
+    // The table ID is dynamic (e.g., #nueva_tabla_deducciones8) so we find it by
+    // the fieldset legend text "Deducción del Personal Doméstico".
+    const existingRowIndex = await page.evaluate(
+      ({ cuil }: { cuil: string }) => {
+        const fieldsets = document.querySelectorAll("#div_tabla_deducciones_agrupadas fieldset");
+        for (let f = 0; f < fieldsets.length; f++) {
+          const legend = fieldsets[f].querySelector("legend");
+          if (!legend || !legend.textContent?.toLowerCase().includes("personal doméstico"))
+            continue;
+          const rows = fieldsets[f].querySelectorAll("table tbody tr");
+          for (let i = 0; i < rows.length; i++) {
+            if ((rows[i].textContent || "").includes(cuil)) return { fieldsetIdx: f, rowIdx: i };
+          }
+        }
+        return null;
+      },
+      { cuil: worker.cuil },
+    );
 
-    // Step 2: Click "Deducción del personal doméstico"
-    log("Seleccionando Deduccion del personal domestico...");
-    const domesticoLink = page.locator("#link_agregar_personal_domestico");
-    await domesticoLink.waitFor({ state: "visible", timeout: 5_000 });
-    await domesticoLink.click();
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(1_000);
+    if (existingRowIndex) {
+      // Edit existing entry — click the edit button on the matching row
+      log(`Entrada existente encontrada para CUIL ${worker.cuil}. Editando...`);
+
+      await page.evaluate(
+        ({ fIdx, rIdx }: { fIdx: number; rIdx: number }) => {
+          const fieldsets = document.querySelectorAll("#div_tabla_deducciones_agrupadas fieldset");
+          const rows = fieldsets[fIdx].querySelectorAll("table tbody tr");
+          const editBtn = rows[rIdx].querySelector("div.act_editar");
+          if (editBtn) (editBtn as HTMLElement).click();
+        },
+        { fIdx: existingRowIndex.fieldsetIdx, rIdx: existingRowIndex.rowIdx },
+      );
+
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(2_000);
+    } else {
+      // Create new entry via the "Agregar" dropdown
+      log("No hay entrada existente. Creando nueva deduccion domestica...");
+
+      const addDeductionToggle = page.locator("#btn_agregar_deducciones");
+      await addDeductionToggle.waitFor({ state: "visible", timeout: 10_000 });
+      await addDeductionToggle.click();
+      await page.waitForTimeout(500);
+
+      const domesticoLink = page.locator("#link_agregar_personal_domestico");
+      await domesticoLink.waitFor({ state: "visible", timeout: 5_000 });
+      await domesticoLink.click();
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(1_000);
+
+      // Fill CUIL — after Tab, SiRADIG does an AJAX lookup that
+      // auto-fills the readonly #razonSocial field with the worker's name.
+      log(`Ingresando CUIL: ${worker.cuil}`);
+      const cuitField = page.locator(sel.formCuit);
+      await cuitField.waitFor({ state: "visible", timeout: 10_000 });
+      await cuitField.click();
+      await cuitField.fill(worker.cuil);
+      await cuitField.press("Tab");
+
+      // Wait for AJAX to populate the name field
+      const nombreField = page.locator(sel.formApellidoNombre);
+      await nombreField.waitFor({ state: "visible", timeout: 10_000 });
+      try {
+        await page.waitForFunction(
+          (s: string) => {
+            const el = document.querySelector(s) as HTMLInputElement | null;
+            return el && el.value.trim().length > 0;
+          },
+          sel.formApellidoNombre,
+          { timeout: 10_000 },
+        );
+        const name = await nombreField.inputValue();
+        log(`Nombre auto-completado: ${name}`);
+      } catch {
+        log("Nombre no se auto-completo, continuando...");
+      }
+      await page.waitForTimeout(300);
+    }
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -2025,106 +2086,8 @@ export async function fillDomesticDeductionForm(
       `Formulario deduccion domestica - CUIL ${worker.cuil}`,
     );
 
-    // Step 3: Fill CUIL — after Tab, SiRADIG does an AJAX lookup that
-    // auto-fills the readonly #razonSocial field with the worker's name.
-    log(`Ingresando CUIL: ${worker.cuil}`);
-    const cuitField = page.locator(sel.formCuit);
-    await cuitField.waitFor({ state: "visible", timeout: 10_000 });
-    await cuitField.click();
-    await cuitField.fill(worker.cuil);
-    await cuitField.press("Tab");
-
-    // Wait for AJAX to populate the name field
-    const nombreField = page.locator(sel.formApellidoNombre);
-    await nombreField.waitFor({ state: "visible", timeout: 10_000 });
-    try {
-      await page.waitForFunction(
-        (sel: string) => {
-          const el = document.querySelector(sel) as HTMLInputElement | null;
-          return el && el.value.trim().length > 0;
-        },
-        sel.formApellidoNombre,
-        { timeout: 10_000 },
-      );
-      const name = await nombreField.inputValue();
-      log(`Nombre auto-completado: ${name}`);
-    } catch {
-      log("Nombre no se auto-completo, continuando...");
-    }
-    await page.waitForTimeout(300);
-
-    // Step 4: Add monthly payment details
-    const monthNames = [
-      "",
-      "Enero",
-      "Febrero",
-      "Marzo",
-      "Abril",
-      "Mayo",
-      "Junio",
-      "Julio",
-      "Agosto",
-      "Septiembre",
-      "Octubre",
-      "Noviembre",
-      "Diciembre",
-    ];
-
-    for (const m of worker.months) {
-      log(`Agregando detalle de pago: ${monthNames[m.fiscalMonth] || m.fiscalMonth}...`);
-
-      // Click "Agregar Detalle de Pagos"
-      const addDetailBtn = page.locator(sel.agregarDetalleBtn).first();
-      await addDetailBtn.waitFor({ state: "visible", timeout: 5_000 });
-      await addDetailBtn.click();
-      await page.waitForTimeout(1_000);
-
-      // Wait for the dialog to open
-      const mesSelect = page.locator(sel.detalleMes);
-      await mesSelect.waitFor({ state: "visible", timeout: 5_000 });
-
-      // Select month
-      await mesSelect.selectOption(String(m.fiscalMonth));
-      await page.waitForTimeout(300);
-
-      // Fill all fields via jQuery to avoid datepicker popups intercepting clicks.
-      // The date fields use jQuery UI datepicker — clicking them opens a calendar
-      // overlay that blocks pointer events on other fields.
-      await page.evaluate(
-        (data: {
-          contribMonto: string;
-          contribFecha: string;
-          retribMonto: string;
-          retribFecha: string;
-        }) => {
-          const $ = (window as any).$;
-          $("#pagoMontoContribucion").val(data.contribMonto).trigger("change");
-          $("#pagoFechaContribucion").val(data.contribFecha).trigger("change");
-          $("#pagoMontoRetribucion").val(data.retribMonto).trigger("change");
-          $("#pagoFechaRetribucion").val(data.retribFecha).trigger("change");
-          // Dismiss any open datepicker
-          $.datepicker._hideDatepicker();
-        },
-        {
-          contribMonto: m.contributionAmount,
-          contribFecha: m.contributionDate,
-          retribMonto: m.salaryAmount,
-          retribFecha: m.salaryDate,
-        },
-      );
-      await page.waitForTimeout(300);
-
-      // Click "Agregar" in the dialog
-      const agregarBtn = page.locator(sel.detalleAgregarBtn);
-      await agregarBtn.waitFor({ state: "visible", timeout: 5_000 });
-      await agregarBtn.click();
-      await page.waitForTimeout(1_000);
-
-      // Dismiss any lingering dialog overlay
-      await dismissDialogOverlay(page);
-
-      log(`Detalle de pago ${monthNames[m.fiscalMonth]} agregado`);
-    }
+    // Add monthly payment details
+    await addMonthlyDetails(page, worker.months, log);
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -2143,5 +2106,86 @@ export async function fillDomesticDeductionForm(
       `Error en formulario domestico - CUIL ${worker.cuil}`,
     );
     return { success: false, error: msg };
+  }
+}
+
+/**
+ * Add monthly payment details to an open domestic deduction form.
+ * Used by both the "new entry" and "edit existing" paths.
+ */
+async function addMonthlyDetails(
+  page: Page,
+  months: DomesticWorkerDeduction["months"],
+  log: (msg: string) => void,
+): Promise<void> {
+  const sel = ARCA_SELECTORS.siradigDomestico;
+  const monthNames = [
+    "",
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+  ];
+
+  for (const m of months) {
+    log(`Agregando detalle de pago: ${monthNames[m.fiscalMonth] || m.fiscalMonth}...`);
+
+    // Click "Agregar Detalle de Pagos"
+    const addDetailBtn = page.locator(sel.agregarDetalleBtn).first();
+    await addDetailBtn.waitFor({ state: "visible", timeout: 5_000 });
+    await addDetailBtn.click();
+    await page.waitForTimeout(1_000);
+
+    // Wait for the dialog to open
+    const mesSelect = page.locator(sel.detalleMes);
+    await mesSelect.waitFor({ state: "visible", timeout: 5_000 });
+
+    // Select month
+    await mesSelect.selectOption(String(m.fiscalMonth));
+    await page.waitForTimeout(300);
+
+    // Fill all fields via jQuery to avoid datepicker popups intercepting clicks.
+    await page.evaluate(
+      (data: {
+        contribMonto: string;
+        contribFecha: string;
+        retribMonto: string;
+        retribFecha: string;
+      }) => {
+        const $ = (window as any).$;
+        $("#pagoMontoContribucion").val(data.contribMonto).trigger("change");
+        $("#pagoFechaContribucion").val(data.contribFecha).trigger("change");
+        $("#pagoMontoRetribucion").val(data.retribMonto).trigger("change");
+        $("#pagoFechaRetribucion").val(data.retribFecha).trigger("change");
+        // Dismiss any open datepicker
+        $.datepicker._hideDatepicker();
+      },
+      {
+        contribMonto: m.contributionAmount,
+        contribFecha: m.contributionDate,
+        retribMonto: m.salaryAmount,
+        retribFecha: m.salaryDate,
+      },
+    );
+    await page.waitForTimeout(300);
+
+    // Click "Agregar" in the dialog
+    const agregarBtn = page.locator(sel.detalleAgregarBtn);
+    await agregarBtn.waitFor({ state: "visible", timeout: 5_000 });
+    await agregarBtn.click();
+    await page.waitForTimeout(1_000);
+
+    // Dismiss any lingering dialog overlay
+    await dismissDialogOverlay(page);
+
+    log(`Detalle de pago ${monthNames[m.fiscalMonth]} agregado`);
   }
 }
