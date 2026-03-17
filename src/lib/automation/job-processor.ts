@@ -7,13 +7,14 @@ import { loginToArca, navigateToSiradig } from "./arca-navigator";
 import {
   navigateToDeductionSection,
   fillDeductionForm,
+  fillDomesticDeductionForm,
   submitDeduction,
   findAndEditExisting,
   navigateToCargasFamilia,
   extractCargasFamilia,
   pushCargasFamilia,
 } from "./siradig-navigator";
-import type { SiradigFamilyDependent } from "./siradig-navigator";
+import type { SiradigFamilyDependent, DomesticWorkerDeduction } from "./siradig-navigator";
 import { navigateToMisComprobantes } from "./mis-comprobantes-navigator";
 import { pullDomesticReceipts, pullDomesticWorkersOnly } from "./domestic-navigator";
 import { extractReceiptFields } from "@/lib/ocr/receipt-extractor";
@@ -827,6 +828,205 @@ async function processPullComprobantes(
   });
 }
 
+/**
+ * Submit domestic worker deductions to SiRADIG.
+ *
+ * For each worker with receipts in the target fiscal year:
+ * 1. Opens "Deducción del personal doméstico" form
+ * 2. Fills CUIL + name
+ * 3. Adds monthly payment details (contribution + salary)
+ * 4. Clicks Guardar
+ *
+ * The `page` should already be on SiRADIG (post-login, post-person-selection).
+ */
+async function processSubmitDomesticDeduction(
+  siradigPage: Page,
+  job: { userId: string; fiscalYear?: number | null; resultData?: Prisma.JsonValue },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  // Extract optional receipt IDs filter from job metadata
+  const receiptIds: string[] | null =
+    job.resultData &&
+    typeof job.resultData === "object" &&
+    !Array.isArray(job.resultData) &&
+    "receiptIds" in job.resultData &&
+    Array.isArray((job.resultData as Record<string, unknown>).receiptIds)
+      ? ((job.resultData as Record<string, unknown>).receiptIds as string[])
+      : null;
+
+  // Navigate to deductions section (person → period → draft → form → accordion)
+  const navResult = await navigateToDeductionSection(
+    siradigPage,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!navResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Fetch workers + their receipts for this fiscal year.
+  // If receiptIds were provided, only include those specific receipts.
+  const receiptFilter: Prisma.DomesticReceiptWhereInput = {
+    fiscalYear,
+    siradiqStatus: { in: ["PENDING", "FAILED"] },
+    ...(receiptIds ? { id: { in: receiptIds } } : {}),
+  };
+
+  const workers = await prisma.domesticWorker.findMany({
+    where: { userId: job.userId, fiscalYear },
+    include: {
+      receipts: {
+        where: receiptFilter,
+        orderBy: { fiscalMonth: "asc" },
+      },
+    },
+  });
+
+  const workersWithReceipts = workers.filter((w) => w.receipts.length > 0);
+
+  if (workersWithReceipts.length === 0) {
+    await appendLogFn(jobId, "No hay recibos pendientes para enviar a SiRADIG", onLog);
+    setJobStatus(jobId, "COMPLETED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "COMPLETED", completedAt: new Date() },
+    });
+    return;
+  }
+
+  await appendLogFn(
+    jobId,
+    `${workersWithReceipts.length} trabajador(es) con ${workersWithReceipts.reduce((s, w) => s + w.receipts.length, 0)} recibos pendientes`,
+    onLog,
+  );
+
+  let totalSubmitted = 0;
+  let totalFailed = 0;
+
+  for (const worker of workersWithReceipts) {
+    await appendLogFn(
+      jobId,
+      `--- Procesando ${worker.apellidoNombre} (CUIL ${worker.cuil}) ---`,
+      onLog,
+    );
+
+    // Build month data from receipts
+    const months: DomesticWorkerDeduction["months"] = worker.receipts.map((r) => ({
+      fiscalMonth: r.fiscalMonth,
+      contributionAmount: r.contributionAmount?.toString() ?? "0",
+      contributionDate: r.contributionDate ?? "",
+      salaryAmount: r.total.toString(),
+      salaryDate: r.contributionDate ?? "", // use same date as contribution
+    }));
+
+    const deduction: DomesticWorkerDeduction = {
+      cuil: worker.cuil,
+      apellidoNombre: worker.apellidoNombre,
+      months,
+    };
+
+    // Fill the form
+    const fillResult = await fillDomesticDeductionForm(
+      siradigPage,
+      deduction,
+      (msg) => appendLogFn(jobId, msg, onLog),
+      onScreenshot,
+    );
+
+    if (!fillResult.success) {
+      await appendLogFn(
+        jobId,
+        `Error al completar formulario para ${worker.apellidoNombre}: ${fillResult.error}`,
+        onLog,
+      );
+      // Mark these receipts as failed
+      await prisma.domesticReceipt.updateMany({
+        where: { id: { in: worker.receipts.map((r) => r.id) } },
+        data: { siradiqStatus: "FAILED" },
+      });
+      totalFailed += worker.receipts.length;
+      continue;
+    }
+
+    // Click Guardar
+    const saveResult = await submitDeduction(
+      siradigPage,
+      (msg) => appendLogFn(jobId, msg, onLog),
+      onScreenshot,
+    );
+
+    if (saveResult.success) {
+      await appendLogFn(
+        jobId,
+        `Deduccion domestica guardada para ${worker.apellidoNombre} (${worker.receipts.length} meses)`,
+        onLog,
+      );
+      // Mark receipts as submitted
+      await prisma.domesticReceipt.updateMany({
+        where: { id: { in: worker.receipts.map((r) => r.id) } },
+        data: { siradiqStatus: "SUBMITTED" },
+      });
+      totalSubmitted += worker.receipts.length;
+    } else {
+      await appendLogFn(
+        jobId,
+        `Error al guardar deduccion para ${worker.apellidoNombre}: ${saveResult.error}`,
+        onLog,
+      );
+      await prisma.domesticReceipt.updateMany({
+        where: { id: { in: worker.receipts.map((r) => r.id) } },
+        data: { siradiqStatus: "FAILED" },
+      });
+      totalFailed += worker.receipts.length;
+    }
+
+    // If there are more workers, navigate back to deductions section
+    if (workersWithReceipts.indexOf(worker) < workersWithReceipts.length - 1) {
+      await appendLogFn(jobId, "Volviendo a la seccion de deducciones...", onLog);
+      // After Guardar, SiRADIG returns to the form list. We need to re-expand
+      // the deductions accordion and continue.
+      try {
+        const deductionsSection = siradigPage.getByText("Deducciones y desgravaciones").first();
+        await deductionsSection.waitFor({ timeout: 10_000 });
+        await deductionsSection.click();
+        await siradigPage.waitForLoadState("networkidle");
+        await siradigPage.waitForTimeout(1_000);
+      } catch {
+        await appendLogFn(jobId, "No se pudo volver a la seccion de deducciones", onLog);
+      }
+    }
+  }
+
+  await appendLogFn(
+    jobId,
+    `Resultado: ${totalSubmitted} recibos enviados, ${totalFailed} fallidos`,
+    onLog,
+  );
+
+  const finalStatus = totalFailed > 0 && totalSubmitted === 0 ? "FAILED" : "COMPLETED";
+  setJobStatus(jobId, finalStatus);
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: finalStatus,
+      completedAt: new Date(),
+      resultData: JSON.stringify({ totalSubmitted, totalFailed }),
+    },
+  });
+}
+
 export async function processJob(jobId: string, onLog?: LogCallback): Promise<void> {
   return enqueueJob(async () => {
     const job = await prisma.automationJob.findUnique({
@@ -962,6 +1162,19 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         // ── PUSH_FAMILY_DEPENDENTS flow ──
         if (job.jobType === "PUSH_FAMILY_DEPENDENTS") {
           await processPushFamilyDependents(
+            siradigPage,
+            job,
+            jobId,
+            onLog,
+            onScreenshot,
+            appendLog,
+          );
+          return;
+        }
+
+        // ── SUBMIT_DOMESTIC_DEDUCTION flow ──
+        if (job.jobType === "SUBMIT_DOMESTIC_DEDUCTION") {
+          await processSubmitDomesticDeduction(
             siradigPage,
             job,
             jobId,

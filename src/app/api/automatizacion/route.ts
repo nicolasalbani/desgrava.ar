@@ -223,12 +223,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
       }
 
+      // Accept optional receiptIds to limit which receipts are submitted
+      const receiptIds: string[] | undefined = body.receiptIds;
+
       const job = await prisma.automationJob.create({
         data: {
           userId: session.user.id,
           jobType,
           fiscalYear,
           status: "PENDING",
+          ...(receiptIds ? { resultData: { receiptIds } } : {}),
         },
       });
 

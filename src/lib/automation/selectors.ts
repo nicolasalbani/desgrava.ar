@@ -172,15 +172,15 @@ export const ARCA_SELECTORS = {
     formMesDesde: "#mesDesde",
     formMesHasta: "#mesHasta",
     formMontoTotal: "#montoTotal",
-    // Detalle mensual
+    // Detalle mensual dialog ("Alta de Detalle de Pagos")
     agregarDetalleBtn: "a:has-text('Agregar Detalle de Pagos'), #btn_alta_detalle",
-    detalleMes: "#detMes, select[name*='mes']",
-    detalleContribucionMonto: "#detContribucionMonto, input[name*='contribucionMonto']",
-    detalleContribucionFecha: "#detContribucionFecha, input[name*='contribucionFecha']",
-    detalleRetribucionMonto: "#detRetribucionMonto, input[name*='retribucionMonto']",
-    detalleRetribucionFecha: "#detRetribucionFecha, input[name*='retribucionFecha']",
-    detalleAgregarBtn: "button:has-text('Agregar')",
-    detalleCancelarBtn: "button:has-text('Cancelar')",
+    detalleMes: "#pagoMes",
+    detalleContribucionMonto: "#pagoMontoContribucion",
+    detalleContribucionFecha: "#pagoFechaContribucion",
+    detalleRetribucionMonto: "#pagoMontoRetribucion",
+    detalleRetribucionFecha: "#pagoFechaRetribucion",
+    detalleAgregarBtn: ".ui-dialog-buttonset button:has-text('Agregar')",
+    detalleCancelarBtn: ".ui-dialog-buttonset button:has-text('Cancelar')",
     // Form buttons
     formVolverBtn: "#btn_volver, button:has-text('Volver')",
     formGuardarBtn: "#btn_guardar, button:has-text('Guardar')",

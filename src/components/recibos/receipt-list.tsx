@@ -255,6 +255,7 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
         body: JSON.stringify({
           jobType: "SUBMIT_DOMESTIC_DEDUCTION",
           fiscalYear,
+          receiptIds: Array.from(selectedIds),
         }),
       });
 
