@@ -56,6 +56,7 @@ import { DEDUCTION_CATEGORIES, DEDUCTION_CATEGORY_LABELS } from "@/lib/validator
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useFiscalYear } from "@/contexts/fiscal-year";
+import { useAttentionCounts } from "@/contexts/attention-counts";
 import { JobStatusBadge, type LatestJob } from "@/components/shared/job-status-badge";
 import { JobHistoryPanel } from "@/components/shared/job-history-panel";
 
@@ -107,8 +108,15 @@ function isFutureMonth(inv: Invoice): boolean {
   );
 }
 
-export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number) => void } = {}) {
+export function InvoiceList({
+  onInitialLoad,
+  attentionFilter = false,
+}: {
+  onInitialLoad?: (count: number) => void;
+  attentionFilter?: boolean;
+} = {}) {
   const { fiscalYear } = useFiscalYear();
+  const { invalidate: invalidateAttention } = useAttentionCounts();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -242,6 +250,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
         ),
       );
       toast.success(dependentId ? "Familiar vinculado" : "Vinculacion removida");
+      invalidateAttention();
     } else {
       toast.error("Error al vincular familiar");
     }
@@ -261,6 +270,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
         return next;
       });
       toast.success("Factura eliminada");
+      invalidateAttention();
     } else {
       const data = await res.json().catch(() => null);
       toast.error(data?.error ?? "Error al eliminar");
@@ -293,6 +303,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
       toast.success(
         deleted.length === 1 ? "Factura eliminada" : `${deleted.length} facturas eliminadas`,
       );
+      invalidateAttention();
     }
     const failed = deletableIds.length - deleted.length;
     if (failed > 0) toast.error(`${failed} factura(s) no se pudieron eliminar`);
@@ -336,6 +347,13 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {
       if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) return false;
+      if (attentionFilter) {
+        const needsAttention =
+          !inv.latestJob ||
+          inv.latestJob.status === "FAILED" ||
+          (inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId);
+        if (!needsAttention) return false;
+      }
       if (categories.size > 0 && !categories.has(inv.deductionCategory)) return false;
       if (statuses.size > 0) {
         const jobStatus = inv.latestJob?.status ?? NO_JOB;
@@ -371,6 +389,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   }, [
     invoices,
     fiscalYear,
+    attentionFilter,
     categories,
     statuses,
     fechaDesde,
@@ -450,6 +469,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
       setSelectedIds(new Set());
       setBulkCategoryOpen(false);
       setBulkCategory("");
+      invalidateAttention();
     } catch {
       toast.error("Error de conexión al actualizar categorías");
     } finally {
@@ -530,6 +550,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
 
     if (successCount > 0) {
       toast.success(`${successCount} factura(s) enviada(s) a la cola de SiRADIG`);
+      invalidateAttention();
     }
     if (failCount > 0) {
       toast.error(`${failCount} factura(s) no se pudieron enviar`);
@@ -583,6 +604,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
           ),
         );
         toast.success("Factura enviada a la cola de SiRADIG");
+        invalidateAttention();
       } else {
         const data = await res.json().catch(() => null);
         toast.error(data?.error ?? "Error al enviar a SiRADIG");

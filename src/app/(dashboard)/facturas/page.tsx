@@ -288,7 +288,11 @@ function FacturasInner() {
         className="animate-in fade-in slide-in-from-bottom-2 duration-500"
         style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
       >
-        <InvoiceList key={refreshKey} onInitialLoad={handleInitialLoad} />
+        <InvoiceList
+          key={refreshKey}
+          onInitialLoad={handleInitialLoad}
+          attentionFilter={searchParams.get("filter") === "attention"}
+        />
       </div>
 
       <EmailIngestDialog open={emailOpen} onOpenChange={setEmailOpen} />

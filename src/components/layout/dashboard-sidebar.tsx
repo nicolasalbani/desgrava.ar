@@ -16,6 +16,8 @@ import {
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AttentionBadge } from "@/components/shared/attention-badge";
+import { useAttentionCounts } from "@/contexts/attention-counts";
 
 const navItems = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
@@ -26,8 +28,19 @@ const navItems = [
   { href: "/configuracion", label: "Configuracion", icon: Settings },
 ];
 
+const badgeHrefs: Record<string, string> = {
+  "/facturas": "/facturas?filter=attention",
+  "/recibos": "/recibos?filter=attention",
+};
+
 export function DashboardSidebar() {
   const pathname = usePathname();
+  const { facturas, recibos } = useAttentionCounts();
+
+  const badgeCounts: Record<string, number> = {
+    "/facturas": facturas,
+    "/recibos": recibos,
+  };
 
   return (
     <aside className="border-border bg-background hidden h-full w-64 flex-col border-r md:flex">
@@ -44,6 +57,7 @@ export function DashboardSidebar() {
             const isActive =
               pathname === item.href ||
               (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            const badgeCount = badgeCounts[item.href];
             return (
               <Link
                 key={item.href}
@@ -57,6 +71,9 @@ export function DashboardSidebar() {
               >
                 <Icon className="h-4 w-4" />
                 {item.label}
+                {badgeCount > 0 && (
+                  <AttentionBadge count={badgeCount} href={badgeHrefs[item.href]} />
+                )}
               </Link>
             );
           })}

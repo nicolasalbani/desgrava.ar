@@ -41,6 +41,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useFiscalYear } from "@/contexts/fiscal-year";
+import { useAttentionCounts } from "@/contexts/attention-counts";
 import { formatCuit } from "@/lib/validators/cuit";
 import { JobStatusBadge, type LatestJob } from "@/components/shared/job-status-badge";
 import { JobHistoryPanel } from "@/components/shared/job-history-panel";
@@ -83,8 +84,15 @@ function formatAmount(amount: string | number): string {
   return `$ ${num.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number) => void }) {
+export function ReceiptList({
+  onInitialLoad,
+  attentionFilter = false,
+}: {
+  onInitialLoad?: (count: number) => void;
+  attentionFilter?: boolean;
+}) {
   const { fiscalYear } = useFiscalYear();
+  const { invalidate: invalidateAttention } = useAttentionCounts();
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -170,6 +178,11 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
 
   const filtered = useMemo(() => {
     return receipts.filter((r) => {
+      if (attentionFilter) {
+        const needsAttention =
+          !r.latestJob || r.latestJob.status === "FAILED" || !r.domesticWorkerId;
+        if (!needsAttention) return false;
+      }
       if (
         categories.size > 0 &&
         (!r.categoriaProfesional || !categories.has(r.categoriaProfesional))
@@ -209,7 +222,17 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
       }
       return true;
     });
-  }, [receipts, categories, statuses, totalMin, totalMax, contribMin, contribMax, search]);
+  }, [
+    receipts,
+    attentionFilter,
+    categories,
+    statuses,
+    totalMin,
+    totalMax,
+    contribMin,
+    contribMax,
+    search,
+  ]);
 
   const hasClientFilters =
     search !== "" ||
@@ -238,6 +261,7 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
         return next;
       });
       toast.success("Recibo eliminado");
+      invalidateAttention();
     } catch {
       toast.error("Error al eliminar recibo");
     } finally {
@@ -272,6 +296,7 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
       toast.success(
         deleted.length === 1 ? "Recibo eliminado" : `${deleted.length} recibos eliminados`,
       );
+      invalidateAttention();
     }
     const failed = deletableIds.length - deleted.length;
     if (failed > 0) toast.error(`${failed} recibo(s) no se pudieron eliminar`);
@@ -317,6 +342,7 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
           ),
         );
         setSelectedIds(new Set());
+        invalidateAttention();
       } else {
         const data = await res.json().catch(() => null);
         toast.error(data?.error ?? "Error al enviar a SiRADIG");
@@ -361,6 +387,7 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
           ),
         );
         toast.success("Recibo enviado a la cola de SiRADIG");
+        invalidateAttention();
       } else {
         const data = await res.json().catch(() => null);
         toast.error(data?.error ?? "Error al enviar a SiRADIG");

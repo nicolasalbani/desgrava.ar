@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, Suspense, type ElementType } from "react";
+import { useSearchParams } from "next/navigation";
 import { Upload, PenLine, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ function ExpandingButton({
 
 function RecibosInner() {
   const { fiscalYear } = useFiscalYear();
+  const searchParams = useSearchParams();
   const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -136,7 +138,11 @@ function RecibosInner() {
         className="animate-in fade-in slide-in-from-bottom-2 duration-500"
         style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
       >
-        <ReceiptList key={refreshKey} onInitialLoad={handleInitialLoad} />
+        <ReceiptList
+          key={refreshKey}
+          onInitialLoad={handleInitialLoad}
+          attentionFilter={searchParams.get("filter") === "attention"}
+        />
       </div>
 
       <ImportArcaReceiptsDialog
