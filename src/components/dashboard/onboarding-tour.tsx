@@ -73,7 +73,7 @@ function getSteps(fiscalYear: number): StepDef[] {
       description: "Envia tus deducciones a SiRADIG",
       completedDescription: "Envios activos",
       icon: Send,
-      href: "/automatizacion",
+      href: "/facturas",
       activeLabel: "Enviar",
     },
   ];

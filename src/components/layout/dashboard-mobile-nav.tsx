@@ -9,7 +9,6 @@ import {
   KeyRound,
   FileText,
   Receipt,
-  Send,
   Settings,
   Calculator,
   LogOut,
@@ -24,7 +23,6 @@ const navItems = [
   { href: "/perfil", label: "Perfil impositivo", icon: User },
   { href: "/facturas", label: "Facturas", icon: FileText },
   { href: "/recibos", label: "Recibos", icon: Receipt },
-  { href: "/automatizacion", label: "Enviar a SiRADIG", icon: Send },
   { href: "/configuracion", label: "Configuracion", icon: Settings },
 ];
 

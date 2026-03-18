@@ -142,9 +142,10 @@ model AutomationJob {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invoice         Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
-  familyDependent FamilyDependent? @relation("AutomationJobFamilyDependent", fields: [familyDependentId], references: [id], onDelete: SetNull)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoice          Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  familyDependent  FamilyDependent? @relation("AutomationJobFamilyDependent", fields: [familyDependentId], references: [id], onDelete: SetNull)
+  domesticReceipts DomesticReceipt[]
 
   @@index([userId, status])
 }
@@ -385,6 +386,7 @@ model DomesticReceipt {
 
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   domesticWorker  DomesticWorker? @relation(fields: [domesticWorkerId], references: [id], onDelete: SetNull)
+  automationJobs  AutomationJob[]
 
   @@unique([userId, domesticWorkerId, fiscalYear, fiscalMonth])
   @@index([userId, fiscalYear])

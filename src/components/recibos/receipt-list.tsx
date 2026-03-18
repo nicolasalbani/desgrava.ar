@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -34,11 +34,16 @@ import {
   Send,
   X,
   ListFilter,
+  ChevronDown,
+  ChevronUp,
+  Square,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 import { formatCuit } from "@/lib/validators/cuit";
+import { JobStatusBadge, type LatestJob } from "@/components/shared/job-status-badge";
+import { JobHistoryPanel } from "@/components/shared/job-history-panel";
 
 interface ReceiptRow {
   id: string;
@@ -60,29 +65,18 @@ interface ReceiptRow {
     apellidoNombre: string;
     cuil: string;
   } | null;
+  latestJob: LatestJob | null;
 }
 
-const STATUS_LABELS: Record<string, string> = {
+const JOB_STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
-  QUEUED: "En cola",
-  PROCESSING: "Procesando",
-  SUBMITTED: "Enviado",
+  RUNNING: "Ejecutando",
+  COMPLETED: "Completado",
   FAILED: "Error",
+  CANCELLED: "Cancelado",
 };
 
-const SELECTABLE_STATUSES = ["PENDING", "FAILED"];
-
-function statusDot(status: string) {
-  const color =
-    status === "SUBMITTED"
-      ? "bg-green-500"
-      : status === "FAILED"
-        ? "bg-red-500"
-        : status === "PROCESSING" || status === "QUEUED"
-          ? "bg-blue-500 animate-pulse"
-          : "bg-gray-400 dark:bg-gray-600";
-  return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
-}
+const NO_JOB = "__NO_JOB__";
 
 function formatAmount(amount: string | number): string {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
@@ -106,6 +100,8 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
   const [submitting, setSubmitting] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
 
   const fetchReceipts = useCallback(
     (showLoading = true) => {
@@ -134,7 +130,11 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     const hasInFlight = receipts.some(
-      (r) => r.siradiqStatus === "QUEUED" || r.siradiqStatus === "PROCESSING",
+      (r) =>
+        r.siradiqStatus === "QUEUED" ||
+        r.siradiqStatus === "PROCESSING" ||
+        r.latestJob?.status === "PENDING" ||
+        r.latestJob?.status === "RUNNING",
     );
     if (hasInFlight && !pollRef.current) {
       pollRef.current = setInterval(() => fetchReceipts(false), 5_000);
@@ -159,12 +159,13 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
     return Array.from(cats).sort();
   }, [receipts]);
 
-  // Derive unique statuses from data — only show statuses that exist in receipts
-  const uniqueStatuses = useMemo(() => {
+  // Derive unique job statuses from data
+  const uniqueJobStatuses = useMemo(() => {
     const sts = new Set<string>();
-    for (const r of receipts) sts.add(r.siradiqStatus);
-    // Preserve STATUS_LABELS order
-    return Object.keys(STATUS_LABELS).filter((k) => sts.has(k));
+    for (const r of receipts) sts.add(r.latestJob?.status ?? NO_JOB);
+    const ordered = Object.keys(JOB_STATUS_LABELS).filter((k) => sts.has(k));
+    if (sts.has(NO_JOB)) ordered.push(NO_JOB);
+    return ordered;
   }, [receipts]);
 
   const filtered = useMemo(() => {
@@ -174,7 +175,10 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
         (!r.categoriaProfesional || !categories.has(r.categoriaProfesional))
       )
         return false;
-      if (statuses.size > 0 && !statuses.has(r.siradiqStatus)) return false;
+      if (statuses.size > 0) {
+        const jobStatus = r.latestJob?.status ?? NO_JOB;
+        if (!statuses.has(jobStatus)) return false;
+      }
       if (totalMin) {
         const min = parseInt(totalMin);
         if (!isNaN(min) && parseFloat(r.total) < min) return false;
@@ -295,9 +299,22 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
       });
 
       if (res.ok) {
+        const jobData = await res.json().catch(() => null);
+        const latestJobData: LatestJob | null = jobData?.job
+          ? {
+              id: jobData.job.id,
+              status: jobData.job.status,
+              createdAt: jobData.job.createdAt,
+              errorMessage: null,
+            }
+          : null;
         toast.success("Deduccion de servicio domestico enviada a la cola de SiRADIG");
         setReceipts((prev) =>
-          prev.map((r) => (selectedIds.has(r.id) ? { ...r, siradiqStatus: "QUEUED" } : r)),
+          prev.map((r) =>
+            selectedIds.has(r.id)
+              ? { ...r, siradiqStatus: "QUEUED", latestJob: latestJobData ?? r.latestJob }
+              : r,
+          ),
         );
         setSelectedIds(new Set());
       } else {
@@ -308,6 +325,69 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
       toast.error("Error de conexion al enviar a SiRADIG");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSendSingle(receiptId: string) {
+    if (!fiscalYear) {
+      toast.error("Selecciona un ano fiscal antes de enviar a SiRADIG");
+      return;
+    }
+    try {
+      const res = await fetch("/api/automatizacion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobType: "SUBMIT_DOMESTIC_DEDUCTION",
+          fiscalYear,
+          receiptIds: [receiptId],
+        }),
+      });
+      if (res.ok) {
+        const jobData = await res.json().catch(() => null);
+        const latestJobData: LatestJob | null = jobData?.job
+          ? {
+              id: jobData.job.id,
+              status: jobData.job.status,
+              createdAt: jobData.job.createdAt,
+              errorMessage: null,
+            }
+          : null;
+        setReceipts((prev) =>
+          prev.map((r) =>
+            r.id === receiptId
+              ? { ...r, siradiqStatus: "QUEUED", latestJob: latestJobData ?? r.latestJob }
+              : r,
+          ),
+        );
+        toast.success("Recibo enviado a la cola de SiRADIG");
+      } else {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error ?? "Error al enviar a SiRADIG");
+      }
+    } catch {
+      toast.error("Error de conexion al enviar a SiRADIG");
+    }
+  }
+
+  async function handleCancelJob(jobId: string) {
+    setCancellingJobId(jobId);
+    try {
+      const res = await fetch(`/api/automatizacion/${jobId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel" }),
+      });
+      if (res.ok) {
+        toast.success("Job cancelado");
+        fetchReceipts(false);
+      } else {
+        toast.error("Error al cancelar");
+      }
+    } catch {
+      toast.error("Error de conexion");
+    } finally {
+      setCancellingJobId(null);
     }
   }
 
@@ -323,7 +403,9 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
     });
   }
 
-  const eligibleReceipts = filtered.filter((r) => SELECTABLE_STATUSES.includes(r.siradiqStatus));
+  const eligibleReceipts = filtered.filter(
+    (r) => r.latestJob?.status !== "PENDING" && r.latestJob?.status !== "RUNNING",
+  );
   const allEligibleSelected =
     eligibleReceipts.length > 0 && eligibleReceipts.every((r) => selectedIds.has(r.id));
 
@@ -621,10 +703,10 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
                 </div>
               </TableHead>
 
-              {/* Estado — filter */}
+              {/* SiRADIG — filter */}
               <TableHead>
                 <div className="flex items-center gap-2">
-                  <span>Estado</span>
+                  <span>SiRADIG</span>
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
@@ -654,7 +736,7 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
                           )}
                         </div>
                         <div className="space-y-1">
-                          {uniqueStatuses.map((key) => (
+                          {uniqueJobStatuses.map((key) => (
                             <label
                               key={key}
                               className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
@@ -673,7 +755,9 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
                                   });
                                 }}
                               />
-                              <span className="text-xs">{STATUS_LABELS[key] ?? key}</span>
+                              <span className="text-xs">
+                                {key === NO_JOB ? "No enviado" : (JOB_STATUS_LABELS[key] ?? key)}
+                              </span>
                             </label>
                           ))}
                         </div>
@@ -682,14 +766,13 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
                   </Popover>
                 </div>
               </TableHead>
-
-              <TableHead className="w-20 text-right">Acciones</TableHead>
+              <TableHead className="w-24 text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-12 text-center">
+                <TableCell colSpan={8} className="py-12 text-center">
                   <p className="text-muted-foreground/70 text-sm font-medium">Sin resultados</p>
                   <p className="text-muted-foreground/50 mt-1 text-xs">
                     Proba con otros filtros o terminos de busqueda
@@ -714,86 +797,134 @@ export function ReceiptList({ onInitialLoad }: { onInitialLoad?: (count: number)
               </TableRow>
             ) : (
               filtered.map((r) => {
-                const isEligible = SELECTABLE_STATUSES.includes(r.siradiqStatus);
+                const isExpanded = expandedRowId === r.id;
+                const isInFlight =
+                  r.latestJob?.status === "PENDING" || r.latestJob?.status === "RUNNING";
+                const canCancel = isInFlight;
                 return (
-                  <TableRow key={r.id}>
-                    <TableCell className="pl-4">
-                      <Checkbox
-                        checked={selectedIds.has(r.id)}
-                        onCheckedChange={() => toggleSelect(r.id)}
-                        disabled={!isEligible}
-                        aria-label={`Seleccionar recibo ${r.id}`}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {r.source === "ARCA" && (
-                          <span title="Importado desde ARCA">
-                            <Download className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
-                          </span>
-                        )}
-                        {(r.source === "PDF" || r.source === "OCR" || r.source === "MANUAL") && (
-                          <span title="Cargado manualmente">
-                            <Upload className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
-                          </span>
-                        )}
-                        {r.domesticWorker ? (
-                          <div>
-                            <p className="text-sm">{r.domesticWorker.apellidoNombre}</p>
-                            <p className="text-muted-foreground text-xs">
-                              {formatCuit(r.domesticWorker.cuil)}
-                            </p>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">Sin asignar</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-muted-foreground text-xs">
-                        {r.categoriaProfesional ?? "—"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-medium">{r.periodo}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {formatAmount(r.total)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {r.contributionAmount ? formatAmount(r.contributionAmount) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        {statusDot(r.siradiqStatus)}
-                        <span className="text-xs">
-                          {STATUS_LABELS[r.siradiqStatus] ?? r.siradiqStatus}
+                  <React.Fragment key={r.id}>
+                    <TableRow>
+                      <TableCell className="pl-4">
+                        <Checkbox
+                          checked={selectedIds.has(r.id)}
+                          onCheckedChange={() => toggleSelect(r.id)}
+                          disabled={isInFlight}
+                          title={isInFlight ? "Hay un envio en curso" : undefined}
+                          aria-label={`Seleccionar recibo ${r.id}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {r.source === "ARCA" && (
+                            <span title="Importado desde ARCA">
+                              <Download className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                            </span>
+                          )}
+                          {(r.source === "PDF" || r.source === "OCR" || r.source === "MANUAL") && (
+                            <span title="Cargado manualmente">
+                              <Upload className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                            </span>
+                          )}
+                          {r.domesticWorker ? (
+                            <div>
+                              <p className="text-sm">{r.domesticWorker.apellidoNombre}</p>
+                              <p className="text-muted-foreground text-xs">
+                                {formatCuit(r.domesticWorker.cuil)}
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">Sin asignar</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-muted-foreground text-xs">
+                          {r.categoriaProfesional ?? "—"}
                         </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {r.hasFile && (
+                      </TableCell>
+                      <TableCell className="font-medium">{r.periodo}</TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatAmount(r.total)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {r.contributionAmount ? formatAmount(r.contributionAmount) : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          onClick={() => setExpandedRowId(isExpanded ? null : r.id)}
+                          className="inline-flex items-center gap-1"
+                        >
+                          <JobStatusBadge job={r.latestJob} />
+                          {r.latestJob &&
+                            (isExpanded ? (
+                              <ChevronUp className="text-muted-foreground/40 h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="text-muted-foreground/40 h-3 w-3" />
+                            ))}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {!isInFlight && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:text-foreground h-8 w-8"
+                              onClick={() => handleSendSingle(r.id)}
+                              title="Enviar a SiRADIG"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {canCancel && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:text-foreground h-8 w-8"
+                              onClick={() => handleCancelJob(r.latestJob!.id)}
+                              disabled={cancellingJobId === r.latestJob!.id}
+                              title="Cancelar envio"
+                            >
+                              <Square className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {r.hasFile && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:text-foreground h-8 w-8"
+                              onClick={() => window.open(`/api/recibos/${r.id}/file`, "_blank")}
+                              title="Ver archivo"
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="text-muted-foreground hover:text-foreground h-8 w-8"
-                            onClick={() => window.open(`/api/recibos/${r.id}/file`, "_blank")}
-                            title="Ver archivo"
+                            className="text-muted-foreground hover:text-destructive h-8 w-8"
+                            onClick={() => setDeleteId(r.id)}
+                            title="Eliminar"
                           >
-                            <FileText className="h-3.5 w-3.5" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-destructive h-8 w-8"
-                          onClick={() => setDeleteId(r.id)}
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow key={`${r.id}-history`}>
+                        <TableCell colSpan={9} className="bg-muted/20 px-6 py-3">
+                          <JobHistoryPanel
+                            entityId={r.id}
+                            entityType="receipt"
+                            latestJobStatus={r.latestJob?.status}
+                            onCancel={handleCancelJob}
+                            cancelling={!!cancellingJobId}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
                 );
               })
             )}

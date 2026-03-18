@@ -233,8 +233,23 @@ export async function POST(req: NextRequest) {
           fiscalYear,
           status: "PENDING",
           ...(receiptIds ? { resultData: { receiptIds } } : {}),
+          ...(receiptIds
+            ? {
+                domesticReceipts: {
+                  connect: receiptIds.map((id) => ({ id })),
+                },
+              }
+            : {}),
         },
       });
+
+      // Update receipt statuses to QUEUED
+      if (receiptIds?.length) {
+        await prisma.domesticReceipt.updateMany({
+          where: { id: { in: receiptIds }, userId: session.user.id },
+          data: { siradiqStatus: "QUEUED" },
+        });
+      }
 
       after(async () => {
         try {

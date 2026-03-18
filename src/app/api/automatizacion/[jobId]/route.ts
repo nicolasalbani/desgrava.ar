@@ -76,6 +76,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ jobI
   const { action } = body;
 
   if (action === "cancel") {
+    if (job.status !== "PENDING" && job.status !== "RUNNING") {
+      return NextResponse.json(
+        { error: "Solo se pueden cancelar jobs pendientes o en ejecución" },
+        { status: 409 },
+      );
+    }
+
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "CANCELLED", completedAt: new Date() },
@@ -88,81 +95,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ jobI
       });
     }
 
+    // Reset receipt statuses for SUBMIT_DOMESTIC_DEDUCTION jobs
+    if (job.jobType === "SUBMIT_DOMESTIC_DEDUCTION") {
+      const jobWithReceipts = await prisma.automationJob.findUnique({
+        where: { id: jobId },
+        select: { domesticReceipts: { select: { id: true } } },
+      });
+      if (jobWithReceipts?.domesticReceipts.length) {
+        await prisma.domesticReceipt.updateMany({
+          where: { id: { in: jobWithReceipts.domesticReceipts.map((r) => r.id) } },
+          data: { siradiqStatus: "PENDING" },
+        });
+      }
+    }
+
     return NextResponse.json({ success: true, message: "Job cancelado" });
   }
 
-  if (action === "retry") {
-    if (job.status !== "FAILED") {
-      return NextResponse.json(
-        { error: "Solo se pueden reintentar jobs fallidos" },
-        { status: 409 },
-      );
-    }
-
-    await prisma.automationJob.update({
-      where: { id: jobId },
-      data: {
-        status: "PENDING",
-        attempts: 0,
-        errorMessage: null,
-        startedAt: null,
-        completedAt: null,
-        logs: [],
-      },
-    });
-
-    if (job.invoiceId) {
-      await prisma.invoice.update({
-        where: { id: job.invoiceId },
-        data: { siradiqStatus: "QUEUED" },
-      });
-    }
-
-    return NextResponse.json({ success: true, message: "Job reintentado" });
-  }
-
   return NextResponse.json({ error: "Accion invalida" }, { status: 400 });
-}
-
-const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
-
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
-  const { jobId } = await params;
-
-  const job = await prisma.automationJob.findFirst({
-    where: { id: jobId, userId: session.user.id },
-  });
-
-  if (!job) {
-    return NextResponse.json({ error: "Job no encontrado" }, { status: 404 });
-  }
-
-  if (!TERMINAL_STATUSES.includes(job.status)) {
-    return NextResponse.json(
-      { error: "Solo se pueden eliminar jobs finalizados. Cancela el job primero." },
-      { status: 409 },
-    );
-  }
-
-  await prisma.automationJob.delete({ where: { id: jobId } });
-
-  // Reset invoice status if no other jobs remain for it
-  if (job.invoiceId) {
-    const remaining = await prisma.automationJob.count({
-      where: { invoiceId: job.invoiceId },
-    });
-    if (remaining === 0) {
-      await prisma.invoice.update({
-        where: { id: job.invoiceId },
-        data: { siradiqStatus: "PENDING" },
-      });
-    }
-  }
-
-  return NextResponse.json({ success: true });
 }

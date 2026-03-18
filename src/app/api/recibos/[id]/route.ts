@@ -93,13 +93,36 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const existing = await prisma.domesticReceipt.findFirst({
     where: { id, userId: session.user.id },
+    select: {
+      id: true,
+      automationJobs: { select: { id: true } },
+    },
   });
 
   if (!existing) {
     return NextResponse.json({ error: "Recibo no encontrado" }, { status: 404 });
   }
 
+  const linkedJobIds = existing.automationJobs.map((j) => j.id);
+
   await prisma.domesticReceipt.delete({ where: { id } });
+
+  // Clean up orphaned jobs (jobs that no longer have any linked receipts or invoices)
+  if (linkedJobIds.length > 0) {
+    const orphanedJobs = await prisma.automationJob.findMany({
+      where: {
+        id: { in: linkedJobIds },
+        invoiceId: null,
+        domesticReceipts: { none: {} },
+      },
+      select: { id: true },
+    });
+    if (orphanedJobs.length > 0) {
+      await prisma.automationJob.deleteMany({
+        where: { id: { in: orphanedJobs.map((j) => j.id) } },
+      });
+    }
+  }
 
   return NextResponse.json({ success: true });
 }

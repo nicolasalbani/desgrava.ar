@@ -47,15 +47,24 @@ export async function GET(req: NextRequest) {
       familyDependentId: true,
       familyDependent: { select: { id: true, nombre: true, apellido: true } },
       createdAt: true,
-      _count: { select: { automationJobs: true } },
+      automationJobs: {
+        where: { jobType: "SUBMIT_INVOICE" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true, status: true, createdAt: true, errorMessage: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  const result = invoices.map((inv) => ({
-    ...inv,
-    hasFile: !!inv.fileMimeType,
-  }));
+  const result = invoices.map((inv) => {
+    const { automationJobs, ...rest } = inv;
+    return {
+      ...rest,
+      hasFile: !!inv.fileMimeType,
+      latestJob: automationJobs[0] ?? null,
+    };
+  });
 
   return NextResponse.json({ invoices: result });
 }

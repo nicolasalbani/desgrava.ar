@@ -43,14 +43,24 @@ export async function GET(req: NextRequest) {
       domesticWorker: {
         select: { id: true, apellidoNombre: true, cuil: true },
       },
+      automationJobs: {
+        where: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true, status: true, createdAt: true, errorMessage: true },
+      },
     },
     orderBy: [{ fiscalYear: "desc" }, { fiscalMonth: "desc" }],
   });
 
-  const result = receipts.map((r) => ({
-    ...r,
-    hasFile: !!r.fileMimeType,
-  }));
+  const result = receipts.map((r) => {
+    const { automationJobs, ...rest } = r;
+    return {
+      ...rest,
+      hasFile: !!r.fileMimeType,
+      latestJob: automationJobs[0] ?? null,
+    };
+  });
 
   return NextResponse.json({ receipts: result });
 }

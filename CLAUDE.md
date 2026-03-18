@@ -51,13 +51,13 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `validators/` — Zod schemas for invoices, credentials, CUIT format, domestic workers/receipts
 - `domestic/` — Domestic workers domain logic (schemas, validators)
 
-**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `landing/`) with shared shadcn components in `ui/` and layout components in `layout/`.
+**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `landing/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`), shadcn components in `ui/`, and layout components in `layout/`.
 
 ## Key Patterns
 
 - **All monetary calculations** use `Decimal.js` (never floating-point) for tax math precision.
 - **ARCA credentials** are encrypted with AES-256-GCM, decrypted only on-demand for automation jobs, never kept in memory.
-- **Automation jobs** are queued with status tracking (PENDING → RUNNING → COMPLETED/FAILED), real-time JSON logs, screenshot capture, and max 3 retries.
+- **Automation jobs** are queued with status tracking (PENDING → RUNNING → COMPLETED/FAILED), real-time JSON logs, screenshot capture. Job status is embedded inline in each invoice/receipt row (no separate page). Each row shows its latest job status and can expand to show full job history. There is no retry — users re-send to create a fresh job. Jobs are audit records deleted only via cascade when the parent invoice/receipt is deleted.
 - **ARCA login** (`arca-navigator.ts`) uses `domcontentloaded` + explicit element waits (not `networkidle`) because ARCA's login pages have persistent connections that cause `networkidle` to hang, especially from remote servers. The ARCA portal and SiRADIG popup use `networkidle` for their `goto`/load since they are SPAs that render content via AJAX after the `load` event fires.
 - **SiRADIG** is a single-page jQuery app. After the initial page load, all interactions are AJAX. Use `networkidle` for waits inside SiRADIG (it works because AJAX requests are finite), but never for ARCA login page navigation.
 - **OCR pipeline** tries pdf-parse for text-based PDFs, falls back to Tesseract for scanned documents.

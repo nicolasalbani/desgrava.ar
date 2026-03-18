@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import confetti from "canvas-confetti";
 import {
   Table,
   TableBody,
@@ -38,6 +38,9 @@ import {
   Upload,
   Download,
   Tags,
+  ChevronDown,
+  ChevronUp,
+  Square,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -53,6 +56,8 @@ import { DEDUCTION_CATEGORIES, DEDUCTION_CATEGORY_LABELS } from "@/lib/validator
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useFiscalYear } from "@/contexts/fiscal-year";
+import { JobStatusBadge, type LatestJob } from "@/components/shared/job-status-badge";
+import { JobHistoryPanel } from "@/components/shared/job-history-panel";
 
 interface FamilyDependentRef {
   id: string;
@@ -79,20 +84,18 @@ interface Invoice {
   contractEndDate: string | null;
   familyDependentId: string | null;
   familyDependent: FamilyDependentRef | null;
-  _count: { automationJobs: number };
+  latestJob: LatestJob | null;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; dot: string; animate?: boolean }> = {
-  PENDING: { label: "Pendiente", dot: "bg-foreground/25" },
-  QUEUED: { label: "En cola", dot: "bg-blue-400/50", animate: true },
-  PROCESSING: { label: "Procesando", dot: "bg-blue-400/70", animate: true },
-  PREVIEW_READY: { label: "Preview listo", dot: "bg-amber-400/70" },
-  CONFIRMED: { label: "Confirmado", dot: "bg-emerald-400/60" },
-  SUBMITTED: { label: "Enviado", dot: "bg-emerald-400/80" },
-  FAILED: { label: "Error", dot: "bg-rose-400/80" },
+const JOB_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pendiente",
+  RUNNING: "Ejecutando",
+  COMPLETED: "Completado",
+  FAILED: "Error",
+  CANCELLED: "Cancelado",
 };
 
-const SELECTABLE_STATUSES = ["PENDING", "FAILED"];
+const NO_JOB = "__NO_JOB__";
 
 function isFutureMonth(inv: Invoice): boolean {
   const now = new Date();
@@ -105,9 +108,7 @@ function isFutureMonth(inv: Invoice): boolean {
 }
 
 export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number) => void } = {}) {
-  const router = useRouter();
   const { fiscalYear } = useFiscalYear();
-  const isFirstAutomation = useRef(true);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -127,6 +128,9 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   const [bulkCategoryUpdating, setBulkCategoryUpdating] = useState(false);
   const [editTarget, setEditTarget] = useState<Invoice | null>(null);
   const [dependents, setDependents] = useState<FamilyDependentRef[]>([]);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+  const celebratedRef = useRef(false);
 
   useEffect(() => {
     fetchInvoices();
@@ -141,27 +145,72 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
     }
   }, [fiscalYear]);
 
-  async function fetchInvoices(showLoading = true) {
-    if (showLoading) setLoading(true);
-    try {
-      const res = await fetch("/api/facturas");
-      const data = await res.json();
-      const loaded: Invoice[] = data.invoices || [];
-      setInvoices(loaded);
-      onInitialLoad?.(loaded.length);
-      if (loaded.some((inv) => inv._count.automationJobs > 0)) {
-        isFirstAutomation.current = false;
+  const fetchInvoices = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) setLoading(true);
+      try {
+        const res = await fetch("/api/facturas");
+        const data = await res.json();
+        const loaded: Invoice[] = data.invoices || [];
+        setInvoices(loaded);
+        onInitialLoad?.(loaded.length);
+
+        // On initial load (showLoading=true), if completions already exist, skip celebration
+        if (showLoading) {
+          if (loaded.some((inv) => inv.latestJob?.status === "COMPLETED")) {
+            celebratedRef.current = true;
+          }
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
+    },
+    [onInitialLoad],
+  );
+
+  // Celebrate the first successful SiRADIG submission
+  useEffect(() => {
+    if (celebratedRef.current) return;
+    const hasCompleted = invoices.some((inv) => inv.latestJob?.status === "COMPLETED");
+    if (hasCompleted) {
+      celebratedRef.current = true;
+      confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.5 },
+        colors: ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ffffff"],
+      });
+      setTimeout(() => {
+        confetti({
+          particleCount: 60,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0, y: 0.6 },
+          colors: ["#6366f1", "#8b5cf6", "#a78bfa"],
+        });
+        confetti({
+          particleCount: 60,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1, y: 0.6 },
+          colors: ["#6366f1", "#8b5cf6", "#a78bfa"],
+        });
+      }, 200);
+      toast.success("Tu primera deduccion fue enviada a SiRADIG", {
+        duration: 6000,
+      });
     }
-  }
+  }, [invoices]);
 
   // Poll for status updates while any invoice is QUEUED or PROCESSING
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     const hasInFlight = invoices.some(
-      (inv) => inv.siradiqStatus === "QUEUED" || inv.siradiqStatus === "PROCESSING",
+      (inv) =>
+        inv.siradiqStatus === "QUEUED" ||
+        inv.siradiqStatus === "PROCESSING" ||
+        inv.latestJob?.status === "PENDING" ||
+        inv.latestJob?.status === "RUNNING",
     );
     if (hasInFlight && !pollRef.current) {
       pollRef.current = setInterval(() => fetchInvoices(false), 5_000);
@@ -219,9 +268,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   }
 
   async function handleBulkDelete() {
-    const deletableIds = invoices
-      .filter((inv) => selectedIds.has(inv.id) && inv._count.automationJobs === 0)
-      .map((inv) => inv.id);
+    const deletableIds = Array.from(selectedIds);
     if (deletableIds.length === 0) return;
 
     setBulkDeleting(true);
@@ -274,11 +321,26 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
     return DEDUCTION_CATEGORIES.filter((cat) => cats.has(cat));
   }, [invoices, fiscalYear]);
 
+  const uniqueJobStatuses = useMemo(() => {
+    const sts = new Set<string>();
+    for (const inv of invoices) {
+      if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) continue;
+      sts.add(inv.latestJob?.status ?? NO_JOB);
+    }
+    // Preserve a sensible order
+    const ordered = Object.keys(JOB_STATUS_LABELS).filter((k) => sts.has(k));
+    if (sts.has(NO_JOB)) ordered.push(NO_JOB);
+    return ordered;
+  }, [invoices, fiscalYear]);
+
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {
       if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) return false;
       if (categories.size > 0 && !categories.has(inv.deductionCategory)) return false;
-      if (statuses.size > 0 && !statuses.has(inv.siradiqStatus)) return false;
+      if (statuses.size > 0) {
+        const jobStatus = inv.latestJob?.status ?? NO_JOB;
+        if (!statuses.has(jobStatus)) return false;
+      }
       if (fechaDesde) {
         if (!inv.invoiceDate) return false;
         if (new Date(inv.invoiceDate) < new Date(fechaDesde)) return false;
@@ -338,14 +400,13 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
   }
 
   const eligibleInvoices = filteredInvoices.filter(
-    (inv) => SELECTABLE_STATUSES.includes(inv.siradiqStatus) && !isFutureMonth(inv),
+    (inv) =>
+      !isFutureMonth(inv) &&
+      inv.latestJob?.status !== "PENDING" &&
+      inv.latestJob?.status !== "RUNNING",
   );
   const allEligibleSelected =
     eligibleInvoices.length > 0 && eligibleInvoices.every((inv) => selectedIds.has(inv.id));
-
-  const deletableSelectedCount = invoices.filter(
-    (inv) => selectedIds.has(inv.id) && inv._count.automationJobs === 0,
-  ).length;
 
   function toggleSelectAll() {
     if (allEligibleSelected) {
@@ -437,9 +498,25 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
           body: JSON.stringify({ invoiceId, jobType: "SUBMIT_INVOICE" }),
         });
         if (res.ok) {
+          const jobData = await res.json().catch(() => null);
           successCount++;
           setInvoices((prev) =>
-            prev.map((inv) => (inv.id === invoiceId ? { ...inv, siradiqStatus: "QUEUED" } : inv)),
+            prev.map((inv) =>
+              inv.id === invoiceId
+                ? {
+                    ...inv,
+                    siradiqStatus: "QUEUED",
+                    latestJob: jobData?.job
+                      ? {
+                          id: jobData.job.id,
+                          status: jobData.job.status,
+                          createdAt: jobData.job.createdAt,
+                          errorMessage: null,
+                        }
+                      : inv.latestJob,
+                  }
+                : inv,
+            ),
           );
         } else {
           failCount++;
@@ -453,10 +530,6 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
 
     if (successCount > 0) {
       toast.success(`${successCount} factura(s) enviada(s) a la cola de SiRADIG`);
-      if (isFirstAutomation.current) {
-        router.push("/dashboard");
-        return;
-      }
     }
     if (failCount > 0) {
       toast.error(`${failCount} factura(s) no se pudieron enviar`);
@@ -464,6 +537,80 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
 
     setSelectedIds(failedIds);
     setSubmitting(false);
+  }
+
+  async function handleSendSingle(invoiceId: string) {
+    const inv = invoices.find((i) => i.id === invoiceId);
+    if (!inv) return;
+    if (fiscalYear === null) {
+      toast.error("Selecciona un ano fiscal antes de enviar a SiRADIG");
+      return;
+    }
+    if (inv.fiscalYear !== fiscalYear) {
+      toast.error(
+        `"${inv.providerName || inv.providerCuit}" es del ano ${inv.fiscalYear}, pero el ano fiscal activo es ${fiscalYear}.`,
+      );
+      return;
+    }
+    if (inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId) {
+      toast.error("Vincula un familiar antes de enviar gastos educativos a SiRADIG");
+      return;
+    }
+    try {
+      const res = await fetch("/api/automatizacion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId, jobType: "SUBMIT_INVOICE" }),
+      });
+      if (res.ok) {
+        const jobData = await res.json().catch(() => null);
+        setInvoices((prev) =>
+          prev.map((i) =>
+            i.id === invoiceId
+              ? {
+                  ...i,
+                  siradiqStatus: "QUEUED",
+                  latestJob: jobData?.job
+                    ? {
+                        id: jobData.job.id,
+                        status: jobData.job.status,
+                        createdAt: jobData.job.createdAt,
+                        errorMessage: null,
+                      }
+                    : i.latestJob,
+                }
+              : i,
+          ),
+        );
+        toast.success("Factura enviada a la cola de SiRADIG");
+      } else {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error ?? "Error al enviar a SiRADIG");
+      }
+    } catch {
+      toast.error("Error de conexion al enviar a SiRADIG");
+    }
+  }
+
+  async function handleCancelJob(jobId: string) {
+    setCancellingJobId(jobId);
+    try {
+      const res = await fetch(`/api/automatizacion/${jobId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel" }),
+      });
+      if (res.ok) {
+        toast.success("Job cancelado");
+        fetchInvoices(false);
+      } else {
+        toast.error("Error al cancelar");
+      }
+    } catch {
+      toast.error("Error de conexion");
+    } finally {
+      setCancellingJobId(null);
+    }
   }
 
   // --- Filter active helpers ---
@@ -549,23 +696,20 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
               </Button>
             </PopoverContent>
           </Popover>
-          {deletableSelectedCount > 0 && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => setBulkDeleteOpen(true)}
-              disabled={submitting || bulkDeleting}
-            >
-              {bulkDeleting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
-              )}
-              Eliminar
-              {deletableSelectedCount < selectedIds.size ? ` (${deletableSelectedCount})` : ""}
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => setBulkDeleteOpen(true)}
+            disabled={submitting || bulkDeleting}
+          >
+            {bulkDeleting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 h-4 w-4" />
+            )}
+            Eliminar
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -791,10 +935,10 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                   </div>
                 </TableHead>
 
-                {/* Estado — funnel */}
+                {/* SiRADIG — funnel */}
                 <TableHead>
                   <div className="flex items-center gap-2">
-                    <span>Estado</span>
+                    <span>SiRADIG</span>
                     <Popover>
                       <PopoverTrigger asChild>
                         <button
@@ -824,7 +968,7 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                             )}
                           </div>
                           <div className="space-y-1">
-                            {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                            {uniqueJobStatuses.map((key) => (
                               <label
                                 key={key}
                                 className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
@@ -843,7 +987,9 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                                     });
                                   }}
                                 />
-                                <span className="text-xs">{cfg.label}</span>
+                                <span className="text-xs">
+                                  {key === NO_JOB ? "No enviado" : (JOB_STATUS_LABELS[key] ?? key)}
+                                </span>
                               </label>
                             ))}
                           </div>
@@ -852,14 +998,13 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                     </Popover>
                   </div>
                 </TableHead>
-
-                <TableHead className="w-20 text-right">Acciones</TableHead>
+                <TableHead className="w-24 text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredInvoices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-12 text-center">
+                  <TableCell colSpan={8} className="py-12 text-center">
                     <p className="text-muted-foreground/70 text-sm font-medium">Sin resultados</p>
                     <p className="text-muted-foreground/50 mt-1 text-xs">
                       Proba con otros filtros o terminos de busqueda
@@ -875,138 +1020,150 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
               ) : (
                 filteredInvoices.map((inv) => {
                   const isFuture = isFutureMonth(inv);
-                  const isEligible = SELECTABLE_STATUSES.includes(inv.siradiqStatus) && !isFuture;
+                  const isExpanded = expandedRowId === inv.id;
+                  const isInFlight =
+                    inv.latestJob?.status === "PENDING" || inv.latestJob?.status === "RUNNING";
+                  const canCancel = isInFlight;
                   return (
-                    <TableRow key={inv.id}>
-                      <TableCell className="pl-4">
-                        <Checkbox
-                          checked={selectedIds.has(inv.id)}
-                          onCheckedChange={() => toggleSelect(inv.id)}
-                          disabled={!isEligible}
-                          title={
-                            isFuture
-                              ? "No disponible: el periodo fiscal aun no esta habilitado en SiRADIG"
-                              : undefined
-                          }
-                          aria-label={`Seleccionar factura ${inv.id}`}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {inv.source === "EMAIL" && (
-                            <span title="Cargada por email">
-                              <Mail className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
-                            </span>
-                          )}
-                          {(inv.source === "PDF" || inv.source === "OCR") && (
-                            <span title="Cargada por archivo">
-                              <Upload className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
-                            </span>
-                          )}
-                          {inv.source === "ARCA" && (
-                            <span title="Importada desde ARCA">
-                              <Download className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
-                            </span>
-                          )}
-                          <div>
-                            <p className="text-sm font-medium">
-                              {inv.providerName || inv.providerCuit}
-                            </p>
-                            {inv.providerName && (
-                              <p className="text-muted-foreground mt-0.5 text-xs">
-                                {inv.providerCuit}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[200px]">
-                        <span
-                          className="text-muted-foreground block truncate text-sm"
-                          title={
-                            DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
-                            inv.deductionCategory
-                          }
-                        >
-                          {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
-                            inv.deductionCategory}
-                        </span>
-                        {inv.deductionCategory === "GASTOS_EDUCATIVOS" && (
-                          <select
-                            className="text-muted-foreground mt-0.5 max-w-full truncate border-none bg-transparent p-0 text-xs outline-none"
-                            value={inv.familyDependentId ?? ""}
-                            onChange={(e) => handleLinkDependent(inv.id, e.target.value || null)}
-                          >
-                            <option value="">Sin vincular</option>
-                            {dependents.map((d) => (
-                              <option key={d.id} value={d.id}>
-                                {d.apellido} {d.nombre}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {inv.invoiceNumber ?? "-"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {inv.invoiceDate
-                          ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="text-right text-sm font-medium tabular-nums">
-                        ${parseFloat(inv.amount).toLocaleString("es-AR")}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const cfg = STATUS_CONFIG[inv.siradiqStatus];
-                          return (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span
-                                className={cn(
-                                  "h-1.5 w-1.5 shrink-0 rounded-full",
-                                  cfg?.dot ?? "bg-foreground/25",
-                                  cfg?.animate && "animate-pulse",
-                                )}
-                              />
-                              <span className="text-foreground/70 text-xs font-medium">
-                                {cfg?.label ?? inv.siradiqStatus}
+                    <React.Fragment key={inv.id}>
+                      <TableRow className="group">
+                        <TableCell className="pl-4">
+                          <Checkbox
+                            checked={selectedIds.has(inv.id)}
+                            onCheckedChange={() => toggleSelect(inv.id)}
+                            disabled={isFuture || isInFlight}
+                            title={
+                              isFuture
+                                ? "No disponible: el periodo fiscal aun no esta habilitado en SiRADIG"
+                                : isInFlight
+                                  ? "Hay un envio en curso"
+                                  : undefined
+                            }
+                            aria-label={`Seleccionar factura ${inv.id}`}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {inv.source === "EMAIL" && (
+                              <span title="Cargada por email">
+                                <Mail className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
                               </span>
-                            </span>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setEditTarget(inv)}
-                            title="Editar"
+                            )}
+                            {(inv.source === "PDF" || inv.source === "OCR") && (
+                              <span title="Cargada por archivo">
+                                <Upload className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                              </span>
+                            )}
+                            {inv.source === "ARCA" && (
+                              <span title="Importada desde ARCA">
+                                <Download className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                              </span>
+                            )}
+                            <div>
+                              <p className="text-sm font-medium">
+                                {inv.providerName || inv.providerCuit}
+                              </p>
+                              {inv.providerName && (
+                                <p className="text-muted-foreground mt-0.5 text-xs">
+                                  {inv.providerCuit}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[200px]">
+                          <span
+                            className="text-muted-foreground block truncate text-sm"
+                            title={
+                              DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                              inv.deductionCategory
+                            }
                           >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          {inv.hasFile && (
-                            <Button variant="ghost" size="icon" asChild title="Ver comprobante">
-                              <a
-                                href={`/api/facturas/${inv.id}/file`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <FileDown className="h-4 w-4" />
-                              </a>
-                            </Button>
+                            {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                              inv.deductionCategory}
+                          </span>
+                          {inv.deductionCategory === "GASTOS_EDUCATIVOS" && (
+                            <select
+                              className="text-muted-foreground mt-0.5 max-w-full truncate border-none bg-transparent p-0 text-xs outline-none"
+                              value={inv.familyDependentId ?? ""}
+                              onChange={(e) => handleLinkDependent(inv.id, e.target.value || null)}
+                            >
+                              <option value="">Sin vincular</option>
+                              {dependents.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.apellido} {d.nombre}
+                                </option>
+                              ))}
+                            </select>
                           )}
-                          {inv._count.automationJobs > 0 ? (
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {inv.invoiceNumber ?? "-"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {inv.invoiceDate
+                            ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-right text-sm font-medium tabular-nums">
+                          ${parseFloat(inv.amount).toLocaleString("es-AR")}
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => setExpandedRowId(isExpanded ? null : inv.id)}
+                            className="inline-flex items-center gap-1"
+                          >
+                            <JobStatusBadge job={inv.latestJob} />
+                            {inv.latestJob &&
+                              (isExpanded ? (
+                                <ChevronUp className="text-muted-foreground/40 h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="text-muted-foreground/40 h-3 w-3" />
+                              ))}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
+                            {!isFuture && !isInFlight && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleSendSingle(inv.id)}
+                                title="Enviar a SiRADIG"
+                              >
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canCancel && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleCancelJob(inv.latestJob!.id)}
+                                disabled={cancellingJobId === inv.latestJob!.id}
+                                title="Cancelar envio"
+                              >
+                                <Square className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
-                              disabled
-                              title="Tiene automatizaciones vinculadas"
+                              onClick={() => setEditTarget(inv)}
+                              title="Editar"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Pencil className="h-4 w-4" />
                             </Button>
-                          ) : (
+                            {inv.hasFile && (
+                              <Button variant="ghost" size="icon" asChild title="Ver comprobante">
+                                <a
+                                  href={`/api/facturas/${inv.id}/file`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <FileDown className="h-4 w-4" />
+                                </a>
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1015,10 +1172,23 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow key={`${inv.id}-history`}>
+                          <TableCell colSpan={8} className="bg-muted/20 px-6 py-3">
+                            <JobHistoryPanel
+                              entityId={inv.id}
+                              entityType="invoice"
+                              latestJobStatus={inv.latestJob?.status}
+                              onCancel={handleCancelJob}
+                              cancelling={!!cancellingJobId}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}
@@ -1046,18 +1216,11 @@ export function InvoiceList({ onInitialLoad }: { onInitialLoad?: (count: number)
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Eliminar {deletableSelectedCount}{" "}
-              {deletableSelectedCount === 1 ? "factura" : "facturas"}
+              Eliminar {selectedIds.size} {selectedIds.size === 1 ? "factura" : "facturas"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               Esta accion no se puede deshacer. Se eliminaran permanentemente las facturas
-              seleccionadas.
-              {deletableSelectedCount < selectedIds.size && (
-                <span className="mt-1 block">
-                  Nota: {selectedIds.size - deletableSelectedCount} factura(s) con automatizaciones
-                  vinculadas no se pueden eliminar.
-                </span>
-              )}
+              seleccionadas y sus envios a SiRADIG asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
