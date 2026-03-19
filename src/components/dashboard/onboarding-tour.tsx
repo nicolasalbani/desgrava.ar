@@ -93,7 +93,12 @@ interface OnboardingTourProps {
 export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProps) {
   const { fiscalYear } = useFiscalYear();
   const steps = getSteps(fiscalYear ?? CURRENT_YEAR);
-  const completedCount = completedSteps.filter(Boolean).length;
+
+  // Override fiscal year step from client-side context (server snapshot may be stale)
+  const effectiveSteps: typeof completedSteps = [...completedSteps];
+  effectiveSteps[1] = fiscalYear != null;
+
+  const completedCount = effectiveSteps.filter(Boolean).length;
   const progressPercent = Math.round((completedCount / 5) * 100);
   const allDone = completedCount === 5;
 
@@ -139,7 +144,7 @@ export function OnboardingTour({ completedSteps, firstName }: OnboardingTourProp
           <StepCard
             key={step.id}
             step={step}
-            state={getStepState(index, completedSteps)}
+            state={getStepState(index, effectiveSteps)}
             index={index}
             onClick={step.id === "fiscal-year" ? openFiscalYearSelector : undefined}
           />
