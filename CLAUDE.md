@@ -51,7 +51,11 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `validators/` — Zod schemas for invoices, credentials, CUIT format, domestic workers/receipts
 - `domestic/` — Domestic workers domain logic (schemas, validators)
 
-**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `landing/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`), shadcn components in `ui/`, and layout components in `layout/`.
+**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `landing/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
+
+**Hooks** (`src/hooks/`) contain shared React hooks:
+
+- `use-paginated-fetch` — Generic hook for server-side paginated data fetching with debounced search, filter management, and polling support. Used by both `InvoiceList` and `ReceiptList`.
 
 ## Key Patterns
 
@@ -62,7 +66,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - **SiRADIG** is a single-page jQuery app. After the initial page load, all interactions are AJAX. Use `networkidle` for waits inside SiRADIG (it works because AJAX requests are finite), but never for ARCA login page navigation.
 - **OCR pipeline** tries pdf-parse for text-based PDFs, falls back to Tesseract for scanned documents.
 - **AI category classification** uses OpenAI to auto-detect invoice deduction categories when users upload or create invoices. The global `ProviderCatalog` table caches categories by CUIT — once a provider is classified, all users benefit. For unknown CUITs without PDF text, the system enriches classification context by fetching business activity data from `sistemas360.ar/cuit/{cuit}`.
-- **Invoice management** uses Dialog modals for upload and manual entry, with multi-select popover filters (categories, statuses) on the table view.
+- **Invoice management** uses Dialog modals for upload and manual entry, with multi-select popover filters (categories, statuses) on the table view. Both facturas and recibos use server-side pagination via `usePaginatedFetch` — filtering, search, and pagination are handled by the API with Prisma `skip`/`take` and `count()` in parallel.
 - **Credential validation** calls `/api/credenciales/validar` after saving to verify ARCA credentials work.
 - **Path alias**: `@/*` maps to `./src/*`.
 - **Naming**: Spanish names in ARCA/SiRADIG-specific automation code, English elsewhere.
@@ -70,7 +74,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 ## Testing
 
-**Framework**: Vitest with 500+ tests across 20 test files.
+**Framework**: Vitest with 537+ tests across 22 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -85,8 +89,9 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `ocr/` — receipt-extractor for domestic worker salary receipts (26 tests)
 - `validators/` — domestic worker and receipt schemas (32 tests)
 - `invite-codes` — token creation and validation (15 tests)
+- `hooks/` — usePaginatedFetch buildParams helper (16 tests)
 
-**Writing new tests**: Always create tests for new `src/lib/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
+**Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
 
 ## CI/CD
 

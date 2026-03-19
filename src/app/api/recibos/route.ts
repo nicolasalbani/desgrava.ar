@@ -12,9 +12,23 @@ export async function GET(req: NextRequest) {
   }
 
   const searchParams = req.nextUrl.searchParams;
+
+  // Pagination
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+  const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "10")));
+
+  // Filters
   const fiscalYear = searchParams.get("fiscalYear");
   const status = searchParams.get("status");
   const workerId = searchParams.get("workerId");
+  const categories = searchParams.get("categories");
+  const statuses = searchParams.get("statuses");
+  const search = searchParams.get("search");
+  const totalMin = searchParams.get("totalMin");
+  const totalMax = searchParams.get("totalMax");
+  const contribMin = searchParams.get("contribMin");
+  const contribMax = searchParams.get("contribMax");
+  const attentionFilter = searchParams.get("attentionFilter");
 
   const where: Prisma.DomesticReceiptWhereInput = {
     userId: session.user.id,
@@ -24,36 +38,88 @@ export async function GET(req: NextRequest) {
   if (status) where.siradiqStatus = status as Prisma.EnumSiradiqStatusFilter["equals"];
   if (workerId) where.domesticWorkerId = workerId;
 
-  const receipts = await prisma.domesticReceipt.findMany({
-    where,
-    select: {
-      id: true,
-      domesticWorkerId: true,
-      fiscalYear: true,
-      fiscalMonth: true,
-      periodo: true,
-      categoriaProfesional: true,
-      total: true,
-      contributionAmount: true,
-      source: true,
-      siradiqStatus: true,
-      originalFilename: true,
-      fileMimeType: true,
-      createdAt: true,
-      domesticWorker: {
-        select: { id: true, apellidoNombre: true, cuil: true },
-      },
-      automationJobs: {
-        where: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" },
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { id: true, status: true, createdAt: true, errorMessage: true },
-      },
-    },
-    orderBy: [{ fiscalYear: "desc" }, { fiscalMonth: "desc" }],
-  });
+  // Multi-value category filter
+  if (categories) {
+    const catList = categories.split(",").filter(Boolean);
+    if (catList.length > 0) {
+      where.categoriaProfesional = { in: catList };
+    }
+  }
 
-  const result = receipts.map((r) => {
+  // Search across worker name, CUIL, and periodo
+  if (search) {
+    where.OR = [
+      { periodo: { contains: search, mode: "insensitive" } },
+      { categoriaProfesional: { contains: search, mode: "insensitive" } },
+      { domesticWorker: { apellidoNombre: { contains: search, mode: "insensitive" } } },
+      { domesticWorker: { cuil: { contains: search } } },
+    ];
+  }
+
+  // Total amount range filter
+  if (totalMin || totalMax) {
+    where.total = {};
+    if (totalMin) where.total.gte = new Prisma.Decimal(totalMin);
+    if (totalMax) where.total.lte = new Prisma.Decimal(totalMax);
+  }
+
+  // Contribution amount range filter
+  if (contribMin || contribMax) {
+    where.contributionAmount = {};
+    if (contribMin) where.contributionAmount.gte = new Prisma.Decimal(contribMin);
+    if (contribMax) where.contributionAmount.lte = new Prisma.Decimal(contribMax);
+  }
+
+  const baseWhere: Prisma.DomesticReceiptWhereInput = { ...where };
+
+  const [receipts, totalCount, distinctJobStatuses, receiptsWithoutJobs] = await Promise.all([
+    prisma.domesticReceipt.findMany({
+      where,
+      select: {
+        id: true,
+        domesticWorkerId: true,
+        fiscalYear: true,
+        fiscalMonth: true,
+        periodo: true,
+        categoriaProfesional: true,
+        total: true,
+        contributionAmount: true,
+        source: true,
+        siradiqStatus: true,
+        originalFilename: true,
+        fileMimeType: true,
+        createdAt: true,
+        domesticWorker: {
+          select: { id: true, apellidoNombre: true, cuil: true },
+        },
+        automationJobs: {
+          where: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true, status: true, createdAt: true, errorMessage: true },
+        },
+      },
+      orderBy: [{ fiscalYear: "desc" }, { fiscalMonth: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.domesticReceipt.count({ where }),
+    prisma.automationJob.groupBy({
+      by: ["status"],
+      where: {
+        jobType: "SUBMIT_DOMESTIC_DEDUCTION",
+        domesticReceipts: { some: { ...baseWhere } },
+      },
+    }),
+    prisma.domesticReceipt.count({
+      where: {
+        ...baseWhere,
+        automationJobs: { none: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" } },
+      },
+    }),
+  ]);
+
+  let result = receipts.map((r) => {
     const { automationJobs, ...rest } = r;
     return {
       ...rest,
@@ -62,7 +128,38 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ receipts: result });
+  // Attention filter: no job, failed job, or missing worker link
+  if (attentionFilter === "true") {
+    result = result.filter((r) => {
+      return !r.latestJob || r.latestJob.status === "FAILED" || !r.domesticWorkerId;
+    });
+  }
+
+  // Post-query job status filter
+  if (statuses) {
+    const statusList = statuses.split(",").filter(Boolean);
+    if (statusList.length > 0) {
+      const NO_JOB = "__NO_JOB__";
+      result = result.filter((r) => {
+        const jobStatus = r.latestJob?.status ?? NO_JOB;
+        return statusList.includes(jobStatus);
+      });
+    }
+  }
+
+  const availableStatuses: string[] = distinctJobStatuses.map((s) => s.status);
+  if (receiptsWithoutJobs > 0) availableStatuses.push("__NO_JOB__");
+
+  return NextResponse.json({
+    receipts: result,
+    pagination: {
+      page,
+      pageSize,
+      totalCount,
+      totalPages: Math.ceil(totalCount / pageSize),
+    },
+    availableStatuses,
+  });
 }
 
 export async function POST(req: NextRequest) {

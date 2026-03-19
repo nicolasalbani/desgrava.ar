@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -45,6 +45,8 @@ import { useAttentionCounts } from "@/contexts/attention-counts";
 import { formatCuit } from "@/lib/validators/cuit";
 import { JobStatusBadge, type LatestJob } from "@/components/shared/job-status-badge";
 import { JobHistoryPanel } from "@/components/shared/job-history-panel";
+import { usePaginatedFetch } from "@/hooks/use-paginated-fetch";
+import { PaginationControls } from "@/components/shared/pagination-controls";
 
 interface ReceiptRow {
   id: string;
@@ -93,15 +95,16 @@ export function ReceiptList({
 }) {
   const { fiscalYear } = useFiscalYear();
   const { invalidate: invalidateAttention } = useAttentionCounts();
-  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+
+  // Local filter UI state
   const [categories, setCategories] = useState<Set<string>>(new Set());
   const [statuses, setStatuses] = useState<Set<string>>(new Set());
   const [totalMin, setTotalMin] = useState("");
   const [totalMax, setTotalMax] = useState("");
   const [contribMin, setContribMin] = useState("");
   const [contribMax, setContribMax] = useState("");
+
+  // Action state
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -111,31 +114,64 @@ export function ReceiptList({
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
 
-  const fetchReceipts = useCallback(
-    (showLoading = true) => {
-      if (showLoading) setLoading(true);
-      const params = new URLSearchParams();
-      if (fiscalYear) params.set("fiscalYear", String(fiscalYear));
+  // Derive unique categories from current page data for filter options
+  // With server-side pagination we only see the current page, so we show all known categories
+  const [knownCategories, setKnownCategories] = useState<string[]>([]);
 
-      fetch(`/api/recibos?${params}`)
-        .then((r) => r.json())
-        .then((d) => {
-          const list = d.receipts ?? [];
-          setReceipts(list);
-          onInitialLoad?.(list.length);
-        })
-        .catch(() => toast.error("Error al cargar recibos"))
-        .finally(() => setLoading(false));
-    },
-    [fiscalYear, onInitialLoad],
-  );
+  // Paginated fetch
+  const {
+    data: receipts,
+    setData: setReceipts,
+    pagination,
+    loading,
+    search,
+    setSearch,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    refetch,
+    setFilters,
+    setShouldPoll,
+    meta,
+  } = usePaginatedFetch<ReceiptRow>({
+    url: "/api/recibos",
+    dataKey: "receipts",
+    staticParams: useMemo(
+      () => ({
+        fiscalYear: fiscalYear?.toString(),
+        attentionFilter: attentionFilter ? "true" : undefined,
+      }),
+      [fiscalYear, attentionFilter],
+    ),
+    onInitialLoad,
+  });
 
+  // Build known categories from received data
   useEffect(() => {
-    fetchReceipts();
-  }, [fetchReceipts]);
+    const cats = new Set(knownCategories);
+    for (const r of receipts) {
+      if (r.categoriaProfesional) cats.add(r.categoriaProfesional);
+    }
+    const sorted = Array.from(cats).sort();
+    if (sorted.join(",") !== knownCategories.join(",")) {
+      setKnownCategories(sorted);
+    }
+  }, [receipts, knownCategories]);
 
-  // Poll for status updates while any receipt is QUEUED or PROCESSING
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Sync local filter state to the hook
+  useEffect(() => {
+    setFilters({
+      categories: categories.size > 0 ? Array.from(categories).join(",") : undefined,
+      statuses: statuses.size > 0 ? Array.from(statuses).join(",") : undefined,
+      totalMin: totalMin || undefined,
+      totalMax: totalMax || undefined,
+      contribMin: contribMin || undefined,
+      contribMax: contribMax || undefined,
+    });
+  }, [categories, statuses, totalMin, totalMax, contribMin, contribMax, setFilters]);
+
+  // Poll while any receipt has in-flight jobs
   useEffect(() => {
     const hasInFlight = receipts.some(
       (r) =>
@@ -144,109 +180,18 @@ export function ReceiptList({
         r.latestJob?.status === "PENDING" ||
         r.latestJob?.status === "RUNNING",
     );
-    if (hasInFlight && !pollRef.current) {
-      pollRef.current = setInterval(() => fetchReceipts(false), 5_000);
-    } else if (!hasInFlight && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [receipts, fetchReceipts]);
+    setShouldPoll(hasInFlight);
+  }, [receipts, setShouldPoll]);
 
-  // Derive unique categories from data
-  const uniqueCategories = useMemo(() => {
-    const cats = new Set<string>();
-    for (const r of receipts) {
-      if (r.categoriaProfesional) cats.add(r.categoriaProfesional);
-    }
-    return Array.from(cats).sort();
-  }, [receipts]);
-
-  // Derive unique job statuses from data
-  const uniqueJobStatuses = useMemo(() => {
-    const sts = new Set<string>();
-    for (const r of receipts) sts.add(r.latestJob?.status ?? NO_JOB);
-    const ordered = Object.keys(JOB_STATUS_LABELS).filter((k) => sts.has(k));
-    if (sts.has(NO_JOB)) ordered.push(NO_JOB);
-    return ordered;
-  }, [receipts]);
-
-  const filtered = useMemo(() => {
-    return receipts.filter((r) => {
-      if (attentionFilter) {
-        const needsAttention =
-          !r.latestJob || r.latestJob.status === "FAILED" || !r.domesticWorkerId;
-        if (!needsAttention) return false;
-      }
-      if (
-        categories.size > 0 &&
-        (!r.categoriaProfesional || !categories.has(r.categoriaProfesional))
-      )
-        return false;
-      if (statuses.size > 0) {
-        const jobStatus = r.latestJob?.status ?? NO_JOB;
-        if (!statuses.has(jobStatus)) return false;
-      }
-      if (totalMin) {
-        const min = parseInt(totalMin);
-        if (!isNaN(min) && parseFloat(r.total) < min) return false;
-      }
-      if (totalMax) {
-        const max = parseInt(totalMax);
-        if (!isNaN(max) && parseFloat(r.total) > max) return false;
-      }
-      if (contribMin) {
-        const min = parseInt(contribMin);
-        if (!isNaN(min) && (!r.contributionAmount || parseFloat(r.contributionAmount) < min))
-          return false;
-      }
-      if (contribMax) {
-        const max = parseInt(contribMax);
-        if (!isNaN(max) && (!r.contributionAmount || parseFloat(r.contributionAmount) > max))
-          return false;
-      }
-      if (search) {
-        const q = search.toLowerCase();
-        if (
-          !r.periodo.toLowerCase().includes(q) &&
-          !r.domesticWorker?.apellidoNombre.toLowerCase().includes(q) &&
-          !r.domesticWorker?.cuil.includes(q) &&
-          !r.categoriaProfesional?.toLowerCase().includes(q)
-        )
-          return false;
-      }
-      return true;
-    });
-  }, [
-    receipts,
-    attentionFilter,
-    categories,
-    statuses,
-    totalMin,
-    totalMax,
-    contribMin,
-    contribMax,
-    search,
-  ]);
-
-  const hasClientFilters =
-    search !== "" ||
-    categories.size > 0 ||
-    statuses.size > 0 ||
-    totalMin !== "" ||
-    totalMax !== "" ||
-    contribMin !== "" ||
-    contribMax !== "";
+  const availableStatuses = (meta.availableStatuses as string[]) ?? [];
 
   const isCategoryActive = categories.size > 0;
   const isTotalActive = totalMin !== "" || totalMax !== "";
   const isContribActive = contribMin !== "" || contribMax !== "";
   const isStatusActive = statuses.size > 0;
+
+  const hasActiveFilters =
+    search !== "" || isCategoryActive || isStatusActive || isTotalActive || isContribActive;
 
   async function handleDelete() {
     if (!deleteId) return;
@@ -262,6 +207,7 @@ export function ReceiptList({
       });
       toast.success("Recibo eliminado");
       invalidateAttention();
+      refetch();
     } catch {
       toast.error("Error al eliminar recibo");
     } finally {
@@ -297,6 +243,7 @@ export function ReceiptList({
         deleted.length === 1 ? "Recibo eliminado" : `${deleted.length} recibos eliminados`,
       );
       invalidateAttention();
+      refetch();
     }
     const failed = deletableIds.length - deleted.length;
     if (failed > 0) toast.error(`${failed} recibo(s) no se pudieron eliminar`);
@@ -407,7 +354,7 @@ export function ReceiptList({
       });
       if (res.ok) {
         toast.success("Job cancelado");
-        fetchReceipts(false);
+        refetch();
       } else {
         toast.error("Error al cancelar");
       }
@@ -430,7 +377,7 @@ export function ReceiptList({
     });
   }
 
-  const eligibleReceipts = filtered.filter(
+  const eligibleReceipts = receipts.filter(
     (r) => r.latestJob?.status !== "PENDING" && r.latestJob?.status !== "RUNNING",
   );
   const allEligibleSelected =
@@ -444,6 +391,16 @@ export function ReceiptList({
     }
   }
 
+  function clearAllFilters() {
+    setSearch("");
+    setCategories(new Set());
+    setStatuses(new Set());
+    setTotalMin("");
+    setTotalMax("");
+    setContribMin("");
+    setContribMax("");
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -452,7 +409,7 @@ export function ReceiptList({
     );
   }
 
-  if (receipts.length === 0) {
+  if (receipts.length === 0 && !hasActiveFilters && pagination.totalCount === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="bg-muted mb-3 flex h-10 w-10 items-center justify-center rounded-full">
@@ -486,10 +443,9 @@ export function ReceiptList({
             </button>
           )}
         </div>
-        {receipts.length > 0 && (
+        {pagination.totalCount > 0 && (
           <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
-            {hasClientFilters ? `${filtered.length} de ${receipts.length}` : receipts.length}{" "}
-            {receipts.length === 1 && !hasClientFilters ? "recibo" : "recibos"}
+            {pagination.totalCount} {pagination.totalCount === 1 ? "recibo" : "recibos"}
           </span>
         )}
       </div>
@@ -579,7 +535,7 @@ export function ReceiptList({
                           )}
                         </div>
                         <div className="max-h-48 space-y-1 overflow-y-auto">
-                          {uniqueCategories.map((cat) => (
+                          {knownCategories.map((cat) => (
                             <label
                               key={cat}
                               className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
@@ -763,7 +719,7 @@ export function ReceiptList({
                           )}
                         </div>
                         <div className="space-y-1">
-                          {uniqueJobStatuses.map((key) => (
+                          {availableStatuses.map((key: string) => (
                             <label
                               key={key}
                               className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
@@ -797,24 +753,16 @@ export function ReceiptList({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
+            {receipts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="py-12 text-center">
                   <p className="text-muted-foreground/70 text-sm font-medium">Sin resultados</p>
                   <p className="text-muted-foreground/50 mt-1 text-xs">
                     Proba con otros filtros o terminos de busqueda
                   </p>
-                  {hasClientFilters && (
+                  {hasActiveFilters && (
                     <button
-                      onClick={() => {
-                        setSearch("");
-                        setCategories(new Set());
-                        setStatuses(new Set());
-                        setTotalMin("");
-                        setTotalMax("");
-                        setContribMin("");
-                        setContribMax("");
-                      }}
+                      onClick={clearAllFilters}
                       className="text-primary hover:text-primary/80 mt-3 text-xs transition-colors"
                     >
                       Limpiar filtros
@@ -823,7 +771,7 @@ export function ReceiptList({
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((r) => {
+              receipts.map((r) => {
                 const isExpanded = expandedRowId === r.id;
                 const isInFlight =
                   r.latestJob?.status === "PENDING" || r.latestJob?.status === "RUNNING";
@@ -958,6 +906,17 @@ export function ReceiptList({
           </TableBody>
         </Table>
       </div>
+
+      {pagination.totalPages > 1 && (
+        <PaginationControls
+          page={page}
+          pageSize={pageSize}
+          totalCount={pagination.totalCount}
+          totalPages={pagination.totalPages}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
+      )}
 
       {/* Single delete confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>

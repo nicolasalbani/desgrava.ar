@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import confetti from "canvas-confetti";
 import {
   Table,
@@ -59,6 +59,8 @@ import { useFiscalYear } from "@/contexts/fiscal-year";
 import { useAttentionCounts } from "@/contexts/attention-counts";
 import { JobStatusBadge, type LatestJob } from "@/components/shared/job-status-badge";
 import { JobHistoryPanel } from "@/components/shared/job-history-panel";
+import { usePaginatedFetch } from "@/hooks/use-paginated-fetch";
+import { PaginationControls } from "@/components/shared/pagination-controls";
 
 interface FamilyDependentRef {
   id: string;
@@ -117,15 +119,16 @@ export function InvoiceList({
 } = {}) {
   const { fiscalYear } = useFiscalYear();
   const { invalidate: invalidateAttention } = useAttentionCounts();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+
+  // Local filter UI state
   const [categories, setCategories] = useState<Set<string>>(new Set());
   const [statuses, setStatuses] = useState<Set<string>>(new Set());
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [montoMin, setMontoMin] = useState("");
   const [montoMax, setMontoMax] = useState("");
+
+  // Action state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -138,12 +141,52 @@ export function InvoiceList({
   const [dependents, setDependents] = useState<FamilyDependentRef[]>([]);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
-  const celebratedRef = useRef(false);
+  const celebratedRef = useRef(
+    typeof window !== "undefined" && localStorage.getItem("siradig-celebrated") === "true",
+  );
 
+  // Paginated fetch
+  const {
+    data: invoices,
+    setData: setInvoices,
+    pagination,
+    loading,
+    search,
+    setSearch,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    refetch,
+    setFilters,
+    setShouldPoll,
+    meta,
+  } = usePaginatedFetch<Invoice>({
+    url: "/api/facturas",
+    dataKey: "invoices",
+    staticParams: useMemo(
+      () => ({
+        fiscalYear: fiscalYear?.toString(),
+        attentionFilter: attentionFilter ? "true" : undefined,
+      }),
+      [fiscalYear, attentionFilter],
+    ),
+    onInitialLoad,
+  });
+
+  // Sync local filter state to the hook (batched in a single setFilters call)
   useEffect(() => {
-    fetchInvoices();
-  }, []);
+    setFilters({
+      categories: categories.size > 0 ? Array.from(categories).join(",") : undefined,
+      statuses: statuses.size > 0 ? Array.from(statuses).join(",") : undefined,
+      dateFrom: fechaDesde || undefined,
+      dateTo: fechaHasta || undefined,
+      amountMin: montoMin || undefined,
+      amountMax: montoMax || undefined,
+    });
+  }, [categories, statuses, fechaDesde, fechaHasta, montoMin, montoMax, setFilters]);
 
+  // Fetch dependents for education invoices
   useEffect(() => {
     if (fiscalYear !== null) {
       fetch(`/api/cargas-familia?year=${fiscalYear}`)
@@ -153,28 +196,17 @@ export function InvoiceList({
     }
   }, [fiscalYear]);
 
-  const fetchInvoices = useCallback(
-    async (showLoading = true) => {
-      if (showLoading) setLoading(true);
-      try {
-        const res = await fetch("/api/facturas");
-        const data = await res.json();
-        const loaded: Invoice[] = data.invoices || [];
-        setInvoices(loaded);
-        onInitialLoad?.(loaded.length);
-
-        // On initial load (showLoading=true), if completions already exist, skip celebration
-        if (showLoading) {
-          if (loaded.some((inv) => inv.latestJob?.status === "COMPLETED")) {
-            celebratedRef.current = true;
-          }
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    [onInitialLoad],
-  );
+  // Poll while any invoice has in-flight jobs
+  useEffect(() => {
+    const hasInFlight = invoices.some(
+      (inv) =>
+        inv.siradiqStatus === "QUEUED" ||
+        inv.siradiqStatus === "PROCESSING" ||
+        inv.latestJob?.status === "PENDING" ||
+        inv.latestJob?.status === "RUNNING",
+    );
+    setShouldPoll(hasInFlight);
+  }, [invoices, setShouldPoll]);
 
   // Celebrate the first successful SiRADIG submission
   useEffect(() => {
@@ -182,6 +214,7 @@ export function InvoiceList({
     const hasCompleted = invoices.some((inv) => inv.latestJob?.status === "COMPLETED");
     if (hasCompleted) {
       celebratedRef.current = true;
+      localStorage.setItem("siradig-celebrated", "true");
       confetti({
         particleCount: 120,
         spread: 80,
@@ -208,30 +241,6 @@ export function InvoiceList({
         duration: 6000,
       });
     }
-  }, [invoices]);
-
-  // Poll for status updates while any invoice is QUEUED or PROCESSING
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    const hasInFlight = invoices.some(
-      (inv) =>
-        inv.siradiqStatus === "QUEUED" ||
-        inv.siradiqStatus === "PROCESSING" ||
-        inv.latestJob?.status === "PENDING" ||
-        inv.latestJob?.status === "RUNNING",
-    );
-    if (hasInFlight && !pollRef.current) {
-      pollRef.current = setInterval(() => fetchInvoices(false), 5_000);
-    } else if (!hasInFlight && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
   }, [invoices]);
 
   async function handleLinkDependent(invoiceId: string, dependentId: string | null) {
@@ -271,6 +280,7 @@ export function InvoiceList({
       });
       toast.success("Factura eliminada");
       invalidateAttention();
+      refetch();
     } else {
       const data = await res.json().catch(() => null);
       toast.error(data?.error ?? "Error al eliminar");
@@ -304,6 +314,7 @@ export function InvoiceList({
         deleted.length === 1 ? "Factura eliminada" : `${deleted.length} facturas eliminadas`,
       );
       invalidateAttention();
+      refetch();
     }
     const failed = deletableIds.length - deleted.length;
     if (failed > 0) toast.error(`${failed} factura(s) no se pudieron eliminar`);
@@ -323,102 +334,7 @@ export function InvoiceList({
     });
   }
 
-  const uniqueCategories = useMemo(() => {
-    const cats = new Set<string>();
-    for (const inv of invoices) {
-      if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) continue;
-      cats.add(inv.deductionCategory);
-    }
-    return DEDUCTION_CATEGORIES.filter((cat) => cats.has(cat));
-  }, [invoices, fiscalYear]);
-
-  const uniqueJobStatuses = useMemo(() => {
-    const sts = new Set<string>();
-    for (const inv of invoices) {
-      if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) continue;
-      sts.add(inv.latestJob?.status ?? NO_JOB);
-    }
-    // Preserve a sensible order
-    const ordered = Object.keys(JOB_STATUS_LABELS).filter((k) => sts.has(k));
-    if (sts.has(NO_JOB)) ordered.push(NO_JOB);
-    return ordered;
-  }, [invoices, fiscalYear]);
-
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      if (fiscalYear !== null && inv.fiscalYear !== fiscalYear) return false;
-      if (attentionFilter) {
-        const needsAttention =
-          !inv.latestJob ||
-          inv.latestJob.status === "FAILED" ||
-          (inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId);
-        if (!needsAttention) return false;
-      }
-      if (categories.size > 0 && !categories.has(inv.deductionCategory)) return false;
-      if (statuses.size > 0) {
-        const jobStatus = inv.latestJob?.status ?? NO_JOB;
-        if (!statuses.has(jobStatus)) return false;
-      }
-      if (fechaDesde) {
-        if (!inv.invoiceDate) return false;
-        if (new Date(inv.invoiceDate) < new Date(fechaDesde)) return false;
-      }
-      if (fechaHasta) {
-        if (!inv.invoiceDate) return false;
-        if (new Date(inv.invoiceDate) > new Date(fechaHasta)) return false;
-      }
-      if (montoMin) {
-        const min = parseInt(montoMin);
-        if (!isNaN(min) && parseFloat(inv.amount) < min) return false;
-      }
-      if (montoMax) {
-        const max = parseInt(montoMax);
-        if (!isNaN(max) && parseFloat(inv.amount) > max) return false;
-      }
-      if (search) {
-        const q = search.toLowerCase();
-        if (
-          !inv.providerName?.toLowerCase().includes(q) &&
-          !inv.providerCuit.includes(q) &&
-          !inv.invoiceNumber?.toLowerCase().includes(q)
-        )
-          return false;
-      }
-      return true;
-    });
-  }, [
-    invoices,
-    fiscalYear,
-    attentionFilter,
-    categories,
-    statuses,
-    fechaDesde,
-    fechaHasta,
-    montoMin,
-    montoMax,
-    search,
-  ]);
-
-  const hasClientFilters =
-    search !== "" ||
-    categories.size > 0 ||
-    statuses.size > 0 ||
-    fechaDesde !== "" ||
-    fechaHasta !== "" ||
-    montoMin !== "" ||
-    montoMax !== "";
-
-  function clearAllFilters() {
-    setSearch("");
-    setCategories(new Set());
-    setStatuses(new Set());
-    setFechaDesde("");
-    setFechaHasta("");
-    setMontoMin("");
-    setMontoMax("");
-  }
-
-  const eligibleInvoices = filteredInvoices.filter(
+  const eligibleInvoices = invoices.filter(
     (inv) =>
       !isFutureMonth(inv) &&
       inv.latestJob?.status !== "PENDING" &&
@@ -460,7 +376,6 @@ export function InvoiceList({
         `${updated} comprobante${updated === 1 ? "" : "s"} actualizado${updated === 1 ? "" : "s"} a ${label}`,
       );
 
-      // Update local state
       setInvoices((prev) =>
         prev.map((inv) =>
           selectedIds.has(inv.id) ? { ...inv, deductionCategory: bulkCategory } : inv,
@@ -624,7 +539,7 @@ export function InvoiceList({
       });
       if (res.ok) {
         toast.success("Job cancelado");
-        fetchInvoices(false);
+        refetch();
       } else {
         toast.error("Error al cancelar");
       }
@@ -635,11 +550,27 @@ export function InvoiceList({
     }
   }
 
+  // Available job statuses from the API (only statuses that exist in data)
+  const availableStatuses = (meta.availableStatuses as string[]) ?? [];
+
   // --- Filter active helpers ---
   const isCategoryActive = categories.size > 0;
   const isFechaActive = fechaDesde !== "" || fechaHasta !== "";
   const isMontoActive = montoMin !== "" || montoMax !== "";
   const isStatusActive = statuses.size > 0;
+
+  const hasActiveFilters =
+    search !== "" || isCategoryActive || isStatusActive || isFechaActive || isMontoActive;
+
+  function clearAllFilters() {
+    setSearch("");
+    setCategories(new Set());
+    setStatuses(new Set());
+    setFechaDesde("");
+    setFechaHasta("");
+    setMontoMin("");
+    setMontoMax("");
+  }
 
   return (
     <div className="space-y-4">
@@ -662,12 +593,9 @@ export function InvoiceList({
             </button>
           )}
         </div>
-        {!loading && invoices.length > 0 && (
+        {!loading && pagination.totalCount > 0 && (
           <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
-            {hasClientFilters
-              ? `${filteredInvoices.length} de ${invoices.length}`
-              : invoices.length}{" "}
-            {invoices.length === 1 && !hasClientFilters ? "comprobante" : "comprobantes"}
+            {pagination.totalCount} {pagination.totalCount === 1 ? "comprobante" : "comprobantes"}
           </span>
         )}
       </div>
@@ -748,7 +676,7 @@ export function InvoiceList({
         <div className="flex justify-center py-16">
           <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
         </div>
-      ) : filteredInvoices.length === 0 && !hasClientFilters ? (
+      ) : invoices.length === 0 && !hasActiveFilters ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="bg-muted/40 mb-4 rounded-full p-4">
             <FileText className="text-muted-foreground/30 h-6 w-6" />
@@ -761,462 +689,479 @@ export function InvoiceList({
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10 pl-4">
-                  <Checkbox
-                    checked={allEligibleSelected && eligibleInvoices.length > 0}
-                    onCheckedChange={toggleSelectAll}
-                    aria-label="Seleccionar todas"
-                    disabled={eligibleInvoices.length === 0}
-                  />
-                </TableHead>
-                <TableHead>Proveedor</TableHead>
-
-                {/* Categoria — funnel */}
-                <TableHead>
-                  <div className="flex items-center gap-2">
-                    <span>Categoria</span>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          className={cn(
-                            "rounded-md p-1 transition-colors",
-                            isCategoryActive
-                              ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
-                          )}
-                        >
-                          <ListFilter className="h-3.5 w-3.5" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-60 p-3" align="start">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <p className="text-muted-foreground text-xs font-medium">
-                              Filtrar por categoria
-                            </p>
-                            {isCategoryActive && (
-                              <button
-                                onClick={() => setCategories(new Set())}
-                                className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
-                              >
-                                Limpiar
-                              </button>
-                            )}
-                          </div>
-                          <div className="max-h-48 space-y-1 overflow-y-auto">
-                            {uniqueCategories.map((cat) => (
-                              <label
-                                key={cat}
-                                className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
-                              >
-                                <Checkbox
-                                  checked={categories.has(cat)}
-                                  onCheckedChange={(checked) => {
-                                    setCategories((prev) => {
-                                      const next = new Set(prev);
-                                      if (checked) {
-                                        next.add(cat);
-                                      } else {
-                                        next.delete(cat);
-                                      }
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <span className="text-xs">{DEDUCTION_CATEGORY_LABELS[cat]}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </TableHead>
-
-                <TableHead>Nro. Comprobante</TableHead>
-
-                {/* Fecha — funnel */}
-                <TableHead>
-                  <div className="flex items-center gap-2">
-                    <span>Fecha</span>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          className={cn(
-                            "rounded-md p-1 transition-colors",
-                            isFechaActive
-                              ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
-                          )}
-                        >
-                          <ListFilter className="h-3.5 w-3.5" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-52 p-3" align="start">
-                        <div className="space-y-2">
-                          <p className="text-muted-foreground text-xs font-medium">
-                            Rango de fecha
-                          </p>
-                          <div className="space-y-1.5">
-                            <label className="text-muted-foreground/70 text-xs">Desde</label>
-                            <Input
-                              type="date"
-                              value={fechaDesde}
-                              onChange={(e) => setFechaDesde(e.target.value)}
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-muted-foreground/70 text-xs">Hasta</label>
-                            <Input
-                              type="date"
-                              value={fechaHasta}
-                              onChange={(e) => setFechaHasta(e.target.value)}
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                          {isFechaActive && (
-                            <button
-                              onClick={() => {
-                                setFechaDesde("");
-                                setFechaHasta("");
-                              }}
-                              className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
-                            >
-                              Limpiar
-                            </button>
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </TableHead>
-
-                {/* Monto — funnel */}
-                <TableHead className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <span>Monto</span>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          className={cn(
-                            "rounded-md p-1 transition-colors",
-                            isMontoActive
-                              ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
-                          )}
-                        >
-                          <ListFilter className="h-3.5 w-3.5" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-44 p-3" align="end">
-                        <div className="space-y-2">
-                          <p className="text-muted-foreground text-xs font-medium">
-                            Rango de monto
-                          </p>
-                          <div className="space-y-1.5">
-                            <label className="text-muted-foreground/70 text-xs">Min $</label>
-                            <Input
-                              type="text"
-                              inputMode="numeric"
-                              placeholder="0"
-                              value={montoMin}
-                              onChange={(e) => setMontoMin(e.target.value.replace(/[^\d]/g, ""))}
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-muted-foreground/70 text-xs">Max $</label>
-                            <Input
-                              type="text"
-                              inputMode="numeric"
-                              placeholder="999999"
-                              value={montoMax}
-                              onChange={(e) => setMontoMax(e.target.value.replace(/[^\d]/g, ""))}
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                          {isMontoActive && (
-                            <button
-                              onClick={() => {
-                                setMontoMin("");
-                                setMontoMax("");
-                              }}
-                              className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
-                            >
-                              Limpiar
-                            </button>
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </TableHead>
-
-                {/* SiRADIG — funnel */}
-                <TableHead>
-                  <div className="flex items-center gap-2">
-                    <span>SiRADIG</span>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          className={cn(
-                            "rounded-md p-1 transition-colors",
-                            isStatusActive
-                              ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
-                          )}
-                        >
-                          <ListFilter className="h-3.5 w-3.5" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-44 p-3" align="start">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <p className="text-muted-foreground text-xs font-medium">
-                              Filtrar por estado
-                            </p>
-                            {isStatusActive && (
-                              <button
-                                onClick={() => setStatuses(new Set())}
-                                className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
-                              >
-                                Limpiar
-                              </button>
-                            )}
-                          </div>
-                          <div className="space-y-1">
-                            {uniqueJobStatuses.map((key) => (
-                              <label
-                                key={key}
-                                className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
-                              >
-                                <Checkbox
-                                  checked={statuses.has(key)}
-                                  onCheckedChange={(checked) => {
-                                    setStatuses((prev) => {
-                                      const next = new Set(prev);
-                                      if (checked) {
-                                        next.add(key);
-                                      } else {
-                                        next.delete(key);
-                                      }
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <span className="text-xs">
-                                  {key === NO_JOB ? "No enviado" : (JOB_STATUS_LABELS[key] ?? key)}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </TableHead>
-                <TableHead className="w-24 text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredInvoices.length === 0 ? (
+        <>
+          <div className="overflow-hidden rounded-xl border">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="py-12 text-center">
-                    <p className="text-muted-foreground/70 text-sm font-medium">Sin resultados</p>
-                    <p className="text-muted-foreground/50 mt-1 text-xs">
-                      Proba con otros filtros o terminos de busqueda
-                    </p>
-                    <button
-                      onClick={clearAllFilters}
-                      className="text-primary hover:text-primary/80 mt-3 text-xs transition-colors"
-                    >
-                      Limpiar filtros
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredInvoices.map((inv) => {
-                  const isFuture = isFutureMonth(inv);
-                  const isExpanded = expandedRowId === inv.id;
-                  const isInFlight =
-                    inv.latestJob?.status === "PENDING" || inv.latestJob?.status === "RUNNING";
-                  const canCancel = isInFlight;
-                  return (
-                    <React.Fragment key={inv.id}>
-                      <TableRow className="group">
-                        <TableCell className="pl-4">
-                          <Checkbox
-                            checked={selectedIds.has(inv.id)}
-                            onCheckedChange={() => toggleSelect(inv.id)}
-                            disabled={isFuture || isInFlight}
-                            title={
-                              isFuture
-                                ? "No disponible: el periodo fiscal aun no esta habilitado en SiRADIG"
-                                : isInFlight
-                                  ? "Hay un envio en curso"
-                                  : undefined
-                            }
-                            aria-label={`Seleccionar factura ${inv.id}`}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {inv.source === "EMAIL" && (
-                              <span title="Cargada por email">
-                                <Mail className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
-                              </span>
+                  <TableHead className="w-10 pl-4">
+                    <Checkbox
+                      checked={allEligibleSelected && eligibleInvoices.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Seleccionar todas"
+                      disabled={eligibleInvoices.length === 0}
+                    />
+                  </TableHead>
+                  <TableHead>Proveedor</TableHead>
+
+                  {/* Categoria — funnel */}
+                  <TableHead>
+                    <div className="flex items-center gap-2">
+                      <span>Categoria</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className={cn(
+                              "rounded-md p-1 transition-colors",
+                              isCategoryActive
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
                             )}
-                            {(inv.source === "PDF" || inv.source === "OCR") && (
-                              <span title="Cargada por archivo">
-                                <Upload className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
-                              </span>
-                            )}
-                            {inv.source === "ARCA" && (
-                              <span title="Importada desde ARCA">
-                                <Download className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
-                              </span>
-                            )}
-                            <div>
-                              <p className="text-sm font-medium">
-                                {inv.providerName || inv.providerCuit}
+                          >
+                            <ListFilter className="h-3.5 w-3.5" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-60 p-3" align="start">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-muted-foreground text-xs font-medium">
+                                Filtrar por categoria
                               </p>
-                              {inv.providerName && (
-                                <p className="text-muted-foreground mt-0.5 text-xs">
-                                  {inv.providerCuit}
-                                </p>
+                              {isCategoryActive && (
+                                <button
+                                  onClick={() => setCategories(new Set())}
+                                  className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
+                                >
+                                  Limpiar
+                                </button>
                               )}
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-[200px]">
-                          <span
-                            className="text-muted-foreground block truncate text-sm"
-                            title={
-                              DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
-                              inv.deductionCategory
-                            }
-                          >
-                            {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
-                              inv.deductionCategory}
-                          </span>
-                          {inv.deductionCategory === "GASTOS_EDUCATIVOS" && (
-                            <select
-                              className="text-muted-foreground mt-0.5 max-w-full truncate border-none bg-transparent p-0 text-xs outline-none"
-                              value={inv.familyDependentId ?? ""}
-                              onChange={(e) => handleLinkDependent(inv.id, e.target.value || null)}
-                            >
-                              <option value="">Sin vincular</option>
-                              {dependents.map((d) => (
-                                <option key={d.id} value={d.id}>
-                                  {d.apellido} {d.nombre}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {inv.invoiceNumber ?? "-"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {inv.invoiceDate
-                            ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-right text-sm font-medium tabular-nums">
-                          ${parseFloat(inv.amount).toLocaleString("es-AR")}
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            onClick={() => setExpandedRowId(isExpanded ? null : inv.id)}
-                            className="inline-flex items-center gap-1"
-                          >
-                            <JobStatusBadge job={inv.latestJob} />
-                            {inv.latestJob &&
-                              (isExpanded ? (
-                                <ChevronUp className="text-muted-foreground/40 h-3 w-3" />
-                              ) : (
-                                <ChevronDown className="text-muted-foreground/40 h-3 w-3" />
-                              ))}
-                          </button>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            {!isFuture && !isInFlight && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleSendSingle(inv.id)}
-                                title="Enviar a SiRADIG"
-                              >
-                                <Send className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {canCancel && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleCancelJob(inv.latestJob!.id)}
-                                disabled={cancellingJobId === inv.latestJob!.id}
-                                title="Cancelar envio"
-                              >
-                                <Square className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setEditTarget(inv)}
-                              title="Editar"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            {inv.hasFile && (
-                              <Button variant="ghost" size="icon" asChild title="Ver comprobante">
-                                <a
-                                  href={`/api/facturas/${inv.id}/file`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                            <div className="max-h-48 space-y-1 overflow-y-auto">
+                              {DEDUCTION_CATEGORIES.map((cat) => (
+                                <label
+                                  key={cat}
+                                  className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
                                 >
-                                  <FileDown className="h-4 w-4" />
-                                </a>
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setDeleteTarget(inv.id)}
-                              title="Eliminar"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                                  <Checkbox
+                                    checked={categories.has(cat)}
+                                    onCheckedChange={(checked) => {
+                                      setCategories((prev) => {
+                                        const next = new Set(prev);
+                                        if (checked) {
+                                          next.add(cat);
+                                        } else {
+                                          next.delete(cat);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                  <span className="text-xs">{DEDUCTION_CATEGORY_LABELS[cat]}</span>
+                                </label>
+                              ))}
+                            </div>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                      {isExpanded && (
-                        <TableRow key={`${inv.id}-history`}>
-                          <TableCell colSpan={8} className="bg-muted/20 px-6 py-3">
-                            <JobHistoryPanel
-                              entityId={inv.id}
-                              entityType="invoice"
-                              latestJobStatus={inv.latestJob?.status}
-                              onCancel={handleCancelJob}
-                              cancelling={!!cancellingJobId}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </TableHead>
+
+                  <TableHead>Nro. Comprobante</TableHead>
+
+                  {/* Fecha — funnel */}
+                  <TableHead>
+                    <div className="flex items-center gap-2">
+                      <span>Fecha</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className={cn(
+                              "rounded-md p-1 transition-colors",
+                              isFechaActive
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
+                            )}
+                          >
+                            <ListFilter className="h-3.5 w-3.5" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-52 p-3" align="start">
+                          <div className="space-y-2">
+                            <p className="text-muted-foreground text-xs font-medium">
+                              Rango de fecha
+                            </p>
+                            <div className="space-y-1.5">
+                              <label className="text-muted-foreground/70 text-xs">Desde</label>
+                              <Input
+                                type="date"
+                                value={fechaDesde}
+                                onChange={(e) => setFechaDesde(e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-muted-foreground/70 text-xs">Hasta</label>
+                              <Input
+                                type="date"
+                                value={fechaHasta}
+                                onChange={(e) => setFechaHasta(e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            {isFechaActive && (
+                              <button
+                                onClick={() => {
+                                  setFechaDesde("");
+                                  setFechaHasta("");
+                                }}
+                                className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
+                              >
+                                Limpiar
+                              </button>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </TableHead>
+
+                  {/* Monto — funnel */}
+                  <TableHead className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <span>Monto</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className={cn(
+                              "rounded-md p-1 transition-colors",
+                              isMontoActive
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
+                            )}
+                          >
+                            <ListFilter className="h-3.5 w-3.5" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-44 p-3" align="end">
+                          <div className="space-y-2">
+                            <p className="text-muted-foreground text-xs font-medium">
+                              Rango de monto
+                            </p>
+                            <div className="space-y-1.5">
+                              <label className="text-muted-foreground/70 text-xs">Min $</label>
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="0"
+                                value={montoMin}
+                                onChange={(e) => setMontoMin(e.target.value.replace(/[^\d]/g, ""))}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-muted-foreground/70 text-xs">Max $</label>
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="999999"
+                                value={montoMax}
+                                onChange={(e) => setMontoMax(e.target.value.replace(/[^\d]/g, ""))}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            {isMontoActive && (
+                              <button
+                                onClick={() => {
+                                  setMontoMin("");
+                                  setMontoMax("");
+                                }}
+                                className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
+                              >
+                                Limpiar
+                              </button>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </TableHead>
+
+                  {/* SiRADIG — funnel */}
+                  <TableHead>
+                    <div className="flex items-center gap-2">
+                      <span>SiRADIG</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className={cn(
+                              "rounded-md p-1 transition-colors",
+                              isStatusActive
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground/50 hover:bg-muted hover:text-foreground",
+                            )}
+                          >
+                            <ListFilter className="h-3.5 w-3.5" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-44 p-3" align="start">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-muted-foreground text-xs font-medium">
+                                Filtrar por estado
+                              </p>
+                              {isStatusActive && (
+                                <button
+                                  onClick={() => setStatuses(new Set())}
+                                  className="text-muted-foreground/60 hover:text-foreground text-xs transition-colors"
+                                >
+                                  Limpiar
+                                </button>
+                              )}
+                            </div>
+                            <div className="space-y-1">
+                              {availableStatuses.map((key: string) => (
+                                <label
+                                  key={key}
+                                  className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
+                                >
+                                  <Checkbox
+                                    checked={statuses.has(key)}
+                                    onCheckedChange={(checked) => {
+                                      setStatuses((prev) => {
+                                        const next = new Set(prev);
+                                        if (checked) {
+                                          next.add(key);
+                                        } else {
+                                          next.delete(key);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                  <span className="text-xs">
+                                    {key === NO_JOB
+                                      ? "No enviado"
+                                      : (JOB_STATUS_LABELS[key] ?? key)}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </TableHead>
+                  <TableHead className="w-24 text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoices.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-12 text-center">
+                      <p className="text-muted-foreground/70 text-sm font-medium">Sin resultados</p>
+                      <p className="text-muted-foreground/50 mt-1 text-xs">
+                        Proba con otros filtros o terminos de busqueda
+                      </p>
+                      <button
+                        onClick={clearAllFilters}
+                        className="text-primary hover:text-primary/80 mt-3 text-xs transition-colors"
+                      >
+                        Limpiar filtros
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  invoices.map((inv) => {
+                    const isFuture = isFutureMonth(inv);
+                    const isExpanded = expandedRowId === inv.id;
+                    const isInFlight =
+                      inv.latestJob?.status === "PENDING" || inv.latestJob?.status === "RUNNING";
+                    const canCancel = isInFlight;
+                    return (
+                      <React.Fragment key={inv.id}>
+                        <TableRow className="group">
+                          <TableCell className="pl-4">
+                            <Checkbox
+                              checked={selectedIds.has(inv.id)}
+                              onCheckedChange={() => toggleSelect(inv.id)}
+                              disabled={isFuture || isInFlight}
+                              title={
+                                isFuture
+                                  ? "No disponible: el periodo fiscal aun no esta habilitado en SiRADIG"
+                                  : isInFlight
+                                    ? "Hay un envio en curso"
+                                    : undefined
+                              }
+                              aria-label={`Seleccionar factura ${inv.id}`}
                             />
                           </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {inv.source === "EMAIL" && (
+                                <span title="Cargada por email">
+                                  <Mail className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                                </span>
+                              )}
+                              {(inv.source === "PDF" || inv.source === "OCR") && (
+                                <span title="Cargada por archivo">
+                                  <Upload className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                                </span>
+                              )}
+                              {inv.source === "ARCA" && (
+                                <span title="Importada desde ARCA">
+                                  <Download className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                                </span>
+                              )}
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {inv.providerName || inv.providerCuit}
+                                </p>
+                                {inv.providerName && (
+                                  <p className="text-muted-foreground mt-0.5 text-xs">
+                                    {inv.providerCuit}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-[200px]">
+                            <span
+                              className="text-muted-foreground block truncate text-sm"
+                              title={
+                                DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                                inv.deductionCategory
+                              }
+                            >
+                              {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                                inv.deductionCategory}
+                            </span>
+                            {inv.deductionCategory === "GASTOS_EDUCATIVOS" && (
+                              <select
+                                className="text-muted-foreground mt-0.5 max-w-full truncate border-none bg-transparent p-0 text-xs outline-none"
+                                value={inv.familyDependentId ?? ""}
+                                onChange={(e) =>
+                                  handleLinkDependent(inv.id, e.target.value || null)
+                                }
+                              >
+                                <option value="">Sin vincular</option>
+                                {dependents.map((d) => (
+                                  <option key={d.id} value={d.id}>
+                                    {d.apellido} {d.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {inv.invoiceNumber ?? "-"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {inv.invoiceDate
+                              ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-right text-sm font-medium tabular-nums">
+                            ${parseFloat(inv.amount).toLocaleString("es-AR")}
+                          </TableCell>
+                          <TableCell>
+                            <button
+                              onClick={() => setExpandedRowId(isExpanded ? null : inv.id)}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <JobStatusBadge job={inv.latestJob} />
+                              {inv.latestJob &&
+                                (isExpanded ? (
+                                  <ChevronUp className="text-muted-foreground/40 h-3 w-3" />
+                                ) : (
+                                  <ChevronDown className="text-muted-foreground/40 h-3 w-3" />
+                                ))}
+                            </button>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-1">
+                              {!isFuture && !isInFlight && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleSendSingle(inv.id)}
+                                  title="Enviar a SiRADIG"
+                                >
+                                  <Send className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {canCancel && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleCancelJob(inv.latestJob!.id)}
+                                  disabled={cancellingJobId === inv.latestJob!.id}
+                                  title="Cancelar envio"
+                                >
+                                  <Square className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setEditTarget(inv)}
+                                title="Editar"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              {inv.hasFile && (
+                                <Button variant="ghost" size="icon" asChild title="Ver comprobante">
+                                  <a
+                                    href={`/api/facturas/${inv.id}/file`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <FileDown className="h-4 w-4" />
+                                  </a>
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDeleteTarget(inv.id)}
+                                title="Eliminar"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
-                      )}
-                    </React.Fragment>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                        {isExpanded && (
+                          <TableRow key={`${inv.id}-history`}>
+                            <TableCell colSpan={8} className="bg-muted/20 px-6 py-3">
+                              <JobHistoryPanel
+                                entityId={inv.id}
+                                entityType="invoice"
+                                latestJobStatus={inv.latestJob?.status}
+                                onCancel={handleCancelJob}
+                                cancelling={!!cancellingJobId}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {pagination.totalPages > 1 && (
+            <PaginationControls
+              page={page}
+              pageSize={pageSize}
+              totalCount={pagination.totalCount}
+              totalPages={pagination.totalPages}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          )}
+        </>
       )}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
@@ -1283,7 +1228,7 @@ export function InvoiceList({
                 }}
                 onSaved={() => {
                   setEditTarget(null);
-                  fetchInvoices();
+                  refetch();
                 }}
                 onCancel={() => setEditTarget(null)}
               />
