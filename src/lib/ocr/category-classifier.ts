@@ -80,7 +80,26 @@ INSTRUCCIONES:
 - Si no podés determinar la categoría con certeza, respondé OTRAS_DEDUCCIONES.
 - No incluyas explicaciones, solo el identificador.`;
 
+/**
+ * Keyword-based pre-classification rules.
+ * Checked before calling OpenAI to save cost and ensure deterministic results.
+ */
+const KEYWORD_RULES: { pattern: RegExp; category: string }[] = [
+  { pattern: /\balquiler\b/i, category: "ALQUILER_VIVIENDA" },
+];
+
+export function classifyCategoryByKeywords(text: string): string | null {
+  for (const rule of KEYWORD_RULES) {
+    if (rule.pattern.test(text)) return rule.category;
+  }
+  return null;
+}
+
 export async function classifyCategory(invoiceText: string): Promise<string> {
+  // Fast keyword-based classification before calling OpenAI
+  const keywordMatch = classifyCategoryByKeywords(invoiceText);
+  if (keywordMatch) return keywordMatch;
+
   try {
     const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",

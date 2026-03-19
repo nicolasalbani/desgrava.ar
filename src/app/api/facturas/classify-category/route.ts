@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { resolveCategory, getCatalogEntry } from "@/lib/catalog/provider-catalog";
-import { classifyCategory } from "@/lib/ocr/category-classifier";
+import { classifyCategory, classifyCategoryByKeywords } from "@/lib/ocr/category-classifier";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -17,16 +17,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Texto insuficiente para clasificar" }, { status: 400 });
     }
 
-    // If CUIT provided, use the catalog-aware resolver
-    if (cuit && typeof cuit === "string" && /^\d{11}$/.test(cuit)) {
+    // Fast keyword-based classification — runs before catalog or OpenAI
+    const keywordCategory = classifyCategoryByKeywords(text);
+    if (keywordCategory) {
+      return NextResponse.json({ category: keywordCategory });
+    }
+
+    // Normalize CUIT: strip dashes so formatted values like "20-22430704-8" are accepted
+    const normalizedCuit = cuit && typeof cuit === "string" ? cuit.replace(/-/g, "") : null;
+
+    // If CUIT provided, use the catalog-aware resolver (writes to ProviderCatalog)
+    if (normalizedCuit && /^\d{11}$/.test(normalizedCuit)) {
       // Check catalog first — may already be resolved
-      const existing = await getCatalogEntry(cuit);
+      const existing = await getCatalogEntry(normalizedCuit);
       if (existing) {
         return NextResponse.json({ category: existing.deductionCategory });
       }
 
       // Classify and write to catalog
-      const category = await resolveCategory({ cuit, pdfText: text });
+      const category = await resolveCategory({ cuit: normalizedCuit, pdfText: text });
       return NextResponse.json({ category });
     }
 

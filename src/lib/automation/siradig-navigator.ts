@@ -1651,13 +1651,13 @@ export async function findAndEditExisting(
 
       default:
         log(
-          `Flujo de edicion aun no implementado para categoria: ${invoice.deductionCategory}. ` +
+          `Flujo de actualización aun no implementado para categoria: ${invoice.deductionCategory}. ` +
             `Editar manualmente en SiRADIG.`,
         );
         return {
           success: false,
           error:
-            `Comprobante duplicado — edicion automatica no disponible para ${invoice.deductionCategory}. ` +
+            `Comprobante duplicado — actualización automatica no disponible para ${invoice.deductionCategory}. ` +
             `Editar manualmente en SiRADIG.`,
         };
     }
