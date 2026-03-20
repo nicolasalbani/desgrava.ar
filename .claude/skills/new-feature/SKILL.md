@@ -35,7 +35,9 @@ Once the plan is approved:
    - Run `npx prisma migrate dev --name <descriptive-name>`
    - Run `npx prisma generate`
 
-2. Implement the feature following these conventions:
+2. **If the feature involves ARCA/SiRADIG automation** (`src/lib/automation/`), use `/implement-loop` to iterate: test against live SiRADIG, observe failures with `agent-browser`, fix, and re-test until the automation succeeds. Then continue to Phase 3.
+
+3. Implement the feature following these conventions:
    - Business logic in `src/lib/` (organized by domain)
    - API routes in `src/app/api/` (mirror domain structure, validate `session?.user?.id`)
    - UI components in `src/components/` (split by feature domain)
@@ -49,7 +51,7 @@ Once the plan is approved:
      - Interactive states need dark variants: `hover:bg-accent dark:hover:bg-accent/50`.
      - Semi-transparent overlays work well in dark mode: `dark:bg-input/30`, `dark:border-input`.
 
-3. Run `npm run lint` and `npm run format:check` after implementation. Fix any issues.
+4. Run `npm run lint` and `npm run format:check` after implementation. Fix any issues.
 
 ## Phase 3: Test
 

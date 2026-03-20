@@ -28,7 +28,8 @@ $ARGUMENTS
 
 1. Make the minimal change needed to fix the bug.
 2. Do NOT refactor, add features, or "improve" surrounding code.
-3. Run `npm run lint` and fix any issues introduced.
+3. **If the bug is in ARCA/SiRADIG automation code** (`src/lib/automation/`), use `/implement-loop` to iterate: test against live SiRADIG, observe failures with `agent-browser`, fix, and re-test until the automation succeeds. Then continue to Phase 3.
+4. Run `npm run lint` and fix any issues introduced.
 
 ## Phase 3: Regression Test
 
