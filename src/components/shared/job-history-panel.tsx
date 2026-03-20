@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Loader2, ChevronDown, ChevronUp, AlertCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,26 @@ interface JobHistoryPanelProps {
   cancelling?: boolean;
 }
 
+function LogsContainer({ logs }: { logs: string[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.scrollTop = ref.current.scrollHeight;
+    }
+  }, [logs]);
+
+  return (
+    <div ref={ref} className="bg-muted/30 max-h-32 space-y-0.5 overflow-y-auto rounded-md p-2">
+      {logs.map((entry, i) => (
+        <p key={i} className="text-muted-foreground text-[10px] leading-4">
+          {entry}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function JobHistoryPanel({
   entityId,
   entityType,
@@ -41,13 +61,34 @@ export function JobHistoryPanel({
   const [loading, setLoading] = useState(true);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
+  const jobsRef = useRef(jobs);
+
+  useEffect(() => {
+    jobsRef.current = jobs;
+  }, [jobs]);
+
   useEffect(() => {
     const param = entityType === "invoice" ? "invoiceId" : "receiptId";
-    fetch(`/api/automatizacion/history?${param}=${entityId}`)
-      .then((r) => r.json())
-      .then((d) => setJobs(d.jobs ?? []))
-      .catch(() => setJobs([]))
-      .finally(() => setLoading(false));
+    const url = `/api/automatizacion/history?${param}=${entityId}`;
+
+    const fetchJobs = () =>
+      fetch(url)
+        .then((r) => r.json())
+        .then((d) => setJobs(d.jobs ?? []))
+        .catch(() => setJobs([]))
+        .finally(() => setLoading(false));
+
+    fetchJobs();
+
+    // Poll every 3s while any job is in-flight
+    const interval = setInterval(() => {
+      const hasInFlight = jobsRef.current.some(
+        (j) => j.status === "PENDING" || j.status === "RUNNING",
+      );
+      if (hasInFlight) fetchJobs();
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, [entityId, entityType, latestJobStatus]);
 
   if (loading) {
@@ -127,15 +168,7 @@ export function JobHistoryPanel({
                   </div>
                 )}
 
-                {logs.length > 0 && (
-                  <div className="bg-muted/30 max-h-32 space-y-0.5 overflow-y-auto rounded-md p-2">
-                    {logs.map((entry, i) => (
-                      <p key={i} className="text-muted-foreground text-[10px] leading-4">
-                        {entry}
-                      </p>
-                    ))}
-                  </div>
-                )}
+                {logs.length > 0 && <LogsContainer logs={logs} />}
 
                 <div className="flex items-center gap-2">
                   <Button
