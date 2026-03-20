@@ -19,8 +19,7 @@ import { navigateToMisComprobantes } from "./mis-comprobantes-navigator";
 import { pullDomesticReceipts, pullDomesticWorkersOnly } from "./domestic-navigator";
 import { extractReceiptFields } from "@/lib/ocr/receipt-extractor";
 import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } from "./csv-parser";
-import { classifyCategory } from "@/lib/ocr/category-classifier";
-import { resolveCategory, getCatalogEntry } from "@/lib/catalog/provider-catalog";
+import { resolveCategory } from "@/lib/catalog/provider-catalog";
 import {
   saveScreenshot,
   ensureVideoDir,
@@ -747,33 +746,92 @@ async function processPullComprobantes(
   let skipped = 0;
   let errors = 0;
 
-  // Batch cache: resolve each CUIT once via catalog, reuse for all invoices from same provider
-  const categoryCache = new Map<string, string>();
-
-  for (let i = 0; i < comprobantes.length; i++) {
-    const comp = comprobantes[i];
+  // Filter out duplicates first
+  const newComprobantes = comprobantes.filter((comp) => {
     const key = invoiceDedupeKey(comp.providerCuit, comp.invoiceNumber, comp.fiscalYear);
-
     if (existingKeys.has(key)) {
       skipped++;
-      continue;
+      return false;
+    }
+    // Add to dedup set so subsequent duplicates in the same CSV are caught
+    existingKeys.add(key);
+    return true;
+  });
+
+  await appendLogFn(
+    jobId,
+    `${skipped} duplicadas, ${newComprobantes.length} nuevas para importar`,
+    onLog,
+  );
+
+  // ── Phase 1: Parallel category resolution ─────────────────
+  const categoryCache = new Map<string, string>();
+
+  // Collect unique CUITs that need resolution, with representative invoice data
+  const uniqueCuits = new Map<
+    string,
+    { providerName: string; invoiceType: string; amount: number }
+  >();
+  for (const comp of newComprobantes) {
+    if (!uniqueCuits.has(comp.providerCuit)) {
+      uniqueCuits.set(comp.providerCuit, {
+        providerName: comp.providerName,
+        invoiceType: comp.invoiceType,
+        amount: comp.amount,
+      });
+    }
+  }
+
+  const cuitsToResolve = Array.from(uniqueCuits.entries());
+  const CATEGORY_CONCURRENCY = 8;
+  let resolvedCount = 0;
+
+  for (let i = 0; i < cuitsToResolve.length; i += CATEGORY_CONCURRENCY) {
+    const chunk = cuitsToResolve.slice(i, i + CATEGORY_CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map(async ([cuit, data]) => {
+        const category = await resolveCategory({
+          cuit,
+          providerName: data.providerName,
+          invoiceType: data.invoiceType,
+          amount: data.amount,
+        });
+        return { cuit, category };
+      }),
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        categoryCache.set(result.value.cuit, result.value.category);
+      }
+      // Failed resolutions will be handled during insert phase
     }
 
-    try {
-      // Resolve category via catalog (cached per CUIT within this batch)
-      let category = categoryCache.get(comp.providerCuit);
-      if (!category) {
-        category = await resolveCategory({
+    resolvedCount += chunk.length;
+    await appendLogFn(
+      jobId,
+      `Clasificando proveedores: ${resolvedCount}/${cuitsToResolve.length}`,
+      onLog,
+    );
+  }
+
+  // ── Phase 2: Batch database inserts ───────────────────────
+  const INSERT_BATCH_SIZE = 50;
+  const invoicesToInsert: Prisma.InvoiceCreateManyInput[] = [];
+
+  for (const comp of newComprobantes) {
+    const category = categoryCache.get(comp.providerCuit);
+    if (!category) {
+      // Category resolution failed for this CUIT — try individual fallback
+      try {
+        const fallback = await resolveCategory({
           cuit: comp.providerCuit,
           providerName: comp.providerName,
           invoiceType: comp.invoiceType,
           amount: comp.amount,
         });
-        categoryCache.set(comp.providerCuit, category);
-      }
-
-      await prisma.invoice.create({
-        data: {
+        categoryCache.set(comp.providerCuit, fallback);
+        invoicesToInsert.push({
           userId: job.userId,
           providerCuit: comp.providerCuit,
           providerName: comp.providerName,
@@ -783,28 +841,63 @@ async function processPullComprobantes(
           amount: comp.amount,
           fiscalYear: comp.fiscalYear,
           fiscalMonth: comp.fiscalMonth,
-          deductionCategory: category as import("@/generated/prisma/client").DeductionCategory,
+          deductionCategory: fallback as import("@/generated/prisma/client").DeductionCategory,
           source: "ARCA",
-        },
-      });
-
-      // Add to dedup set so subsequent duplicates in the same CSV are caught
-      existingKeys.add(key);
-      imported++;
-
-      // Log progress every 10 invoices
-      if ((imported + skipped) % 10 === 0 || i === comprobantes.length - 1) {
+        });
+      } catch (err) {
+        errors++;
+        const msg = err instanceof Error ? err.message : "Error desconocido";
         await appendLogFn(
           jobId,
-          `Progreso: ${imported} importadas, ${skipped} duplicadas, ${errors} errores (${i + 1}/${comprobantes.length})`,
+          `Error clasificando comprobante ${comp.invoiceNumber}: ${msg}`,
           onLog,
         );
       }
-    } catch (err) {
-      errors++;
-      const msg = err instanceof Error ? err.message : "Error desconocido";
-      await appendLogFn(jobId, `Error importando comprobante ${comp.invoiceNumber}: ${msg}`, onLog);
+      continue;
     }
+
+    invoicesToInsert.push({
+      userId: job.userId,
+      providerCuit: comp.providerCuit,
+      providerName: comp.providerName,
+      invoiceType: comp.invoiceType as import("@/generated/prisma/client").InvoiceType,
+      invoiceNumber: comp.invoiceNumber,
+      invoiceDate: comp.invoiceDate,
+      amount: comp.amount,
+      fiscalYear: comp.fiscalYear,
+      fiscalMonth: comp.fiscalMonth,
+      deductionCategory: category as import("@/generated/prisma/client").DeductionCategory,
+      source: "ARCA",
+    });
+  }
+
+  for (let i = 0; i < invoicesToInsert.length; i += INSERT_BATCH_SIZE) {
+    const batch = invoicesToInsert.slice(i, i + INSERT_BATCH_SIZE);
+    try {
+      const result = await prisma.invoice.createMany({ data: batch });
+      imported += result.count;
+    } catch (err) {
+      // If batch fails, fall back to individual inserts to isolate errors
+      for (const inv of batch) {
+        try {
+          await prisma.invoice.create({ data: inv });
+          imported++;
+        } catch (innerErr) {
+          errors++;
+          const msg = innerErr instanceof Error ? innerErr.message : "Error desconocido";
+          await appendLogFn(
+            jobId,
+            `Error importando comprobante ${inv.invoiceNumber}: ${msg}`,
+            onLog,
+          );
+        }
+      }
+    }
+    await appendLogFn(
+      jobId,
+      `Importadas: ${imported}/${invoicesToInsert.length} (${errors} errores)`,
+      onLog,
+    );
   }
 
   const summary = `Importacion completada: ${imported} importadas, ${skipped} duplicadas, ${errors} errores de ${comprobantes.length} total`;
