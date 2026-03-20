@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processDocument } from "@/lib/ocr/pipeline";
+import { resolveCategory } from "@/lib/catalog/provider-catalog";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
@@ -31,10 +32,26 @@ export async function POST(req: NextRequest) {
     console.log(`[OCR] Extracted text:\n${result.text}`);
     console.log(`[OCR] Fields:`, result.fields);
 
+    // Auto-classify category using ProviderCatalog + AI fallback
+    let category: string | null = null;
+    if (result.fields.cuit) {
+      try {
+        category = await resolveCategory({
+          cuit: result.fields.cuit,
+          providerName: result.fields.providerName ?? undefined,
+          amount: result.fields.amount ?? undefined,
+          pdfText: result.text,
+        });
+      } catch (err) {
+        console.error("[OCR] Category classification failed:", err);
+      }
+    }
+
     return NextResponse.json({
       filename: file.name,
       method: result.method,
       extractedFields: result.fields,
+      category,
     });
   } catch (error) {
     console.error("Error processing upload:", error);

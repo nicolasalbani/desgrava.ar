@@ -15,42 +15,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calculator, Plus, Trash2, Loader2, FileText } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, Minus, Trash2, FileText } from "lucide-react";
 import { CATEGORY_LABELS, type SimuladorCategory } from "@/lib/simulador/deduction-rules";
+import { validateCuit, formatCuit } from "@/lib/validators/cuit";
 import { SimuladorResults } from "./simulador-results";
 import { PdfUploadDropzone } from "./pdf-upload-dropzone";
-import type { SimulationResult } from "@/lib/simulador/calculator";
+import { simulateSimplified, type SimplifiedSimulationResult } from "@/lib/simulador/calculator";
 
 const ALLOWED_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const MAX_UPLOAD_FILES = 10;
 
 const formSchema = z.object({
-  salarioBrutoMensual: z
-    .string()
-    .min(1, "El salario es requerido")
-    .refine(
-      (val) => {
-        const num = parseFloat(unformatArgNumber(val));
-        return !isNaN(num) && num > 0;
-      },
-      { message: "El salario debe ser mayor a 0" },
-    ),
-  tieneHijos: z.string(),
+  tieneHijos: z.number().int().min(0).max(20),
   tieneConyuge: z.boolean(),
-  incluyeSindicato: z.boolean(),
   deducciones: z.array(
     z.object({
-      category: z.string().min(1, "Selecciona una categoria"),
-      monthlyAmount: z
-        .string()
-        .min(1, "Ingresa un monto")
-        .refine(
-          (val) => {
-            const num = parseFloat(unformatArgNumber(val));
-            return !isNaN(num) && num > 0;
-          },
-          { message: "El monto debe ser mayor a 0" },
-        ),
+      providerName: z.string().optional(),
+      cuit: z.string().optional(),
+      date: z.string().optional(),
+      category: z.string().optional(),
+      amount: z.string().optional(),
       _sourceFilename: z.string().optional(),
     }),
   ),
@@ -70,19 +62,189 @@ function unformatArgNumber(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  const parts = dateStr.split(/[\/\-.]/);
+  if (parts.length === 3) {
+    const [a, b, c] = parts;
+    if (a.length === 4) return `${c}/${b}/${a}`;
+    return `${a}/${b}/${c}`;
+  }
+  return dateStr;
+}
+
+function todayFormatted(): string {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+// ── Manual entry dialog ─────────────────────────────────────────────────────
+
+interface ManualEntryDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAdd: (entry: {
+    providerName: string;
+    cuit: string;
+    date: string;
+    category: string;
+    amount: string;
+  }) => void;
+}
+
+function isoToDisplay(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function ManualEntryDialog({ open, onOpenChange, onAdd }: ManualEntryDialogProps) {
+  const [name, setName] = useState("");
+  const [cuit, setCuit] = useState("");
+  const [cuitError, setCuitError] = useState("");
+  const [dateIso, setDateIso] = useState("");
+  const [category, setCategory] = useState("");
+  const [amount, setAmount] = useState("");
+
+  function reset() {
+    setName("");
+    setCuit("");
+    setCuitError("");
+    setDateIso("");
+    setCategory("");
+    setAmount("");
+  }
+
+  function handleCuitChange(value: string) {
+    const formatted = formatCuit(value);
+    setCuit(formatted);
+    const cleaned = formatted.replace(/-/g, "");
+    if (cleaned.length === 0) {
+      setCuitError("");
+    } else if (cleaned.length < 11) {
+      setCuitError("El CUIT debe tener 11 digitos");
+    } else if (!validateCuit(cleaned)) {
+      setCuitError("CUIT invalido");
+    } else {
+      setCuitError("");
+    }
+  }
+
+  function handleAdd() {
+    if (!category || !amount || !unformatArgNumber(amount)) return;
+    if (cuit && cuitError) return;
+    onAdd({
+      providerName: name,
+      cuit: cuit.replace(/-/g, ""),
+      date: isoToDisplay(dateIso),
+      category,
+      amount: unformatArgNumber(amount),
+    });
+    reset();
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) reset();
+        onOpenChange(v);
+      }}
+    >
+      <DialogContent className="overflow-hidden [&>*]:min-w-0">
+        <DialogHeader>
+          <DialogTitle>Agregar deduccion</DialogTitle>
+        </DialogHeader>
+        <div className="min-w-0 space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label className="text-muted-foreground text-sm">Proveedor</Label>
+            <Input
+              type="text"
+              placeholder="Nombre del proveedor"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1 space-y-1.5">
+              <Label className="text-muted-foreground text-sm">CUIT (opcional)</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder="20-12345678-9"
+                value={cuit}
+                onChange={(e) => handleCuitChange(e.target.value)}
+                className={cuitError ? "border-destructive" : ""}
+              />
+              {cuitError && <p className="text-destructive text-xs">{cuitError}</p>}
+            </div>
+            <div className="flex-1 space-y-1.5">
+              <Label className="text-muted-foreground text-sm">Fecha (opcional)</Label>
+              <Input type="date" value={dateIso} onChange={(e) => setDateIso(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-muted-foreground text-sm">Categoria</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="!w-full min-w-0 overflow-hidden text-left [&>span]:block [&>span]:truncate">
+                <SelectValue placeholder="Seleccionar categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-muted-foreground text-sm">Monto</Label>
+            <div className="relative">
+              <span className="text-muted-foreground/60 absolute top-1/2 left-3 -translate-y-1/2 text-sm select-none">
+                $
+              </span>
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder="200.000"
+                value={formatArgNumber(amount)}
+                onChange={(e) => setAmount(unformatArgNumber(e.target.value))}
+                className="pl-7"
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            onClick={handleAdd}
+            disabled={!category || !unformatArgNumber(amount) || !!cuitError}
+          >
+            Agregar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Main form ───────────────────────────────────────────────────────────────
+
 export function SimuladorForm() {
-  const [result, setResult] = useState<SimulationResult | null>(null);
-  const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      salarioBrutoMensual: "",
-      tieneHijos: "0",
+      tieneHijos: 0,
       tieneConyuge: false,
-      incluyeSindicato: false,
       deducciones: [],
     },
   });
@@ -91,6 +253,31 @@ export function SimuladorForm() {
     control: form.control,
     name: "deducciones",
   });
+
+  const tieneHijos = form.watch("tieneHijos");
+  const tieneConyuge = form.watch("tieneConyuge");
+  const deducciones = form.watch("deducciones");
+
+  // Auto-calculate savings client-side on every render
+  // simulateSimplified is pure Decimal.js math — fast enough to skip memoization
+  const validDeducciones = deducciones
+    .filter((d) => d.category && d.amount && unformatArgNumber(d.amount))
+    .map((d) => ({
+      category: d.category!,
+      amount: parseFloat(unformatArgNumber(d.amount!)),
+    }))
+    .filter((d) => d.amount > 0);
+
+  const result: SimplifiedSimulationResult | null =
+    validDeducciones.length === 0 && !tieneConyuge && tieneHijos === 0
+      ? null
+      : simulateSimplified({
+          tieneHijos,
+          tieneConyuge,
+          esPropietario: false,
+          interesesHipotecariosMensual: 0,
+          deducciones: validDeducciones,
+        });
 
   const handleFilesSelected = useCallback(
     async (files: File[]) => {
@@ -114,12 +301,32 @@ export function SimuladorForm() {
           });
           if (res.ok) {
             const data = await res.json();
-            const amount = data.extractedFields?.amount ?? null;
-            append({
-              category: "",
-              monthlyAmount: amount != null ? amount.toString() : "",
-              _sourceFilename: file.name,
-            });
+            const fields = data.extractedFields;
+            const newCuit = fields?.cuit ?? "";
+            const newDate = formatDate(fields?.date) || todayFormatted();
+            const newAmount = fields?.amount != null ? Math.round(fields.amount).toString() : "";
+
+            const existing = form.getValues("deducciones");
+            const isDuplicate =
+              newCuit &&
+              newAmount &&
+              existing.some(
+                (d) =>
+                  d.cuit === newCuit &&
+                  d.date === newDate &&
+                  unformatArgNumber(d.amount ?? "") === newAmount,
+              );
+
+            if (!isDuplicate) {
+              append({
+                providerName: fields?.providerName ?? "",
+                cuit: newCuit,
+                date: newDate,
+                category: data.category ?? "",
+                amount: newAmount,
+                _sourceFilename: file.name,
+              });
+            }
           }
         } catch {
           // skip failed files silently
@@ -129,107 +336,68 @@ export function SimuladorForm() {
 
       setIsUploading(false);
     },
-    [append],
+    [append, form],
   );
 
-  async function onSubmit(data: FormData) {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/simulador/calcular", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          salarioBrutoMensual: parseFloat(unformatArgNumber(data.salarioBrutoMensual)),
-          tieneHijos: parseInt(data.tieneHijos),
-          tieneConyuge: data.tieneConyuge,
-          incluyeSindicato: data.incluyeSindicato,
-          deducciones: data.deducciones.map((d) => ({
-            category: d.category,
-            monthlyAmount: parseFloat(unformatArgNumber(d.monthlyAmount)),
-          })),
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        console.error(err);
-        return;
-      }
-
-      const simResult = await res.json();
-      setResult(simResult);
-    } finally {
-      setLoading(false);
-    }
+  function handleManualAdd(entry: {
+    providerName: string;
+    cuit: string;
+    date: string;
+    category: string;
+    amount: string;
+  }) {
+    append({
+      providerName: entry.providerName,
+      cuit: entry.cuit,
+      date: entry.date,
+      category: entry.category,
+      amount: entry.amount,
+    });
   }
 
   return (
     <div className="space-y-12">
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-10">
-        {/* Salary */}
-        <div className="space-y-2">
-          <Label htmlFor="salario" className="text-muted-foreground text-sm">
-            Salario bruto mensual
-          </Label>
-          <div className="relative">
-            <span className="text-muted-foreground/60 absolute top-1/2 left-4 -translate-y-1/2 text-lg select-none">
-              $
-            </span>
-            <Input
-              id="salario"
-              type="text"
-              inputMode="numeric"
-              placeholder="2.000.000"
-              value={formatArgNumber(form.watch("salarioBrutoMensual"))}
-              onChange={(e) => {
-                const raw = unformatArgNumber(e.target.value);
-                form.setValue("salarioBrutoMensual", raw, { shouldValidate: true });
-              }}
-              className="h-14 pl-8 text-xl font-medium tracking-tight"
-            />
-          </div>
-          {form.formState.errors.salarioBrutoMensual && (
-            <p className="text-destructive text-sm">
-              {form.formState.errors.salarioBrutoMensual.message}
-            </p>
-          )}
-        </div>
-
-        {/* Family situation */}
-        <div className="border-border flex flex-wrap gap-x-8 gap-y-4 border-y py-5">
-          <div className="space-y-1">
-            <Label htmlFor="hijos" className="text-muted-foreground text-sm">
-              Hijos a cargo
-            </Label>
-            <Input
-              id="hijos"
-              type="number"
-              min="0"
-              max="20"
-              {...form.register("tieneHijos")}
-              className="h-9 w-24"
-            />
+      <div className="space-y-10">
+        {/* Family situation + toggles */}
+        <div className="border-border flex flex-wrap items-center gap-x-8 gap-y-4 border-b pb-5">
+          {/* Hijos stepper */}
+          <div className="space-y-1.5">
+            <Label className="text-muted-foreground text-sm">Hijos a cargo</Label>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                disabled={tieneHijos <= 0}
+                onClick={() => form.setValue("tieneHijos", Math.max(0, tieneHijos - 1))}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <span className="text-foreground w-8 text-center text-sm font-medium tabular-nums">
+                {tieneHijos}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                disabled={tieneHijos >= 20}
+                onClick={() => form.setValue("tieneHijos", Math.min(20, tieneHijos + 1))}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
 
           <div className="flex items-center gap-3 self-end pb-0.5">
             <Switch
               id="conyuge"
-              checked={form.watch("tieneConyuge")}
+              checked={tieneConyuge}
               onCheckedChange={(v) => form.setValue("tieneConyuge", v)}
             />
             <Label htmlFor="conyuge" className="cursor-pointer text-sm">
               Conyuge a cargo
-            </Label>
-          </div>
-
-          <div className="flex items-center gap-3 self-end pb-0.5">
-            <Switch
-              id="sindicato"
-              checked={form.watch("incluyeSindicato")}
-              onCheckedChange={(v) => form.setValue("incluyeSindicato", v)}
-            />
-            <Label htmlFor="sindicato" className="cursor-pointer text-sm">
-              Aporte sindical (2%)
             </Label>
           </div>
         </div>
@@ -248,7 +416,7 @@ export function SimuladorForm() {
               variant="outline"
               size="sm"
               className="shrink-0"
-              onClick={() => append({ category: "", monthlyAmount: "" })}
+              onClick={() => setManualDialogOpen(true)}
             >
               <Plus className="mr-1 h-3.5 w-3.5" />
               Agregar
@@ -263,96 +431,102 @@ export function SimuladorForm() {
           />
 
           {fields.length > 0 && (
-            <div className="space-y-3 pt-1">
-              {fields.map((field, index) => (
-                <div
-                  key={field.id}
-                  className="flex flex-col items-start gap-3 sm:flex-row sm:items-end"
-                >
-                  <div className="w-full min-w-0 flex-1 space-y-1">
-                    {index === 0 && (
-                      <Label className="text-muted-foreground text-xs">Categoria</Label>
-                    )}
-                    <Select
-                      value={form.watch(`deducciones.${index}.category`)}
-                      onValueChange={(v) => form.setValue(`deducciones.${index}.category`, v)}
+            <TooltipProvider delayDuration={300}>
+              <div className="divide-border divide-y pt-1">
+                {fields.map((field, index) => {
+                  const providerName = form.watch(`deducciones.${index}.providerName`);
+                  const cuit = form.watch(`deducciones.${index}.cuit`);
+                  const date = form.watch(`deducciones.${index}.date`);
+                  const filename = form.watch(`deducciones.${index}._sourceFilename`);
+
+                  return (
+                    <div
+                      key={field.id}
+                      className="grid grid-cols-[1fr_minmax(0,1.2fr)_7rem_auto] items-center gap-2 py-2"
                     >
-                      <SelectTrigger className="w-full overflow-hidden">
-                        <SelectValue placeholder="Seleccionar categoria" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      {/* Provider + CUIT + date */}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {providerName || cuit || "Sin proveedor"}
+                        </p>
+                        <p className="text-muted-foreground truncate text-xs">
+                          {[providerName && cuit ? cuit : null, date].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
 
-                  <div className="w-full space-y-1 sm:w-44 sm:shrink-0">
-                    {index === 0 && (
-                      <Label className="text-muted-foreground text-xs">Monto mensual</Label>
-                    )}
-                    <div className="relative">
-                      <span className="text-muted-foreground/60 absolute top-1/2 left-3 -translate-y-1/2 text-sm select-none">
-                        $
-                      </span>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="200.000"
-                        value={formatArgNumber(form.watch(`deducciones.${index}.monthlyAmount`))}
-                        onChange={(e) => {
-                          const raw = unformatArgNumber(e.target.value);
-                          form.setValue(`deducciones.${index}.monthlyAmount`, raw, {
-                            shouldValidate: true,
-                          });
-                        }}
-                        className="pl-6"
-                      />
+                      {/* Category */}
+                      <Select
+                        value={form.watch(`deducciones.${index}.category`) ?? ""}
+                        onValueChange={(v) => form.setValue(`deducciones.${index}.category`, v)}
+                      >
+                        <SelectTrigger className="h-8 w-full overflow-hidden text-xs">
+                          <SelectValue placeholder="Categoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* Amount */}
+                      <div className="relative">
+                        <span className="text-muted-foreground/60 absolute top-1/2 left-2 -translate-y-1/2 text-xs select-none">
+                          $
+                        </span>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={formatArgNumber(form.watch(`deducciones.${index}.amount`) ?? "")}
+                          onChange={(e) => {
+                            const raw = unformatArgNumber(e.target.value);
+                            form.setValue(`deducciones.${index}.amount`, raw);
+                          }}
+                          className="h-8 pl-5 text-right text-xs"
+                        />
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-0.5">
+                        {filename ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <FileText className="text-muted-foreground/40 h-3.5 w-3.5 shrink-0" />
+                            </TooltipTrigger>
+                            <TooltipContent>{filename}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => remove(index)}
+                          className="text-muted-foreground/40 hover:text-destructive h-7 w-7 shrink-0"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-
-                  {form.watch(`deducciones.${index}._sourceFilename`) && (
-                    <div className="text-muted-foreground hidden max-w-32 shrink-0 items-center gap-1 truncate pb-2 text-xs sm:flex">
-                      <FileText className="h-3 w-3 shrink-0" />
-                      {form.watch(`deducciones.${index}._sourceFilename`)}
-                    </div>
-                  )}
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remove(index)}
-                    className="text-muted-foreground/60 hover:text-destructive shrink-0"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-
-              {form.formState.errors.deducciones && (
-                <p className="text-destructive text-sm">
-                  Completa todos los campos de las deducciones
-                </p>
-              )}
-            </div>
+                  );
+                })}
+              </div>
+            </TooltipProvider>
           )}
         </div>
-
-        <Button type="submit" size="lg" className="w-full" disabled={loading}>
-          {loading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Calculator className="mr-2 h-4 w-4" />
-          )}
-          Calcular ahorro
-        </Button>
-      </form>
+      </div>
 
       {result && <SimuladorResults result={result} />}
+
+      <ManualEntryDialog
+        open={manualDialogOpen}
+        onOpenChange={setManualDialogOpen}
+        onAdd={handleManualAdd}
+      />
     </div>
   );
 }

@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { simuladorInputSchema } from "@/lib/simulador/schemas";
-import { simulate } from "@/lib/simulador/calculator";
+import { simuladorInputSchema, simuladorSimplifiedInputSchema } from "@/lib/simulador/schemas";
+import { simulate, simulateSimplified } from "@/lib/simulador/calculator";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const parsed = simuladorInputSchema.safeParse(body);
 
+    // Try simplified mode first (no salary field)
+    if (!("salarioBrutoMensual" in body)) {
+      const parsed = simuladorSimplifiedInputSchema.safeParse(body);
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: "Datos invalidos", details: parsed.error.flatten() },
+          { status: 400 },
+        );
+      }
+      const result = simulateSimplified(parsed.data);
+      return NextResponse.json(result);
+    }
+
+    // Legacy full simulation mode
+    const parsed = simuladorInputSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Datos invalidos", details: parsed.error.flatten() },

@@ -16,3 +16,20 @@ export const simuladorInputSchema = z.object({
 });
 
 export type SimuladorInput = z.infer<typeof simuladorInputSchema>;
+
+export const simuladorSimplifiedInputSchema = z.object({
+  tieneHijos: z.number().int().min(0).max(20).default(0),
+  tieneConyuge: z.boolean().default(false),
+  esPropietario: z.boolean().default(false),
+  interesesHipotecariosMensual: z.number().min(0).default(0),
+  deducciones: z
+    .array(
+      z.object({
+        category: z.string(),
+        amount: z.number().positive("El monto debe ser mayor a 0"),
+      }),
+    )
+    .default([]),
+});
+
+export type SimuladorSimplifiedInput = z.infer<typeof simuladorSimplifiedInputSchema>;

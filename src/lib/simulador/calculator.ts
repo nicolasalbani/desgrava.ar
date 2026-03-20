@@ -1,6 +1,11 @@
 import Decimal from "decimal.js";
 import { getTaxTables, TaxBracket, TaxPeriod } from "./tax-tables";
-import { DeductionInput, DeductionResult, applyDeductionRules } from "./deduction-rules";
+import {
+  DeductionInput,
+  DeductionResult,
+  applyDeductionRules,
+  CATEGORY_LABELS,
+} from "./deduction-rules";
 
 export interface SimulationInput {
   salarioBrutoMensual: number;
@@ -50,6 +55,99 @@ function calculateTax(taxableIncome: Decimal, brackets: TaxBracket[]): Decimal {
   // Above highest bracket
   const last = brackets[brackets.length - 1];
   return last.fixedAmount.plus(taxableIncome.minus(last.from).mul(last.rate));
+}
+
+// Personal plan monthly cost in ARS
+export const PERSONAL_PLAN_MONTHLY_COST = 4999;
+
+export interface SimplifiedSimulationInput {
+  tieneHijos: number;
+  tieneConyuge: boolean;
+  esPropietario: boolean;
+  interesesHipotecariosMensual: number;
+  deducciones: Array<{
+    category: string;
+    amount: number;
+  }>;
+  period?: TaxPeriod;
+}
+
+export interface SimplifiedSimulationResult {
+  ahorroAnualHasta: string;
+  ahorroMensualHasta: string;
+  ahorronetoAnual: string;
+  ahorroNetoMensual: string;
+  planCostoAnual: string;
+  detalleDeduciones: Array<{
+    category: string;
+    label: string;
+    inputAmount: string;
+    deductibleAmount: string;
+  }>;
+}
+
+export function simulateSimplified(input: SimplifiedSimulationInput): SimplifiedSimulationResult {
+  const tables = getTaxTables(input.period);
+  const pd = tables.personalDeductions;
+  const TOP_RATE = new Decimal("0.35");
+
+  // Build deductions list — include mortgage interest if property owner
+  const allDeducciones = [...input.deducciones];
+  if (input.esPropietario && input.interesesHipotecariosMensual > 0) {
+    allDeducciones.push({
+      category: "INTERESES_HIPOTECARIOS",
+      amount: input.interesesHipotecariosMensual * 12,
+    });
+  }
+
+  // Apply deduction rules using a high net income so percentage-based caps are generous
+  const highNetIncome = new Decimal("100_000_000");
+
+  const deductionInputs: DeductionInput[] = allDeducciones.map((d) => ({
+    category: d.category as DeductionInput["category"],
+    annualAmount: new Decimal(d.amount),
+  }));
+
+  const deductionResults: DeductionResult[] = deductionInputs.map((di) =>
+    applyDeductionRules(di, tables.deductionLimits, highNetIncome),
+  );
+
+  // Family deductions declared via SiRADIG (conyuge, hijos)
+  // NOTE: gananciaNoImponible and deduccionEspecial are excluded because
+  // they are automatically applied by the employer — not a SiRADIG benefit.
+  let familyDeductions = new Decimal(0);
+  if (input.tieneConyuge) {
+    familyDeductions = familyDeductions.plus(pd.conyuge);
+  }
+  familyDeductions = familyDeductions.plus(pd.hijoMenor.mul(input.tieneHijos));
+
+  const totalComprobantes = deductionResults.reduce(
+    (sum, r) => sum.plus(r.deductibleAmount),
+    new Decimal(0),
+  );
+
+  // Max savings = (family + comprobantes) * 35% top marginal rate
+  const totalDeductible = familyDeductions.plus(totalComprobantes);
+  const ahorroAnual = totalDeductible.mul(TOP_RATE);
+  const ahorroMensual = ahorroAnual.div(12);
+
+  const planCostoAnual = new Decimal(PERSONAL_PLAN_MONTHLY_COST).mul(12);
+  const netoAnual = Decimal.max(ahorroAnual.minus(planCostoAnual), new Decimal(0));
+  const netoMensual = netoAnual.div(12);
+
+  return {
+    ahorroAnualHasta: ahorroAnual.toFixed(2),
+    ahorroMensualHasta: ahorroMensual.toFixed(2),
+    ahorronetoAnual: netoAnual.toFixed(2),
+    ahorroNetoMensual: netoMensual.toFixed(2),
+    planCostoAnual: planCostoAnual.toFixed(2),
+    detalleDeduciones: deductionResults.map((r) => ({
+      category: r.category,
+      label: CATEGORY_LABELS[r.category] ?? r.category,
+      inputAmount: r.inputAmount.toFixed(2),
+      deductibleAmount: r.deductibleAmount.toFixed(2),
+    })),
+  };
 }
 
 export function simulate(input: SimulationInput): SimulationResult {

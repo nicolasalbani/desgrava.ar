@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { simuladorInputSchema } from "@/lib/simulador/schemas";
+import { simuladorInputSchema, simuladorSimplifiedInputSchema } from "@/lib/simulador/schemas";
 
 describe("simuladorInputSchema", () => {
   describe("valid input", () => {
@@ -222,5 +222,51 @@ describe("simuladorInputSchema", () => {
       const result = simuladorInputSchema.safeParse(input);
       expect(result.success).toBe(false);
     });
+  });
+});
+
+describe("simuladorSimplifiedInputSchema", () => {
+  it("passes with minimal input (all defaults)", () => {
+    const result = simuladorSimplifiedInputSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tieneHijos).toBe(0);
+      expect(result.data.tieneConyuge).toBe(false);
+      expect(result.data.esPropietario).toBe(false);
+      expect(result.data.interesesHipotecariosMensual).toBe(0);
+      expect(result.data.deducciones).toEqual([]);
+    }
+  });
+
+  it("passes with all fields provided", () => {
+    const input = {
+      tieneHijos: 3,
+      tieneConyuge: true,
+      esPropietario: true,
+      interesesHipotecariosMensual: 50_000,
+      deducciones: [{ category: "ALQUILER_VIVIENDA", amount: 200_000 }],
+    };
+    const result = simuladorSimplifiedInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("fails when amount is negative", () => {
+    const input = {
+      deducciones: [{ category: "GASTOS_MEDICOS", amount: -100 }],
+    };
+    const result = simuladorSimplifiedInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("fails when tieneHijos exceeds max", () => {
+    const result = simuladorSimplifiedInputSchema.safeParse({ tieneHijos: 21 });
+    expect(result.success).toBe(false);
+  });
+
+  it("does not require salarioBrutoMensual", () => {
+    const result = simuladorSimplifiedInputSchema.safeParse({
+      deducciones: [{ category: "GASTOS_MEDICOS", amount: 10_000 }],
+    });
+    expect(result.success).toBe(true);
   });
 });

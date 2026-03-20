@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { simulate, SimulationInput } from "@/lib/simulador/calculator";
+import {
+  simulate,
+  simulateSimplified,
+  SimulationInput,
+  SimplifiedSimulationInput,
+  PERSONAL_PLAN_MONTHLY_COST,
+} from "@/lib/simulador/calculator";
 import { getTaxTables } from "@/lib/simulador/tax-tables";
 
 function makeInput(overrides: Partial<SimulationInput> = {}): SimulationInput {
@@ -273,6 +279,176 @@ describe("simulate()", () => {
       );
       const expected = new Decimal(result.ahorroAnual).div(12);
       expect(result.ahorroMensual).toBe(expected.toFixed(2));
+    });
+  });
+});
+
+// ─── simulateSimplified() ───────────────────────────────────────────────────
+
+function makeSimplifiedInput(
+  overrides: Partial<SimplifiedSimulationInput> = {},
+): SimplifiedSimulationInput {
+  return {
+    tieneHijos: 0,
+    tieneConyuge: false,
+    esPropietario: false,
+    interesesHipotecariosMensual: 0,
+    deducciones: [],
+    ...overrides,
+  };
+}
+
+describe("simulateSimplified()", () => {
+  describe("basic savings with flat 35% rate", () => {
+    it("computes savings as comprobantes * 0.35 (excludes automatic personal deductions)", () => {
+      const result = simulateSimplified(
+        makeSimplifiedInput({
+          deducciones: [{ category: "GASTOS_INDUMENTARIA_TRABAJO", amount: 1_200_000 }],
+        }),
+      );
+      // Only invoice-backed deductions count — gananciaNoImponible and
+      // deduccionEspecial are automatic and excluded from simplified savings
+      const expected = new Decimal(1_200_000).mul("0.35");
+      expect(result.ahorroAnualHasta).toBe(expected.toFixed(2));
+    });
+
+    it("computes monthly savings as annual / 12", () => {
+      const result = simulateSimplified(
+        makeSimplifiedInput({
+          deducciones: [{ category: "GASTOS_INDUMENTARIA_TRABAJO", amount: 600_000 }],
+        }),
+      );
+      const expected = new Decimal(result.ahorroAnualHasta).div(12);
+      expect(result.ahorroMensualHasta).toBe(expected.toFixed(2));
+    });
+  });
+
+  describe("net savings after plan cost", () => {
+    it("subtracts annual plan cost from gross savings", () => {
+      const result = simulateSimplified(
+        makeSimplifiedInput({
+          deducciones: [{ category: "GASTOS_INDUMENTARIA_TRABAJO", amount: 10_000_000 }],
+        }),
+      );
+      const planCostAnual = new Decimal(PERSONAL_PLAN_MONTHLY_COST).mul(12);
+      const expectedNeto = Decimal.max(
+        new Decimal(result.ahorroAnualHasta).minus(planCostAnual),
+        new Decimal(0),
+      );
+      expect(result.ahorronetoAnual).toBe(expectedNeto.toFixed(2));
+    });
+
+    it("net savings are never negative", () => {
+      // With zero deductions, savings come only from personal deductions
+      const result = simulateSimplified(makeSimplifiedInput());
+      expect(parseFloat(result.ahorronetoAnual)).toBeGreaterThanOrEqual(0);
+    });
+
+    it("reports correct plan cost", () => {
+      const result = simulateSimplified(makeSimplifiedInput());
+      const expected = new Decimal(PERSONAL_PLAN_MONTHLY_COST).mul(12);
+      expect(result.planCostoAnual).toBe(expected.toFixed(2));
+    });
+  });
+
+  describe("family situation affects personal deductions", () => {
+    it("conyuge increases savings", () => {
+      const without = simulateSimplified(makeSimplifiedInput({ tieneConyuge: false }));
+      const withC = simulateSimplified(makeSimplifiedInput({ tieneConyuge: true }));
+      expect(parseFloat(withC.ahorroAnualHasta)).toBeGreaterThan(
+        parseFloat(without.ahorroAnualHasta),
+      );
+    });
+
+    it("children increase savings proportionally", () => {
+      const tables = getTaxTables("2025");
+      const with0 = simulateSimplified(makeSimplifiedInput({ tieneHijos: 0 }));
+      const with2 = simulateSimplified(makeSimplifiedInput({ tieneHijos: 2 }));
+      const diff = new Decimal(with2.ahorroAnualHasta).minus(with0.ahorroAnualHasta);
+      const expectedDiff = tables.personalDeductions.hijoMenor.mul(2).mul("0.35");
+      expect(diff.toFixed(2)).toBe(expectedDiff.toFixed(2));
+    });
+  });
+
+  describe("property owner mortgage interest", () => {
+    it("includes mortgage interest when esPropietario is true", () => {
+      const without = simulateSimplified(makeSimplifiedInput({ esPropietario: false }));
+      const withProp = simulateSimplified(
+        makeSimplifiedInput({
+          esPropietario: true,
+          interesesHipotecariosMensual: 50_000,
+        }),
+      );
+      expect(parseFloat(withProp.ahorroAnualHasta)).toBeGreaterThan(
+        parseFloat(without.ahorroAnualHasta),
+      );
+    });
+
+    it("does not include mortgage interest when esPropietario is false", () => {
+      const result = simulateSimplified(
+        makeSimplifiedInput({
+          esPropietario: false,
+          interesesHipotecariosMensual: 50_000,
+        }),
+      );
+      const base = simulateSimplified(makeSimplifiedInput());
+      expect(result.ahorroAnualHasta).toBe(base.ahorroAnualHasta);
+    });
+
+    it("respects mortgage interest annual cap", () => {
+      const tables = getTaxTables("2025");
+      const cap = tables.deductionLimits.interesesHipotecarios.annualMax;
+      // 1M/month = 12M annual, way above the cap
+      const result = simulateSimplified(
+        makeSimplifiedInput({
+          esPropietario: true,
+          interesesHipotecariosMensual: 1_000_000,
+        }),
+      );
+      const hipotecario = result.detalleDeduciones.find(
+        (d) => d.category === "INTERESES_HIPOTECARIOS",
+      );
+      expect(hipotecario).toBeDefined();
+      expect(hipotecario!.deductibleAmount).toBe(cap.toFixed(2));
+    });
+  });
+
+  describe("deduction rules still apply", () => {
+    it("caps alquiler vivienda at 40% and annual max", () => {
+      const tables = getTaxTables("2025");
+      const alqMax = tables.deductionLimits.alquilerVivienda.annualMax;
+      // Very high amount to hit the cap
+      const result = simulateSimplified(
+        makeSimplifiedInput({
+          deducciones: [{ category: "ALQUILER_VIVIENDA", amount: 50_000_000 }],
+        }),
+      );
+      const alq = result.detalleDeduciones.find((d) => d.category === "ALQUILER_VIVIENDA");
+      expect(alq).toBeDefined();
+      expect(alq!.deductibleAmount).toBe(alqMax.toFixed(2));
+    });
+
+    it("returns 100% deductible for uncapped categories", () => {
+      const result = simulateSimplified(
+        makeSimplifiedInput({
+          deducciones: [{ category: "GASTOS_INDUMENTARIA_TRABAJO", amount: 500_000 }],
+        }),
+      );
+      const det = result.detalleDeduciones[0];
+      expect(det.inputAmount).toBe("500000.00");
+      expect(det.deductibleAmount).toBe("500000.00");
+    });
+  });
+
+  describe("empty deductions", () => {
+    it("returns zero savings when no deductions and no family", () => {
+      const result = simulateSimplified(makeSimplifiedInput());
+      expect(result.ahorroAnualHasta).toBe("0.00");
+    });
+
+    it("returns empty detalleDeduciones", () => {
+      const result = simulateSimplified(makeSimplifiedInput());
+      expect(result.detalleDeduciones).toHaveLength(0);
     });
   });
 });

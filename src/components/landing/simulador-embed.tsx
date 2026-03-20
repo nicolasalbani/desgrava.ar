@@ -1,7 +1,4 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { SimuladorForm } from "@/components/simulador/simulador-form";
-import { ArrowRight } from "lucide-react";
 
 export function SimuladorEmbed() {
   return (
@@ -11,20 +8,11 @@ export function SimuladorEmbed() {
           Calcula cuanto podes recuperar
         </h2>
         <p className="text-muted-foreground mt-2 text-base">
-          Ingresa tu sueldo y tus gastos deducibles. Sin registro, sin compromiso.
+          Carga tus gastos deducibles y enterate cuanto podes ahorrar. Sin registro, sin compromiso.
         </p>
       </div>
 
       <SimuladorForm />
-
-      <div className="mt-8 text-center">
-        <Button size="lg" asChild>
-          <Link href="/login">
-            Registrate para desgravar
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
-      </div>
     </div>
   );
 }
