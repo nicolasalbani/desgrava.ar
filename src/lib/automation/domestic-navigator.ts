@@ -273,6 +273,115 @@ export async function pullDomesticReceipts(
 }
 
 /**
+ * Navigate to "VER TRABAJADORES HISTÓRICOS" and return an array of
+ * { cuil, href } entries paired by DOM position. Returns empty array
+ * if the link doesn't exist (user has no terminated workers).
+ *
+ * Leaves the page on the historical workers list URL (returned as historicUrl).
+ */
+async function navigateToHistoricWorkersList(
+  servicePage: Page,
+  homeUrl: string,
+  onLog: (msg: string) => void,
+  onScreenshot: ScreenshotCallback,
+): Promise<{ entries: { cuil: string; href: string }[]; historicUrl: string } | null> {
+  // Ensure we're on the home page first
+  if (servicePage.url() !== homeUrl) {
+    await servicePage.goto(homeUrl, { waitUntil: "networkidle" });
+  }
+
+  const historicLink = servicePage.locator("a:has-text('VER TRABAJADORES HISTÓRICOS')");
+  if ((await historicLink.count()) === 0) {
+    onLog("No se encontro el link VER TRABAJADORES HISTORICOS");
+    return null;
+  }
+
+  await historicLink.click();
+  await servicePage.waitForLoadState("networkidle");
+  const historicUrl = servicePage.url();
+
+  await onScreenshot(
+    await servicePage.screenshot({ fullPage: true }),
+    "historic-workers",
+    "Trabajadores historicos",
+  );
+
+  const entries = await servicePage.evaluate(() => {
+    const body = document.body.textContent || "";
+    const cuilMatches = [...body.matchAll(/CUIL:\s*([\d-]+)/g)];
+    const datosLinks = document.querySelectorAll("a");
+    const datosHrefs: string[] = [];
+    for (let i = 0; i < datosLinks.length; i++) {
+      if (datosLinks[i].textContent?.trim() === "DATOS DEL TRABAJADOR") {
+        datosHrefs.push(datosLinks[i].href);
+      }
+    }
+    const result: { cuil: string; href: string }[] = [];
+    for (let i = 0; i < Math.min(cuilMatches.length, datosHrefs.length); i++) {
+      result.push({ cuil: cuilMatches[i][1].replace(/-/g, ""), href: datosHrefs[i] });
+    }
+    return result;
+  });
+
+  onLog(`Encontrados ${entries.length} trabajadores historicos`);
+  return { entries, historicUrl };
+}
+
+/**
+ * Pull worker data (not receipts) from "VER TRABAJADORES HISTÓRICOS".
+ * Used by pullDomesticInternal to include terminated workers in the import.
+ */
+async function pullHistoricWorkerData(
+  servicePage: Page,
+  homeUrl: string,
+  onLog: (msg: string) => void,
+  onScreenshot: ScreenshotCallback,
+): Promise<DomesticWorkerData[]> {
+  const workers: DomesticWorkerData[] = [];
+
+  const result = await navigateToHistoricWorkersList(servicePage, homeUrl, onLog, onScreenshot);
+  if (!result) return workers;
+
+  const { entries, historicUrl } = result;
+
+  for (const hw of entries) {
+    onLog(`--- Procesando trabajador historico CUIL ${hw.cuil} ---`);
+
+    await servicePage.goto(hw.href, { waitUntil: "networkidle" });
+
+    if (await isSessionExpiredPage(servicePage)) {
+      onLog("Sesion expirada — recuperando...");
+      await servicePage.goto(historicUrl, { waitUntil: "networkidle" });
+      continue;
+    }
+
+    await onScreenshot(
+      await servicePage.screenshot({ fullPage: true }),
+      `historic-worker-${hw.cuil}-details`,
+      `Datos del trabajador historico ${hw.cuil}`,
+    );
+
+    const detailText = await servicePage.locator("body").innerText();
+    const worker = extractWorkerFromDetailPage(detailText);
+
+    if (worker) {
+      workers.push(worker);
+      onLog(
+        `Trabajador historico: ${worker.apellidoNombre} (CUIL: ${worker.cuil}, ${worker.condicion})`,
+      );
+    }
+
+    onLog("Volviendo a trabajadores historicos...");
+    await servicePage.goto(historicUrl, { waitUntil: "networkidle" });
+  }
+
+  // Go back to home
+  await servicePage.goto(homeUrl, { waitUntil: "networkidle" });
+
+  return workers;
+}
+
+/**
  * Pull receipts for terminated workers from "VER TRABAJADORES HISTÓRICOS".
  *
  * Historical workers don't have a "PAGOS Y RECIBOS" link on the main page.
@@ -290,45 +399,10 @@ async function pullHistoricWorkerReceipts(
 ): Promise<DomesticReceiptData[]> {
   const receipts: DomesticReceiptData[] = [];
 
-  // Click "VER TRABAJADORES HISTÓRICOS"
-  const historicLink = servicePage.locator("a:has-text('VER TRABAJADORES HISTÓRICOS')");
-  if ((await historicLink.count()) === 0) {
-    onLog("No se encontro el link VER TRABAJADORES HISTORICOS");
-    return receipts;
-  }
+  const result = await navigateToHistoricWorkersList(servicePage, homeUrl, onLog, onScreenshot);
+  if (!result) return receipts;
 
-  await historicLink.click();
-  await servicePage.waitForLoadState("networkidle");
-  const historicUrl = servicePage.url();
-
-  await onScreenshot(
-    await servicePage.screenshot({ fullPage: true }),
-    "historic-workers",
-    "Trabajadores historicos",
-  );
-
-  // Extract CUILs and their corresponding "DATOS DEL TRABAJADOR" link hrefs.
-  // Each historical worker card shows CUIL text + has a DATOS DEL TRABAJADOR link.
-  // We use page.evaluate to pair them by position in the DOM.
-  const historicWorkers = await servicePage.evaluate(() => {
-    const body = document.body.textContent || "";
-    const cuilMatches = [...body.matchAll(/CUIL:\s*([\d-]+)/g)];
-    const datosLinks = document.querySelectorAll("a");
-    const datosHrefs: string[] = [];
-    for (let i = 0; i < datosLinks.length; i++) {
-      if (datosLinks[i].textContent?.trim() === "DATOS DEL TRABAJADOR") {
-        datosHrefs.push(datosLinks[i].href);
-      }
-    }
-    // Pair CUILs with DATOS links by position (1:1 correspondence)
-    const result: { cuil: string; href: string }[] = [];
-    for (let i = 0; i < Math.min(cuilMatches.length, datosHrefs.length); i++) {
-      result.push({ cuil: cuilMatches[i][1].replace(/-/g, ""), href: datosHrefs[i] });
-    }
-    return result;
-  });
-
-  onLog(`Encontrados ${historicWorkers.length} trabajadores historicos`);
+  const { entries: historicWorkers, historicUrl } = result;
 
   for (const hw of historicWorkers) {
     if (!cuilSet.has(hw.cuil)) continue;
@@ -483,10 +557,17 @@ async function pullDomesticInternal(
     await servicePage.goto(homeUrl, { waitUntil: "networkidle" });
   }
 
+  const activeCount = workers.length;
+
+  // Also pull historical workers (condicion: "Baja") from "VER TRABAJADORES HISTÓRICOS"
+  const historicWorkers = await pullHistoricWorkerData(servicePage, homeUrl, onLog, onScreenshot);
+  workers.push(...historicWorkers);
+
+  const historicCount = historicWorkers.length;
   onLog(
     fiscalYear !== null
-      ? `Total: ${workers.length} trabajadores, ${receipts.length} recibos`
-      : `Total: ${workers.length} trabajadores`,
+      ? `Total: ${activeCount} activos, ${historicCount} historicos — ${workers.length} trabajadores, ${receipts.length} recibos`
+      : `Total: ${activeCount} activos, ${historicCount} historicos — ${workers.length} trabajadores`,
   );
   return { workers, receipts };
 }
