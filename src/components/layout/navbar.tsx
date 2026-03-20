@@ -68,24 +68,25 @@ export function Navbar() {
           >
             <ThemeIcon className="h-4 w-4" />
           </Button>
-          {isLanding ? (
-            sectionLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-              >
-                {link.label}
-              </a>
-            ))
-          ) : (
-            <Link
-              href="/simulador"
-              className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-            >
-              Simulador
-            </Link>
-          )}
+          {isLanding
+            ? sectionLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                >
+                  {link.label}
+                </a>
+              ))
+            : sectionLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                >
+                  {link.label}
+                </Link>
+              ))}
           <Button asChild size="sm">
             {session ? (
               <Link href="/dashboard">Ir al panel</Link>
@@ -112,26 +113,27 @@ export function Navbar() {
             </SheetTrigger>
             <SheetContent side="right" className="w-[280px]">
               <nav className="mt-8 flex flex-col gap-4">
-                {isLanding ? (
-                  sectionLinks.map((link) => (
-                    <a
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setOpen(false)}
-                      className="text-muted-foreground hover:text-foreground text-base transition-colors"
-                    >
-                      {link.label}
-                    </a>
-                  ))
-                ) : (
-                  <Link
-                    href="/simulador"
-                    onClick={() => setOpen(false)}
-                    className="text-muted-foreground hover:text-foreground text-base transition-colors"
-                  >
-                    Simulador
-                  </Link>
-                )}
+                {isLanding
+                  ? sectionLinks.map((link) => (
+                      <a
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setOpen(false)}
+                        className="text-muted-foreground hover:text-foreground text-base transition-colors"
+                      >
+                        {link.label}
+                      </a>
+                    ))
+                  : sectionLinks.map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setOpen(false)}
+                        className="text-muted-foreground hover:text-foreground text-base transition-colors"
+                      >
+                        {link.label}
+                      </Link>
+                    ))}
                 {session ? (
                   <Link
                     href="/dashboard"

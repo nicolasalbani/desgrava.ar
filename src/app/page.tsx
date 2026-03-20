@@ -29,10 +29,10 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col justify-center gap-3 pt-2 sm:flex-row">
               <Button size="lg" asChild>
-                <Link href="#simulador">
+                <a href="#simulador">
                   Calcula tu ahorro
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </a>
               </Button>
               <Button size="lg" variant="outline" asChild>
                 <Link href="/login">Empeza gratis</Link>
