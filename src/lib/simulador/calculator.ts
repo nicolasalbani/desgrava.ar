@@ -58,7 +58,7 @@ function calculateTax(taxableIncome: Decimal, brackets: TaxBracket[]): Decimal {
 }
 
 // Personal plan monthly cost in ARS
-export const PERSONAL_PLAN_MONTHLY_COST = 4999;
+export const PERSONAL_PLAN_MONTHLY_COST = 5999;
 
 export interface SimplifiedSimulationInput {
   tieneHijos: number;
