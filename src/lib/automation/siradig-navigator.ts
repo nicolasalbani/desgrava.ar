@@ -1611,6 +1611,23 @@ export async function findAndEditExisting(
     await page.waitForLoadState("networkidle").catch(() => {});
     await page.waitForTimeout(1000);
 
+    // Re-expand the "Deducciones y desgravaciones" accordion — it may collapse after Volver
+    try {
+      const deductionsHeader = page.getByText("Deducciones y desgravaciones").first();
+      const isExpanded = await page
+        .locator("#div_tabla_deducciones_agrupadas")
+        .isVisible()
+        .catch(() => false);
+      if (!isExpanded) {
+        log("Re-expandiendo seccion de deducciones...");
+        await deductionsHeader.click();
+        await page.waitForLoadState("networkidle").catch(() => {});
+        await page.waitForTimeout(1000);
+      }
+    } catch {
+      // Section might already be expanded
+    }
+
     await capture(
       await page.screenshot({ fullPage: true }),
       "edit-list-view",
@@ -1648,6 +1665,9 @@ export async function findAndEditExisting(
           log,
           capture,
         );
+
+      case "ALQUILER_VIVIENDA":
+        return await editAlquilerEntry(page, invoice, log, capture);
 
       default:
         log(
@@ -1692,6 +1712,385 @@ const MONTH_NAMES = [
   "Noviembre",
   "Diciembre",
 ];
+
+/**
+ * Edit an existing ALQUILER_VIVIENDA entry in SiRADIG.
+ *
+ * The alquiler edit form differs from standard deductions:
+ *   - It has a monthly detail table (#tabla_meses) with per-month amounts
+ *   - Each month row has its own comprobante sub-table
+ *   - Contract dates and locador fields are at the top
+ *
+ * Strategy:
+ *   1. Find the existing entry by fieldset legend ("alquiler") + CUIT
+ *   2. Click edit to open the edit form
+ *   3. Check if the target month already exists in #tabla_meses
+ *      - If yes: delete that month row, then re-add with updated values
+ *      - If no: add the month as a new row
+ *   4. Return success so the caller can call submitDeduction()
+ */
+async function editAlquilerEntry(
+  page: Page,
+  invoice: InvoiceData,
+  log: (msg: string) => void,
+  capture: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+): Promise<FillResult> {
+  const cuitDigits = invoice.providerCuit.replace(/-/g, "");
+  const monthName = MONTH_NAMES[invoice.fiscalMonth] || "";
+
+  log(`Buscando entrada de alquiler existente: CUIT ${cuitDigits}, periodo ${monthName}...`);
+
+  // Find the alquiler entry by searching all fieldsets in the deducciones container.
+  // Search broadly: first in #div_tabla_deducciones_agrupadas, then across all fieldsets on page.
+  // Alquiler fieldsets may or may not have .grupo_deducciones class.
+  // Each row represents a contract — match by CUIT first, then prefer rows whose
+  // period text contains the target month name (e.g. "Julio").
+  const match = await page.evaluate(
+    ({ cuit, month }: { cuit: string; month: string }) => {
+      const containers = [
+        "#div_tabla_deducciones_agrupadas fieldset",
+        "#content fieldset",
+        "fieldset",
+      ];
+      let bestMatch: {
+        selector: string;
+        fieldsetIdx: number;
+        rowIdx: number;
+      } | null = null;
+
+      for (const selector of containers) {
+        const fieldsets = document.querySelectorAll(selector);
+        for (let f = 0; f < fieldsets.length; f++) {
+          const legend = fieldsets[f].querySelector("legend");
+          const legendText = legend?.textContent?.toLowerCase() ?? "";
+          if (
+            !legendText.includes("alquiler") &&
+            !legendText.includes("locatario") &&
+            !legendText.includes("inquilino")
+          )
+            continue;
+          const rows = fieldsets[f].querySelectorAll("table tbody tr");
+          for (let r = 0; r < rows.length; r++) {
+            const text = (rows[r].textContent || "").replace(/-/g, "");
+            if (!text.includes(cuit)) continue;
+            // Exact period match — best result
+            if (month && rows[r].textContent?.includes(month)) {
+              return { selector, fieldsetIdx: f, rowIdx: r };
+            }
+            // CUIT-only match — keep as fallback
+            if (!bestMatch) {
+              bestMatch = { selector, fieldsetIdx: f, rowIdx: r };
+            }
+          }
+        }
+        // If we found any match in this scope, use it (don't broaden further)
+        if (bestMatch) return bestMatch;
+      }
+      return bestMatch;
+    },
+    { cuit: cuitDigits, month: monthName },
+  );
+
+  if (!match) {
+    // Log available fieldsets for debugging
+    const debugInfo = await page.evaluate(() => {
+      const fieldsets = document.querySelectorAll("fieldset");
+      return Array.from(fieldsets).map((f) => ({
+        legend: f.querySelector("legend")?.textContent?.trim().substring(0, 80) ?? "(no legend)",
+        classes: f.className,
+        rowCount: f.querySelectorAll("table tbody tr").length,
+      }));
+    });
+    log(
+      `No se encontro entrada de alquiler para CUIT ${cuitDigits}. Fieldsets visibles: ${JSON.stringify(debugInfo)}`,
+    );
+    return {
+      success: false,
+      error: `No se encontro la entrada de alquiler existente para CUIT ${cuitDigits}`,
+    };
+  }
+
+  log(
+    `Entrada de alquiler encontrada (${match.selector}, fieldset ${match.fieldsetIdx}). Abriendo formulario de edicion...`,
+  );
+
+  // Click the edit button on the matching row
+  await page.evaluate(
+    ({ selector, fIdx, rIdx }: { selector: string; fIdx: number; rIdx: number }) => {
+      const fieldsets = document.querySelectorAll(selector);
+      const rows = fieldsets[fIdx].querySelectorAll("table tbody tr");
+      const editBtn = rows[rIdx].querySelector("div.act_editar");
+      if (editBtn) (editBtn as HTMLElement).click();
+    },
+    { selector: match.selector, fIdx: match.fieldsetIdx, rIdx: match.rowIdx },
+  );
+
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(2000);
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "alquiler-edit-form",
+    "Formulario de edicion de alquiler abierto",
+  );
+
+  // Verify we're in the edit form by checking for the monthly detail table
+  const hasMesTable = await page
+    .locator("#tabla_meses")
+    .isVisible()
+    .catch(() => false);
+
+  if (!hasMesTable) {
+    log("No se detecto el formulario de edicion (tabla de meses no visible)");
+    return {
+      success: false,
+      error: "No se pudo abrir el formulario de edicion de alquiler",
+    };
+  }
+
+  // Check if the target month already exists in the monthly detail table.
+  // The table ID is #tabla_meses; cell format is "07 - Julio".
+  // Match by month name (case-insensitive, includes) or numeric prefix (e.g. "07").
+  const monthValue = String(invoice.fiscalMonth);
+  const paddedMonth = monthValue.padStart(2, "0"); // "7" → "07"
+  const monthSearch = await page.evaluate(
+    ({
+      monthName,
+      monthNum,
+      paddedMonth,
+    }: {
+      monthName: string;
+      monthNum: string;
+      paddedMonth: string;
+    }) => {
+      // Try #tabla_meses first, then any table in the page that has "Mes" header
+      const table =
+        document.querySelector("#tabla_meses") ??
+        document.querySelector("table:has(th:first-child)");
+      if (!table) return { idx: -1, rowTexts: ["(tabla no encontrada)"], tableId: "none" };
+
+      const rows = table.querySelectorAll("tbody tr");
+      const rowTexts: string[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const rowText = rows[i].textContent?.trim() ?? "";
+        rowTexts.push(rowText);
+        const lower = rowText.toLowerCase();
+        // Match "07 - Julio", "Julio", "7", "07"
+        if (
+          lower.includes(monthName.toLowerCase()) ||
+          Array.from(rows[i].querySelectorAll("td")).some((td) => {
+            const cellText = td.textContent?.trim() ?? "";
+            return (
+              cellText === monthNum ||
+              cellText === paddedMonth ||
+              cellText.startsWith(paddedMonth + " ")
+            );
+          })
+        ) {
+          return { idx: i, rowTexts, tableId: table.id || "(no id)" };
+        }
+      }
+      return { idx: -1, rowTexts, tableId: table.id || "(no id)" };
+    },
+    { monthName, monthNum: monthValue, paddedMonth },
+  );
+
+  const existingMonthIdx = monthSearch.idx;
+  if (existingMonthIdx === -1) {
+    log(
+      `Mes ${monthName} no encontrado en tabla ${monthSearch.tableId}. Filas: ${JSON.stringify(monthSearch.rowTexts.map((t) => t.substring(0, 80)))}`,
+    );
+  }
+
+  if (existingMonthIdx >= 0) {
+    // Month already exists — delete it so we can re-add with updated values
+    log(
+      `Mes ${monthName} ya existe en la entrada (fila ${existingMonthIdx + 1}). Eliminando para actualizar...`,
+    );
+
+    // The delete handler is bound via jQuery .live() on "#tabla_meses div span"
+    // and uses window.confirm() — a native browser dialog. We must:
+    // 1. Override window.confirm to auto-accept
+    // 2. Trigger the click on the <span> inside div.eliminar via jQuery
+    const deleteSelector =
+      monthSearch.tableId !== "none" ? `#${monthSearch.tableId}` : "#tabla_meses";
+    await page.evaluate(
+      ({ tableSelector, idx }: { tableSelector: string; idx: number }) => {
+        // Override confirm to auto-accept the "¿Está seguro?" dialog
+        const origConfirm = window.confirm;
+        window.confirm = () => true;
+        try {
+          const table = document.querySelector(tableSelector);
+          if (!table) return;
+          const rows = table.querySelectorAll("tbody tr");
+          // Click the <span> inside div.eliminar — jQuery .live() listens on
+          // "#tabla_meses div span", not on the div itself
+          const span = rows[idx].querySelector("div.eliminar span");
+          if (span) {
+            (window as any).$(span).trigger("click");
+          }
+        } finally {
+          window.confirm = origConfirm;
+        }
+      },
+      { tableSelector: deleteSelector, idx: existingMonthIdx },
+    );
+    await page.waitForTimeout(1000);
+
+    log("Mes eliminado. Agregando con valores actualizados...");
+  } else {
+    log(`Mes ${monthName} no existe en la entrada. Agregando nuevo mes...`);
+  }
+
+  // Add the month with updated values
+  log("Abriendo dialogo de agregar mes...");
+  await page.evaluate(() => {
+    (window as any).$("#btn_alta_mes").trigger("click");
+  });
+  await page.waitForTimeout(1000);
+
+  // Select month
+  log(`Seleccionando mes: ${monthValue}`);
+  await page.evaluate((v: string) => {
+    (window as any).$("#detalleIndividualMes").val(v).trigger("change");
+  }, monthValue);
+  await page.waitForTimeout(300);
+
+  // Type amount
+  log(`Ingresando monto de alquiler: $${invoice.amount}`);
+  const montoField = page.locator("#detalleIndividualMontoRealMensual");
+  await montoField.click();
+  await montoField.fill("");
+  await montoField.pressSequentially(invoice.amount, { delay: 30 });
+  await montoField.press("Tab");
+  await page.waitForTimeout(800);
+
+  // Click "Agregar" in the mes dialog
+  log("Confirmando mes individual...");
+  const mesDialog = page.locator(".ui-dialog").filter({ has: page.locator("#dialog_alta_mes") });
+  const mesAgregarBtn = mesDialog.locator(".ui-dialog-buttonset button").first();
+  await mesAgregarBtn.waitFor({ state: "visible", timeout: 5000 });
+  await mesAgregarBtn.click();
+  await page.waitForTimeout(1500);
+
+  // Add comprobante — non-fatal
+  try {
+    // First, delete any existing comprobante with the same invoice number
+    // to avoid "comprobante duplicado" errors. The delete handler uses
+    // window.confirm() via jQuery .live() on "#tabla_comprobantes div span".
+    if (invoice.invoiceNumber) {
+      const deletedCmp = await page.evaluate(
+        ({ invoiceNum }: { invoiceNum: string }) => {
+          const table = document.querySelector("#tabla_comprobantes");
+          if (!table) return false;
+          const rows = table.querySelectorAll("tbody tr");
+          for (let i = 0; i < rows.length; i++) {
+            const text = rows[i].textContent || "";
+            // Match by invoice number (e.g. "00002 - 00000078" or "00002-00000078")
+            const normalizedNum = invoiceNum.replace("-", " - ");
+            if (text.includes(invoiceNum) || text.includes(normalizedNum)) {
+              const origConfirm = window.confirm;
+              window.confirm = () => true;
+              try {
+                const span = rows[i].querySelector("div.eliminar span");
+                if (span) {
+                  (window as any).$(span).trigger("click");
+                  return true;
+                }
+              } finally {
+                window.confirm = origConfirm;
+              }
+            }
+          }
+          return false;
+        },
+        { invoiceNum: invoice.invoiceNumber },
+      );
+      if (deletedCmp) {
+        log("Comprobante existente eliminado para reemplazar.");
+        await page.waitForTimeout(1000);
+      }
+    }
+
+    log("Agregando comprobante actualizado...");
+    const lastMesRow = page.locator("#tabla_meses tbody tr").last();
+    const cmpCellLink = lastMesRow.locator("td").nth(3).locator("a, button").first();
+
+    const cmpOpened = await cmpCellLink.isVisible().catch(() => false);
+    if (cmpOpened) {
+      await cmpCellLink.click();
+    } else {
+      await page.locator("#btn_alta_comprobante").click();
+    }
+    await page.waitForTimeout(1000);
+
+    // Fill comprobante fields
+    if (invoice.invoiceDate) {
+      const dateStr = formatDateDDMMYYYY(invoice.invoiceDate);
+      await page.evaluate((d: string) => {
+        (window as any).$("#cmpFechaEmision").val(d).trigger("change");
+      }, dateStr);
+      await page.waitForTimeout(300);
+    }
+
+    const invoiceTypeText = getSiradigInvoiceTypeText(invoice.invoiceType);
+    await page.evaluate((label: string) => {
+      const $sel = (window as any).$("#cmpTipo");
+      const $opt = $sel.find("option").filter(function (this: HTMLOptionElement) {
+        return (window as any).$(this).text().trim() === label;
+      });
+      if ($opt.length > 0) {
+        $sel.val($opt.val()).trigger("change");
+      }
+    }, invoiceTypeText);
+    await page.waitForTimeout(300);
+
+    if (invoice.invoiceNumber) {
+      const parts = invoice.invoiceNumber.split("-");
+      if (parts.length === 2) {
+        await page.evaluate(
+          ([pv, num]: string[]) => {
+            (window as any).$("#cmpPuntoVenta").val(pv).trigger("change");
+            (window as any).$("#cmpNumero").val(num).trigger("change");
+          },
+          [parts[0], parts[1]],
+        );
+      } else {
+        await page.evaluate((num: string) => {
+          (window as any).$("#cmpNumero").val(num).trigger("change");
+        }, invoice.invoiceNumber);
+      }
+      await page.waitForTimeout(300);
+    }
+
+    await page.evaluate((v: string) => {
+      (window as any).$("#cmpMontoFacturado").val(v).trigger("change");
+    }, invoice.amount);
+
+    // Click "Agregar" in comprobante dialog
+    const cmpDialog = page
+      .locator(".ui-dialog")
+      .filter({ has: page.locator("#dialog_alta_comprobante") });
+    const cmpAgregarBtn = cmpDialog.locator(".ui-dialog-buttonset button").first();
+    await cmpAgregarBtn.waitFor({ state: "visible", timeout: 5000 });
+    await cmpAgregarBtn.click();
+    await page.waitForTimeout(1500);
+    await dismissDialogOverlay(page);
+  } catch (err) {
+    log(
+      `Advertencia: no se pudo agregar el comprobante (${err instanceof Error ? err.message : err}). Continuando con Guardar...`,
+    );
+  }
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "alquiler-edit-ready",
+    "Formulario de edicion de alquiler listo para guardar",
+  );
+
+  log("Formulario de edicion de alquiler listo para guardar");
+  return { success: true };
+}
 
 /**
  * Edit an existing standard deduction entry in SiRADIG.
