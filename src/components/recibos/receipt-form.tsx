@@ -165,7 +165,7 @@ export function ReceiptForm({ onSaved, onCancel }: { onSaved: () => void; onCanc
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Ano fiscal</Label>
+          <Label>Año fiscal</Label>
           <Input value={year} disabled className="w-full" />
         </div>
       </div>

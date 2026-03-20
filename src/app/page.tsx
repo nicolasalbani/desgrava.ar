@@ -1,32 +1,13 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { FileText, Bot, Calculator, Shield, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import { HowItWorksSection } from "@/components/landing/how-it-works-section";
+import { FeaturesBento } from "@/components/landing/features-bento";
+import { SimuladorEmbed } from "@/components/landing/simulador-embed";
+import { PricingSection } from "@/components/landing/pricing-section";
 import { ReviewsCarousel } from "@/components/landing/reviews-carousel";
-
-const features = [
-  {
-    icon: Calculator,
-    title: "Sabe cuanto vas a ahorrar",
-    description: "Simula tu devolucion de ganancias antes de cargar nada. Sin registro.",
-  },
-  {
-    icon: FileText,
-    title: "Subi tus facturas y listo",
-    description: "Arrastra un PDF o carga los datos a mano. Nuestro OCR extrae todo en segundos.",
-  },
-  {
-    icon: Bot,
-    title: "SiRADIG en un click",
-    description: "Conecta tu clave fiscal y dejanos cargar tus deducciones automaticamente.",
-  },
-  {
-    icon: Shield,
-    title: "Tu clave fiscal, protegida",
-    description: "Encriptacion AES-256 de grado bancario. Nunca se almacena en texto plano.",
-  },
-];
 
 export default function LandingPage() {
   return (
@@ -34,21 +15,21 @@ export default function LandingPage() {
       <Navbar />
 
       <main className="flex-1">
-        {/* Hero */}
-        <section className="py-16 md:py-20">
-          <div className="mx-auto max-w-5xl space-y-6 px-4 text-center md:px-6">
-            <h1 className="text-foreground text-4xl font-bold tracking-tight md:text-5xl">
+        {/* ── Hero ── */}
+        <section className="flex min-h-[calc(100vh-4rem)] items-center">
+          <div className="mx-auto max-w-5xl space-y-6 px-4 py-16 text-center md:px-6 md:py-20">
+            <h1 className="text-foreground text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
               Recupera la plata
               <br />
               <span className="text-primary">que ganancias te saca</span>
             </h1>
-            <p className="text-muted-foreground mx-auto max-w-xl text-base leading-relaxed">
-              Miles de pesos en deducciones se pierden cada ano porque cargarlas en SiRADIG es un
+            <p className="text-muted-foreground mx-auto max-w-2xl text-lg leading-relaxed">
+              Miles de pesos en deducciones se pierden cada año porque cargarlas en SiRADIG es un
               dolor de cabeza. desgrava.ar lo hace por vos.
             </p>
-            <div className="flex flex-col justify-center gap-3 sm:flex-row">
+            <div className="flex flex-col justify-center gap-3 pt-2 sm:flex-row">
               <Button size="lg" asChild>
-                <Link href="/simulador">
+                <Link href="#simulador">
                   Calcula tu ahorro
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
@@ -60,32 +41,52 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Features */}
-        <section className="bg-muted/50 border-border border-t py-14">
-          <div className="mx-auto max-w-5xl px-4 md:px-6">
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-              {features.map((feature) => {
-                const Icon = feature.icon;
-                return (
-                  <div key={feature.title} className="space-y-3">
-                    <div className="bg-muted flex h-10 w-10 items-center justify-center rounded-lg">
-                      <Icon className="text-muted-foreground h-5 w-5" />
-                    </div>
-                    <h3 className="text-foreground font-medium">{feature.title}</h3>
-                    <p className="text-muted-foreground text-sm leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                );
-              })}
+        {/* ── Desgravá: How It Works + Features Bento ── */}
+        <section
+          id="desgrava"
+          className="bg-muted/50 border-border flex min-h-screen flex-col justify-center border-t"
+        >
+          <div className="mx-auto w-full max-w-5xl space-y-16 px-4 py-16 md:px-6 md:py-20">
+            <HowItWorksSection />
+            <div className="border-border border-t pt-16">
+              <div className="mb-10 text-center">
+                <h2 className="text-foreground text-2xl font-bold tracking-tight md:text-3xl">
+                  Todo lo que necesitas para desgravar
+                </h2>
+                <p className="text-muted-foreground mt-2 text-base">
+                  Automatizamos cada paso del proceso de deducciones
+                </p>
+              </div>
+              <FeaturesBento />
             </div>
           </div>
         </section>
 
-        {/* Reviews */}
-        <section className="border-border border-t py-14">
-          <div className="mx-auto max-w-5xl px-4 md:px-6">
-            <ReviewsCarousel />
+        {/* ── Simulador ── */}
+        <section
+          id="simulador"
+          className="border-border flex min-h-screen flex-col justify-center border-t"
+        >
+          <div className="mx-auto w-full max-w-5xl px-4 py-16 md:px-6 md:py-20">
+            <SimuladorEmbed />
+          </div>
+        </section>
+
+        {/* ── Planes: Pricing + Reviews ── */}
+        <section
+          id="planes"
+          className="bg-muted/50 border-border flex min-h-screen flex-col justify-center border-t"
+        >
+          <div className="mx-auto w-full max-w-5xl space-y-16 px-4 py-16 md:px-6 md:py-20">
+            <PricingSection />
+            <div className="border-border border-t pt-16">
+              <div className="mb-10 text-center">
+                <h2 className="text-foreground text-2xl font-bold tracking-tight md:text-3xl">
+                  Lo que dicen nuestros usuarios
+                </h2>
+              </div>
+              <ReviewsCarousel />
+            </div>
           </div>
         </section>
       </main>

@@ -479,12 +479,12 @@ export function InvoiceList({
     const inv = invoices.find((i) => i.id === invoiceId);
     if (!inv) return;
     if (fiscalYear === null) {
-      toast.error("Selecciona un ano fiscal antes de enviar a SiRADIG");
+      toast.error("Selecciona un año fiscal antes de enviar a SiRADIG");
       return;
     }
     if (inv.fiscalYear !== fiscalYear) {
       toast.error(
-        `"${inv.providerName || inv.providerCuit}" es del ano ${inv.fiscalYear}, pero el ano fiscal activo es ${fiscalYear}.`,
+        `"${inv.providerName || inv.providerCuit}" es del año ${inv.fiscalYear}, pero el año fiscal activo es ${fiscalYear}.`,
       );
       return;
     }

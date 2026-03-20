@@ -303,7 +303,7 @@ export function ReceiptList({
 
   async function handleSendSingle(receiptId: string) {
     if (!fiscalYear) {
-      toast.error("Selecciona un ano fiscal antes de enviar a SiRADIG");
+      toast.error("Selecciona un año fiscal antes de enviar a SiRADIG");
       return;
     }
     try {
