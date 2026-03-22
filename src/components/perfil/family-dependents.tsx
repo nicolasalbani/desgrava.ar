@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -44,8 +44,8 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { useRef, useCallback } from "react";
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -527,9 +527,12 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
   const [deleting, setDeleting] = useState(false);
 
   // Import from SiRADIG state
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importLogs, setImportLogs] = useState<string[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [skippedDependents, setSkippedDependents] = useState(false);
+  const skippedArcaRef = useRef<string[]>([]);
   const [highlightedIds, setHighlightedIds] = useState<Map<string, "created" | "updated">>(
     new Map(),
   );
@@ -625,6 +628,18 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
       .catch(() => toast.error("Error al cargar las cargas de familia"))
       .finally(() => setLoading(false));
   }, [fiscalYear]);
+
+  // Fetch skip preference
+  useEffect(() => {
+    fetch("/api/configuracion")
+      .then((r) => r.json())
+      .then((data) => {
+        const arr: string[] = data.preference?.skippedArcaDialogs ?? [];
+        skippedArcaRef.current = arr;
+        setSkippedDependents(arr.includes("import-dependents"));
+      })
+      .catch(() => {});
+  }, []);
 
   // On mount, check for an active PULL_FAMILY_DEPENDENTS job and reconnect
   useEffect(() => {
@@ -1101,7 +1116,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
         <Button
           variant="outline"
           size="sm"
-          onClick={handleImportFromSiradig}
+          onClick={() => setImportDialogOpen(true)}
           disabled={importing || isExporting}
         >
           {importing ? (
@@ -1112,6 +1127,18 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
           Importar desde SiRADIG
         </Button>
       </div>
+
+      <ImportDependentsSiradigDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onConfirm={() => {
+          setImportDialogOpen(false);
+          handleImportFromSiradig();
+        }}
+        skipped={skippedDependents}
+        skippedArcaRef={skippedArcaRef}
+        onSkipChange={setSkippedDependents}
+      />
 
       <DependentDialog
         open={dialogOpen}
@@ -1139,5 +1166,92 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function ImportDependentsSiradigDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  skipped,
+  skippedArcaRef,
+  onSkipChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onConfirm: () => void;
+  skipped: boolean;
+  skippedArcaRef: React.RefObject<string[]>;
+  onSkipChange: (v: boolean) => void;
+}) {
+  // Auto-confirm when skip preference is enabled
+  useEffect(() => {
+    if (open && skipped) {
+      onConfirm();
+    }
+  }, [open]);
+
+  async function saveSkipPreference(checked: boolean) {
+    onSkipChange(checked);
+    const key = "import-dependents";
+    const updated = checked
+      ? [...skippedArcaRef.current.filter((k) => k !== key), key]
+      : skippedArcaRef.current.filter((k) => k !== key);
+    skippedArcaRef.current = updated;
+    try {
+      await fetch("/api/configuracion", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skippedArcaDialogs: updated }),
+      });
+    } catch {
+      // Silently fail
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Importar cargas de familia desde SiRADIG</DialogTitle>
+          <DialogDescription>
+            Se conectara a SiRADIG y descargara las cargas de familia declaradas en el formulario
+            F.572 Web.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-1">
+          <div className="bg-muted/40 rounded-xl p-4 text-sm">
+            <p className="text-foreground/80 mb-2 font-medium">Esto va a:</p>
+            <ul className="text-muted-foreground space-y-1.5 text-xs">
+              <li>1. Iniciar sesión en ARCA con tus credenciales guardadas</li>
+              <li>2. Ir a SiRADIG → Carga de Formulario → Deducciones y Desgravaciones</li>
+              <li>3. Importar las cargas de familia declaradas</li>
+            </ul>
+            <p className="text-muted-foreground/70 mt-3 text-xs">
+              Las cargas de familia que ya tengas cargadas se van a actualizar con los datos mas
+              recientes.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="skip-dependents-import"
+              checked={skipped}
+              onCheckedChange={(checked) => saveSkipPreference(checked === true)}
+            />
+            <label
+              htmlFor="skip-dependents-import"
+              className="text-muted-foreground cursor-pointer text-xs"
+            >
+              No volver a mostrar este mensaje
+            </label>
+          </div>
+          <Button onClick={onConfirm} className="w-full">
+            <Download className="mr-2 h-4 w-4" />
+            Iniciar importacion
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -162,6 +162,7 @@ model UserPreference {
   notifications       Boolean @default(true)
   autoSubmitEnabled   Boolean @default(false)
   autoSubmitDay       Int? // 1-28, day of month for automatic presentación
+  skippedArcaDialogs  String[] @default([])
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -40,6 +40,7 @@ import {
   MODALIDAD_PAGO_OPTIONS,
   MODALIDAD_TRABAJO_OPTIONS,
 } from "@/lib/validators/domestic";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCuit } from "@/lib/validators/cuit";
 
 // ── Zod schema ─────────────────────────────────────────────
@@ -356,9 +357,12 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
   const [deleting, setDeleting] = useState(false);
 
   // Import from ARCA state
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importLogs, setImportLogs] = useState<string[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [skippedWorkers, setSkippedWorkers] = useState(false);
+  const skippedArcaRef = useRef<string[]>([]);
   const [highlightedIds, setHighlightedIds] = useState<Map<string, "created" | "updated">>(
     new Map(),
   );
@@ -436,6 +440,18 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
       .catch(() => toast.error("Error al cargar trabajadores"))
       .finally(() => setLoading(false));
   }, [fiscalYear]);
+
+  // Fetch skip preference
+  useEffect(() => {
+    fetch("/api/configuracion")
+      .then((r) => r.json())
+      .then((data) => {
+        const arr: string[] = data.preference?.skippedArcaDialogs ?? [];
+        skippedArcaRef.current = arr;
+        setSkippedWorkers(arr.includes("import-workers"));
+      })
+      .catch(() => {});
+  }, []);
 
   // Check for active import job on mount
   useEffect(() => {
@@ -646,7 +662,12 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Agregar trabajador
         </Button>
-        <Button variant="outline" size="sm" onClick={handleImportFromArca} disabled={importing}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setImportDialogOpen(true)}
+          disabled={importing}
+        >
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
           ) : (
@@ -655,6 +676,18 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
           Importar desde ARCA
         </Button>
       </div>
+
+      <ImportWorkersArcaDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onConfirm={() => {
+          setImportDialogOpen(false);
+          handleImportFromArca();
+        }}
+        skipped={skippedWorkers}
+        skippedArcaRef={skippedArcaRef}
+        onSkipChange={setSkippedWorkers}
+      />
 
       <WorkerDialog
         open={dialogOpen}
@@ -683,5 +716,92 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function ImportWorkersArcaDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  skipped,
+  skippedArcaRef,
+  onSkipChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onConfirm: () => void;
+  skipped: boolean;
+  skippedArcaRef: React.RefObject<string[]>;
+  onSkipChange: (v: boolean) => void;
+}) {
+  // Auto-confirm when skip preference is enabled
+  useEffect(() => {
+    if (open && skipped) {
+      onConfirm();
+    }
+  }, [open]);
+
+  async function saveSkipPreference(checked: boolean) {
+    onSkipChange(checked);
+    const key = "import-workers";
+    const updated = checked
+      ? [...skippedArcaRef.current.filter((k) => k !== key), key]
+      : skippedArcaRef.current.filter((k) => k !== key);
+    skippedArcaRef.current = updated;
+    try {
+      await fetch("/api/configuracion", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skippedArcaDialogs: updated }),
+      });
+    } catch {
+      // Silently fail
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Importar trabajadores desde ARCA</DialogTitle>
+          <DialogDescription>
+            Se conectara a Personal de Casas Particulares y descargara los datos de todos los
+            trabajadores registrados.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-1">
+          <div className="bg-muted/40 rounded-xl p-4 text-sm">
+            <p className="text-foreground/80 mb-2 font-medium">Esto va a:</p>
+            <ul className="text-muted-foreground space-y-1.5 text-xs">
+              <li>1. Iniciar sesión en ARCA con tus credenciales guardadas</li>
+              <li>2. Ir a &quot;Personal de Casas Particulares&quot;</li>
+              <li>3. Importar los datos de cada trabajador registrado</li>
+            </ul>
+            <p className="text-muted-foreground/70 mt-3 text-xs">
+              Los trabajadores que ya tengas cargados se van a actualizar con los datos mas
+              recientes.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="skip-workers-import"
+              checked={skipped}
+              onCheckedChange={(checked) => saveSkipPreference(checked === true)}
+            />
+            <label
+              htmlFor="skip-workers-import"
+              className="text-muted-foreground cursor-pointer text-xs"
+            >
+              No volver a mostrar este mensaje
+            </label>
+          </div>
+          <Button onClick={onConfirm} className="w-full">
+            <Download className="mr-2 h-4 w-4" />
+            Iniciar importacion
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

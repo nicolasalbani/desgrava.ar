@@ -19,6 +19,7 @@ export async function GET() {
       notifications: true,
       autoSubmitEnabled: false,
       autoSubmitDay: null,
+      skippedArcaDialogs: [],
     },
   });
 }
@@ -30,7 +31,8 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { defaultFiscalYear, notifications, autoSubmitEnabled, autoSubmitDay } = body;
+  const { defaultFiscalYear, notifications, autoSubmitEnabled, autoSubmitDay, skippedArcaDialogs } =
+    body;
 
   // Validate autoSubmitDay range
   if (autoSubmitDay !== undefined && autoSubmitDay !== null) {
@@ -49,6 +51,7 @@ export async function PUT(req: NextRequest) {
       ...(autoSubmitDay !== undefined && {
         autoSubmitDay: autoSubmitDay === null ? null : parseInt(autoSubmitDay),
       }),
+      ...(skippedArcaDialogs !== undefined && { skippedArcaDialogs }),
     },
     create: {
       userId: session.user.id,
@@ -56,6 +59,7 @@ export async function PUT(req: NextRequest) {
       notifications: notifications ?? true,
       autoSubmitEnabled: autoSubmitEnabled ?? false,
       autoSubmitDay: autoSubmitDay ? parseInt(autoSubmitDay) : null,
+      skippedArcaDialogs: skippedArcaDialogs ?? [],
     },
   });
 

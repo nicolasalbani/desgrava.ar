@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, CheckCircle2, XCircle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useFiscalYear } from "@/contexts/fiscal-year";
@@ -36,6 +37,11 @@ export function ImportArcaDialog({
   const [logs, setLogs] = useState<string[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [_jobId, setJobId] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState(false);
+  const skippedBoolRef = useRef(false);
+  const [skipPrefLoaded, setSkipPrefLoaded] = useState(false);
+  const skippedRef = useRef<string[]>([]);
+  const autoStartedRef = useRef(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -56,6 +62,21 @@ export function ImportArcaDialog({
     }
   }, [logs]);
 
+  // Fetch skip preference on mount
+  useEffect(() => {
+    fetch("/api/configuracion")
+      .then((r) => r.json())
+      .then((data) => {
+        const arr: string[] = data.preference?.skippedArcaDialogs ?? [];
+        skippedRef.current = arr;
+        const isSkipped = arr.includes("import-facturas");
+        skippedBoolRef.current = isSkipped;
+        setSkipped(isSkipped);
+        setSkipPrefLoaded(true);
+      })
+      .catch(() => setSkipPrefLoaded(true));
+  }, []);
+
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
@@ -63,12 +84,13 @@ export function ImportArcaDialog({
       setLogs([]);
       setResult(null);
       setJobId(null);
+      autoStartedRef.current = false;
     } else {
       cleanup();
     }
   }, [open, cleanup]);
 
-  async function startImport() {
+  const startImport = useCallback(async () => {
     if (!fiscalYear) {
       toast.error("Selecciona un año fiscal primero");
       return;
@@ -143,6 +165,38 @@ export function ImportArcaDialog({
       toast.error("Error de conexión al iniciar la importación");
       setState("failed");
     }
+  }, [fiscalYear, onImportComplete]);
+
+  // Auto-start when skip preference is enabled (only on dialog open, not on checkbox change)
+  useEffect(() => {
+    if (
+      open &&
+      skipPrefLoaded &&
+      skippedBoolRef.current &&
+      state === "idle" &&
+      !autoStartedRef.current
+    ) {
+      autoStartedRef.current = true;
+      startImport();
+    }
+  }, [open, skipPrefLoaded, state, startImport]);
+
+  async function saveSkipPreference(checked: boolean) {
+    setSkipped(checked);
+    const key = "import-facturas";
+    const updated = checked
+      ? [...skippedRef.current.filter((k) => k !== key), key]
+      : skippedRef.current.filter((k) => k !== key);
+    skippedRef.current = updated;
+    try {
+      await fetch("/api/configuracion", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skippedArcaDialogs: updated }),
+      });
+    } catch {
+      // Silently fail — preference is non-critical
+    }
   }
 
   return (
@@ -171,6 +225,19 @@ export function ImportArcaDialog({
                 <p className="text-muted-foreground/70 mt-3 text-xs">
                   Los comprobantes que ya tengas cargados no se van a duplicar.
                 </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="skip-facturas"
+                  checked={skipped}
+                  onCheckedChange={(checked) => saveSkipPreference(checked === true)}
+                />
+                <label
+                  htmlFor="skip-facturas"
+                  className="text-muted-foreground cursor-pointer text-xs"
+                >
+                  No volver a mostrar este mensaje
+                </label>
               </div>
               <Button onClick={startImport} className="w-full">
                 <Download className="mr-2 h-4 w-4" />
