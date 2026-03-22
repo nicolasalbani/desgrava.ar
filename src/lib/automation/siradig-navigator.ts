@@ -53,6 +53,85 @@ function formatDateDDMMYYYY(isoDate: string): string {
 }
 
 /**
+ * Navigate through SiRADIG from the person selection page to the main menu.
+ * This performs: select person → select period → Continuar → dismiss modal → create/reuse draft.
+ * After this, the page shows the SiRADIG main menu with buttons like
+ * "Carga de Formulario", "Consulta de Formularios Enviados", etc.
+ */
+export async function navigateToSiradigMainMenu(
+  page: Page,
+  fiscalYear: number,
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback,
+): Promise<FillResult> {
+  const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
+
+  try {
+    log(`Seleccionando persona a representar... (URL: ${page.url()})`);
+    await page.waitForLoadState("networkidle");
+
+    const personButton = page.locator("input.btn_empresa").first();
+    await personButton.waitFor({ timeout: 30000 });
+    await personButton.click();
+    await page.waitForLoadState("networkidle");
+    log(`Persona seleccionada. URL: ${page.url()}`);
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "person-selected",
+      "Persona seleccionada",
+    );
+
+    log(`Seleccionando periodo fiscal ${fiscalYear}...`);
+    const periodSelect = page.locator("select").first();
+    await periodSelect.waitFor({ timeout: 30000 });
+    await periodSelect.selectOption(String(fiscalYear));
+
+    log("Haciendo click en Continuar...");
+    const continueBtn = page.getByText("Continuar").first();
+    await continueBtn.click();
+    await page.waitForLoadState("networkidle");
+    log(`Despues de Continuar. URL: ${page.url()}`);
+
+    await capture(
+      await page.screenshot({ fullPage: true }),
+      "after-continue",
+      "Pagina principal SiRADIG",
+    );
+
+    // Dismiss the "Recordatorio - Formulario Borrador" modal if it appears
+    try {
+      const aceptarBtn = page.getByText("Aceptar", { exact: true }).first();
+      await aceptarBtn.waitFor({ timeout: 3000 });
+      log("Cerrando recordatorio de formulario borrador...");
+      await aceptarBtn.click();
+      await page.waitForTimeout(500);
+    } catch {
+      // Modal didn't appear
+    }
+
+    // Create new draft if needed
+    const createDraftBtn = page.locator("#btn_nuevo_borrador");
+    if (await createDraftBtn.isVisible()) {
+      log("Creando nuevo borrador...");
+      await createDraftBtn.click();
+      await page.waitForTimeout(2000);
+    } else {
+      log("Borrador existente detectado, continuando...");
+    }
+
+    await capture(await page.screenshot({ fullPage: true }), "draft-menu", "Menu del borrador");
+    log("Navegacion al menu principal de SiRADIG completada");
+    return { success: true };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Error desconocido";
+    log(`Error navegando dentro de SiRADIG: ${msg} | URL: ${page.url()}`);
+    return { success: false, error: msg };
+  }
+}
+
+/**
  * Navigate through SiRADIG from the initial person selection page
  * all the way to the deductions section of the F572 form.
  *

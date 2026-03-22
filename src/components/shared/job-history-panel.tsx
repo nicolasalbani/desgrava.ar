@@ -24,7 +24,7 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string }> = {
 
 interface JobHistoryPanelProps {
   entityId: string;
-  entityType: "invoice" | "receipt";
+  entityType: "invoice" | "receipt" | "presentacion";
   latestJobStatus?: string | null;
   onCancel?: (jobId: string) => void;
   cancelling?: boolean;
@@ -68,7 +68,12 @@ export function JobHistoryPanel({
   }, [jobs]);
 
   useEffect(() => {
-    const param = entityType === "invoice" ? "invoiceId" : "receiptId";
+    const param =
+      entityType === "invoice"
+        ? "invoiceId"
+        : entityType === "receipt"
+          ? "receiptId"
+          : "presentacionId";
     const url = `/api/automatizacion/history?${param}=${entityId}`;
 
     const fetchJobs = () =>

@@ -189,6 +189,33 @@ export const ARCA_SELECTORS = {
     domesticoFieldsetLegend: "personal doméstico",
     existingEditButton: "div.act_editar",
   },
+  // SiRADIG Presentaciones — verified 2026-03-21 via /arca-assisted-navigation
+  siradigPresentaciones: {
+    // Main menu button to navigate to Consulta de Formularios Enviados
+    consultaBtn: "#btn_consulta",
+    // Tab link (visible in the top navigation bar after entering the section)
+    consultaTab: "#tab_principal_consultas",
+    // Table of sent forms (id="tabla_formularios")
+    formulariosTable: "#tabla_formularios",
+    formulariosTableRows: "#tabla_formularios tbody tr[data-id-reg]",
+    // Print dropdown button inside each row (div with class "boton con_menu")
+    printDropdownBtn: "div.boton.con_menu",
+    // Print menu items (appear after clicking the dropdown)
+    printSeccionA: "#menu_btn_imprimir_a", // "Sección A (para el Agente de Retención)"
+    printSeccionB: "#menu_btn_imprimir_b", // "Sección B (para otros empleadores)"
+    // PDF download URL pattern: /radig/jsp/descargarPDF.do?id=<session>&s=a
+    // Carga de Formulario button
+    cargaFormularioBtn: "#btn_carga",
+    // Vista Previa page (URL: /radig/jsp/vistaPreviaFormulario.do)
+    vistaPrevia: "#btn_vista_previa",
+    // Imprimir Borrador (downloads PDF via jQuery click handler)
+    imprimirBorrador: "#btn_imprimir_borrador",
+    // Enviar al Empleador (opens confirmation dialog)
+    enviarEmpleador: "#btn_enviar_empleador",
+    // Confirmation dialog buttons (jQuery UI dialog)
+    generarPresentacion: ".ui-dialog-buttonset button:has-text('Generar Presentación')",
+    cancelarEnvio: ".ui-dialog-buttonset button:has-text('Cancelar')",
+  },
 } as const;
 
 // Human-readable descriptions for logging

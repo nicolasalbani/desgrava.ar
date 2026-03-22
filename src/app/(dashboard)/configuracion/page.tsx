@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmailIngestCard } from "@/components/configuracion/email-ingest-card";
+import { AutoSubmitCard } from "@/components/configuracion/auto-submit-card";
 
 export default function ConfiguracionPage() {
   const [notifications, setNotifications] = useState(true);
@@ -77,6 +78,10 @@ export default function ConfiguracionPage() {
         </div>
 
         <EmailIngestCard />
+
+        <div className="border-border border-t" />
+
+        <AutoSubmitCard />
       </div>
     </div>
   );

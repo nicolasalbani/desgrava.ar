@@ -74,6 +74,45 @@ describe("ARCA_SELECTORS", () => {
     });
   });
 
+  describe("siradigPresentaciones selectors", () => {
+    it("contains all required presentacion selectors", () => {
+      const sel = ARCA_SELECTORS.siradigPresentaciones;
+      expect(sel.consultaBtn).toBeDefined();
+      expect(sel.consultaTab).toBeDefined();
+      expect(sel.formulariosTable).toBeDefined();
+      expect(sel.formulariosTableRows).toBeDefined();
+      expect(sel.printDropdownBtn).toBeDefined();
+      expect(sel.printSeccionA).toBeDefined();
+      expect(sel.cargaFormularioBtn).toBeDefined();
+      expect(sel.vistaPrevia).toBeDefined();
+      expect(sel.imprimirBorrador).toBeDefined();
+      expect(sel.enviarEmpleador).toBeDefined();
+      expect(sel.generarPresentacion).toBeDefined();
+      expect(sel.cancelarEnvio).toBeDefined();
+    });
+
+    it("all presentacion selectors are non-empty strings", () => {
+      for (const [key, value] of Object.entries(ARCA_SELECTORS.siradigPresentaciones)) {
+        expect(typeof value, `siradigPresentaciones.${key} should be a string`).toBe("string");
+        expect(value.length, `siradigPresentaciones.${key} should be non-empty`).toBeGreaterThan(0);
+      }
+    });
+
+    it("table selector uses a specific ID", () => {
+      expect(ARCA_SELECTORS.siradigPresentaciones.formulariosTable).toBe("#tabla_formularios");
+    });
+
+    it("row selector targets data rows with data-id-reg attribute", () => {
+      expect(ARCA_SELECTORS.siradigPresentaciones.formulariosTableRows).toContain("data-id-reg");
+    });
+
+    it("buttons use specific IDs from SiRADIG", () => {
+      expect(ARCA_SELECTORS.siradigPresentaciones.vistaPrevia).toBe("#btn_vista_previa");
+      expect(ARCA_SELECTORS.siradigPresentaciones.imprimirBorrador).toBe("#btn_imprimir_borrador");
+      expect(ARCA_SELECTORS.siradigPresentaciones.enviarEmpleador).toBe("#btn_enviar_empleador");
+    });
+  });
+
   describe("no null or undefined values in any selector group", () => {
     it("login has no null/undefined values", () => {
       for (const [key, value] of Object.entries(ARCA_SELECTORS.login)) {

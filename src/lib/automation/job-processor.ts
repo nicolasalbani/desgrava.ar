@@ -6,6 +6,7 @@ import { getContext, releaseContext, enqueueJob } from "./browser-pool";
 import { loginToArca, navigateToSiradig } from "./arca-navigator";
 import {
   navigateToDeductionSection,
+  navigateToSiradigMainMenu,
   fillDeductionForm,
   fillDomesticDeductionForm,
   submitDeduction,
@@ -17,6 +18,11 @@ import {
 import type { SiradigFamilyDependent, DomesticWorkerDeduction } from "./siradig-navigator";
 import { navigateToMisComprobantes } from "./mis-comprobantes-navigator";
 import { pullDomesticReceipts, pullDomesticWorkersOnly } from "./domestic-navigator";
+import {
+  pullPresentaciones,
+  submitPresentacion,
+  extractMontoTotalFromText,
+} from "./presentacion-navigator";
 import { extractReceiptFields } from "@/lib/ocr/receipt-extractor";
 import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } from "./csv-parser";
 import { resolveCategory } from "@/lib/catalog/provider-catalog";
@@ -1120,6 +1126,255 @@ async function processSubmitDomesticDeduction(
   });
 }
 
+// ── PULL_PRESENTACIONES flow ──
+async function processPullPresentaciones(
+  siradigPage: Page,
+  job: { id: string; userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+) {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  await appendLogFn(jobId, `Importando presentaciones para ${fiscalYear}...`, onLog);
+
+  const result = await pullPresentaciones(
+    siradigPage,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!result.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: result.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Upsert presentaciones into DB
+  let created = 0;
+  let updated = 0;
+
+  for (const p of result.presentaciones) {
+    const fechaEnvio = parseDateDDMMYYYY(p.fechaEnvio);
+    const fechaLectura = p.fechaLectura ? parseDateDDMMYYYY(p.fechaLectura) : null;
+
+    const existing = await prisma.presentacion.findUnique({
+      where: {
+        userId_fiscalYear_numero: {
+          userId: job.userId,
+          fiscalYear,
+          numero: p.numero,
+        },
+      },
+    });
+
+    const pdfData = p.pdfBuffer ? new Uint8Array(p.pdfBuffer) : null;
+
+    // Extract monto total from PDF if available
+    let montoTotal: string | null = null;
+    if (p.pdfBuffer) {
+      try {
+        montoTotal = await extractMontoFromPdfBuffer(p.pdfBuffer);
+        if (montoTotal) {
+          await appendLogFn(jobId, `Monto total presentacion ${p.numero}: $${montoTotal}`, onLog);
+        }
+      } catch {
+        // best-effort
+      }
+    }
+
+    if (existing) {
+      await prisma.presentacion.update({
+        where: { id: existing.id },
+        data: {
+          descripcion: p.descripcion,
+          fechaEnvio: fechaEnvio ?? new Date(),
+          fechaLectura: fechaLectura,
+          source: "ARCA_IMPORT",
+          siradiqStatus: "SUBMITTED",
+          ...(montoTotal ? { montoTotal: new Prisma.Decimal(montoTotal) } : {}),
+          ...(pdfData
+            ? {
+                fileData: pdfData,
+                fileMimeType: "application/pdf",
+                originalFilename: `presentacion-${fiscalYear}-${p.numero}.pdf`,
+              }
+            : {}),
+        },
+      });
+      updated++;
+    } else {
+      await prisma.presentacion.create({
+        data: {
+          userId: job.userId,
+          fiscalYear,
+          numero: p.numero,
+          descripcion: p.descripcion,
+          fechaEnvio: fechaEnvio ?? new Date(),
+          fechaLectura: fechaLectura,
+          source: "ARCA_IMPORT",
+          siradiqStatus: "SUBMITTED",
+          ...(montoTotal ? { montoTotal: new Prisma.Decimal(montoTotal) } : {}),
+          ...(pdfData
+            ? {
+                fileData: pdfData,
+                fileMimeType: "application/pdf",
+                originalFilename: `presentacion-${fiscalYear}-${p.numero}.pdf`,
+              }
+            : {}),
+        },
+      });
+      created++;
+    }
+  }
+
+  await appendLogFn(
+    jobId,
+    `Importacion completada: ${created} nuevas, ${updated} actualizadas`,
+    onLog,
+  );
+
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData: JSON.stringify({ created, updated, total: result.presentaciones.length }),
+    },
+  });
+}
+
+// ── SUBMIT_PRESENTACION flow ──
+async function processSubmitPresentacion(
+  siradigPage: Page,
+  job: { id: string; userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+) {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  await appendLogFn(jobId, `Enviando presentacion para ${fiscalYear}...`, onLog);
+
+  const result = await submitPresentacion(
+    siradigPage,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!result.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: result.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Create the presentacion record
+  const numero = result.numero ?? (await getNextPresentacionNumero(job.userId, fiscalYear));
+  const descripcion =
+    result.descripcion ?? (numero === 1 ? "Original" : `Rectificativa ${numero - 1}`);
+  const submitPdfData = result.pdfBuffer ? new Uint8Array(result.pdfBuffer) : null;
+
+  const presentacion = await prisma.presentacion.create({
+    data: {
+      userId: job.userId,
+      fiscalYear,
+      numero,
+      descripcion,
+      fechaEnvio: new Date(),
+      source: "AUTOMATION",
+      siradiqStatus: "SUBMITTED",
+      ...(submitPdfData
+        ? {
+            fileData: submitPdfData,
+            fileMimeType: "application/pdf",
+            originalFilename: `presentacion-${fiscalYear}-${numero}.pdf`,
+          }
+        : {}),
+    },
+  });
+
+  // Link the automation job to the presentacion
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      presentacionId: presentacion.id,
+    },
+  });
+
+  // Try to extract monto total from PDF
+  if (result.pdfBuffer) {
+    try {
+      const monto = await extractMontoFromPdfBuffer(result.pdfBuffer);
+      if (monto) {
+        await prisma.presentacion.update({
+          where: { id: presentacion.id },
+          data: { montoTotal: new Prisma.Decimal(monto) },
+        });
+        await appendLogFn(jobId, `Monto total extraido del PDF: $${monto}`, onLog);
+      }
+    } catch {
+      // PDF parsing is best-effort
+    }
+  }
+
+  await appendLogFn(jobId, `Presentacion ${numero} (${descripcion}) enviada exitosamente`, onLog);
+
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: { status: "COMPLETED", completedAt: new Date() },
+  });
+}
+
+async function getNextPresentacionNumero(userId: string, fiscalYear: number): Promise<number> {
+  const latest = await prisma.presentacion.findFirst({
+    where: { userId, fiscalYear },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  return (latest?.numero ?? 0) + 1;
+}
+
+async function extractMontoFromPdfBuffer(pdfBuffer: Buffer): Promise<string | null> {
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const doc = await pdfjsLib.getDocument({
+    data: new Uint8Array(pdfBuffer),
+    standardFontDataUrl: "node_modules/pdfjs-dist/standard_fonts/",
+  }).promise;
+
+  let pdfText = "";
+  for (let i = 1; i <= doc.numPages; i++) {
+    const pdfPage = await doc.getPage(i);
+    const content = await pdfPage.getTextContent();
+     
+    pdfText += (content.items as any[])
+      .filter((item) => "str" in item)
+      .map((item) => item.str)
+      .join(" ");
+  }
+
+  return extractMontoTotalFromText(pdfText);
+}
+
+function parseDateDDMMYYYY(dateStr: string): Date | null {
+  const parts = dateStr.trim().split("/");
+  if (parts.length !== 3) return null;
+  const [day, month, year] = parts.map(Number);
+  if (!day || !month || !year) return null;
+  return new Date(year, month - 1, day);
+}
+
 export async function processJob(jobId: string, onLog?: LogCallback): Promise<void> {
   return enqueueJob(async () => {
     const job = await prisma.automationJob.findUnique({
@@ -1275,6 +1530,48 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             onScreenshot,
             appendLog,
           );
+          return;
+        }
+
+        // ── PULL_PRESENTACIONES flow ──
+        if (job.jobType === "PULL_PRESENTACIONES") {
+          // Only navigate to the main menu (person + period), NOT into Carga de Formulario
+          const navResult = await navigateToSiradigMainMenu(
+            siradigPage,
+            job.fiscalYear ?? new Date().getFullYear(),
+            (msg) => appendLog(jobId, msg, onLog),
+            onScreenshot,
+          );
+          if (!navResult.success) {
+            setJobStatus(jobId, "FAILED");
+            await prisma.automationJob.update({
+              where: { id: jobId },
+              data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
+            });
+            return;
+          }
+          await processPullPresentaciones(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
+          return;
+        }
+
+        // ── SUBMIT_PRESENTACION flow ──
+        if (job.jobType === "SUBMIT_PRESENTACION") {
+          // Only navigate to the main menu (person + period), NOT into Carga de Formulario
+          const navResult = await navigateToSiradigMainMenu(
+            siradigPage,
+            job.fiscalYear ?? new Date().getFullYear(),
+            (msg) => appendLog(jobId, msg, onLog),
+            onScreenshot,
+          );
+          if (!navResult.success) {
+            setJobStatus(jobId, "FAILED");
+            await prisma.automationJob.update({
+              where: { id: jobId },
+              data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
+            });
+            return;
+          }
+          await processSubmitPresentacion(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
 

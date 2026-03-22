@@ -39,7 +39,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `(auth)/` — login flow (Google OAuth)
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
-**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`. All protected routes validate `session?.user?.id`.
+**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`, `/presentaciones`, `/cron/presentaciones`. All protected routes validate `session?.user?.id`.
 
 **Business logic** lives in `src/lib/`, organized by domain:
 
@@ -51,11 +51,11 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `validators/` — Zod schemas for invoices, credentials, CUIT format, domestic workers/receipts
 - `domestic/` — Domestic workers domain logic (schemas, validators)
 
-**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `landing/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
+**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
 
 **Hooks** (`src/hooks/`) contain shared React hooks:
 
-- `use-paginated-fetch` — Generic hook for server-side paginated data fetching with debounced search, filter management, and polling support. Used by both `InvoiceList` and `ReceiptList`.
+- `use-paginated-fetch` — Generic hook for server-side paginated data fetching with debounced search, filter management, and polling support. Used by `InvoiceList`, `ReceiptList`, and `PresentacionesList`.
 
 ## Key Patterns
 
@@ -83,7 +83,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `simulador/` — calculator, deduction-rules, tax-tables, schemas (125 tests)
 - `validators/` — cuit, invoice, credentials (55 tests)
 - `crypto/` — encryption round-trip and tamper detection (17 tests)
-- `automation/` — deduction-mapper, selectors (96 tests)
+- `automation/` — deduction-mapper, selectors, presentacion selectors (101 tests)
 - `ocr/` — field-extractor, pipeline (22 tests)
 - `catalog/` — provider-catalog HTML parser (8 tests)
 - `ocr/` — receipt-extractor for domestic worker salary receipts (26 tests)
@@ -119,4 +119,4 @@ Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_te
 
 ## Environment Variables
 
-`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`.
+`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `CRON_SECRET` (for Railway cron endpoint auth).
