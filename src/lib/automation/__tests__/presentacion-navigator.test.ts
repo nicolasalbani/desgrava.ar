@@ -33,7 +33,7 @@ describe("extractMontoTotalFromText", () => {
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
       const content = await page.getTextContent();
-       
+
       pdfText += (content.items as any[])
         .filter((item: { str?: string }) => "str" in item)
         .map((item: { str: string }) => item.str)

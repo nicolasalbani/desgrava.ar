@@ -1357,7 +1357,7 @@ async function extractMontoFromPdfBuffer(pdfBuffer: Buffer): Promise<string | nu
   for (let i = 1; i <= doc.numPages; i++) {
     const pdfPage = await doc.getPage(i);
     const content = await pdfPage.getTextContent();
-     
+
     pdfText += (content.items as any[])
       .filter((item) => "str" in item)
       .map((item) => item.str)
