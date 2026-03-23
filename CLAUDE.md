@@ -29,14 +29,14 @@ npm run lint && npm run format:check && npm run build && npm run test
 
 ## Tech Stack
 
-Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 4 (Google OAuth + Prisma adapter), shadcn/ui + Tailwind CSS 4 + Radix UI, Playwright for browser automation, Tesseract.js + pdf-parse for OCR, OpenAI for AI-powered invoice category classification, Embla Carousel for landing page reviews.
+Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 4 (Google OAuth + Credentials + Prisma adapter), shadcn/ui + Tailwind CSS 4 + Radix UI, Playwright for browser automation, Tesseract.js + pdf-parse for OCR, OpenAI for AI-powered invoice category classification, Resend for transactional email, bcryptjs for password hashing, Embla Carousel for landing page reviews.
 
 ## Architecture
 
 **Route groups** organize the app by access level:
 
 - `(public)/` — unauthenticated pages (e.g., `/simulador`)
-- `(auth)/` — login flow (Google OAuth)
+- `(auth)/` — login flow (Google OAuth + email/password), email verification, password reset
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
 **API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`, `/presentaciones`, `/cron/presentaciones`. All protected routes validate `session?.user?.id`.
@@ -47,11 +47,13 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `ocr/` — Document processing pipeline (pdf-parse first, Tesseract fallback) + field extraction
 - `automation/` — Playwright-based ARCA/SiRADIG automation: job processor, browser pool, navigators, CSS selectors, deduction mapper
 - `crypto/encryption.ts` — AES-256-GCM for ARCA credentials (encrypt/decrypt at API boundary)
+- `email.ts` — Resend integration for verification and password reset emails
+- `rate-limit.ts` — In-memory rate limiter for auth endpoints
 - `catalog/` — Global provider catalog: CUIT → deduction category lookup with sistemas360.ar enrichment
 - `validators/` — Zod schemas for invoices, credentials, CUIT format, domestic workers/receipts
 - `domestic/` — Domestic workers domain logic (schemas, validators)
 
-**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
+**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`, `auth/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
 
 **Hooks** (`src/hooks/`) contain shared React hooks:
 
@@ -90,6 +92,8 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `validators/` — domestic worker and receipt schemas (32 tests)
 - `invite-codes` — token creation and validation (15 tests)
 - `hooks/` — usePaginatedFetch buildParams helper (16 tests)
+- `validators/` — password complexity rules, schemas (24 tests)
+- `rate-limit` — in-memory rate limiter (5 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
 
@@ -119,4 +123,4 @@ Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_te
 
 ## Environment Variables
 
-`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `CRON_SECRET` (for Railway cron endpoint auth).
+`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for Railway cron endpoint auth).

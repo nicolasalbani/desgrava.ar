@@ -12,7 +12,7 @@ export function generateIngestToken(): string {
  * Construct the full ingest email address for a given token.
  */
 export function getIngestEmail(token: string): string {
-  const domain = process.env.INGEST_EMAIL_DOMAIN || "ingest.desgrava.ar";
+  const domain = process.env.INGEST_EMAIL_DOMAIN || "desgrava.ar";
   return `${token}@${domain}`;
 }
 
@@ -21,7 +21,7 @@ export function getIngestEmail(token: string): string {
  * Returns null if the address doesn't match the expected domain.
  */
 export function extractTokenFromEmail(email: string): string | null {
-  const domain = process.env.INGEST_EMAIL_DOMAIN || "ingest.desgrava.ar";
+  const domain = process.env.INGEST_EMAIL_DOMAIN || "desgrava.ar";
   const escapedDomain = domain.replace(/\./g, "\\.");
   const match = email.match(new RegExp(`^(.+)@${escapedDomain}$`, "i"));
   return match?.[1] ?? null;

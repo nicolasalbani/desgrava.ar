@@ -263,7 +263,7 @@ async function sendReplyEmail(
   errors: string[],
   errorMessage: string | null,
 ): Promise<void> {
-  const from = process.env.RESEND_FROM_EMAIL ?? "desgrava.ar <notificaciones@ingest.desgrava.ar>";
+  const from = process.env.RESEND_FROM_EMAIL ?? "desgrava.ar <notificaciones@desgrava.ar>";
   const replySubject =
     status === "COMPLETED"
       ? `✓ Factura cargada — desgrava.ar`
