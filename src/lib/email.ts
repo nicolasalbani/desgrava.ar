@@ -1,8 +1,13 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 const FROM_EMAIL = "desgrava.ar <noreply@desgrava.ar>";
+
+function getResend(): Resend {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY is not configured");
+  }
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 function getBaseUrl(): string {
   return process.env.NEXTAUTH_URL ?? "http://localhost:3000";
@@ -11,7 +16,7 @@ function getBaseUrl(): string {
 export async function sendVerificationEmail(email: string, token: string): Promise<void> {
   const url = `${getBaseUrl()}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM_EMAIL,
     to: email,
     subject: "Verificá tu email — desgrava.ar",
@@ -36,7 +41,7 @@ export async function sendVerificationEmail(email: string, token: string): Promi
 export async function sendPasswordResetEmail(email: string, token: string): Promise<void> {
   const url = `${getBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM_EMAIL,
     to: email,
     subject: "Restablecer contraseña — desgrava.ar",
