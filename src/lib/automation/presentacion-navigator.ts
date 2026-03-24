@@ -85,9 +85,24 @@ export async function pullPresentaciones(
       "Consulta de Formularios Enviados",
     );
 
-    // Wait for the table to appear
+    // Wait for the table to appear — it may not exist if there are no presentaciones
     const table = page.locator(SEL.formulariosTable);
-    await table.waitFor({ timeout: 15000 });
+    const tableVisible = await table.isVisible().catch(() => false);
+    if (!tableVisible) {
+      // Wait a bit more in case it's loading
+      try {
+        await table.waitFor({ timeout: 5000 });
+      } catch {
+        // No table means no presentaciones for this period — this is a valid state
+        log("No hay presentaciones enviadas para este periodo");
+        await capture(
+          await page.screenshot({ fullPage: true }),
+          "no-presentaciones",
+          "Sin presentaciones",
+        );
+        return { success: true, presentaciones: [] };
+      }
+    }
 
     // Step 1: Scrape all row data first (before any navigation that would invalidate locators)
     const rows = page.locator(SEL.formulariosTableRows);
@@ -194,6 +209,13 @@ export async function submitPresentacion(
   const capture = onScreenshot ?? (async () => {});
 
   try {
+    // Navigate to "Carga de Formulario" first (we start at the SiRADIG main menu)
+    log("Accediendo a Carga de Formulario...");
+    const formBtn = page.locator(SEL.cargaFormularioBtn);
+    await formBtn.waitFor({ state: "visible", timeout: 15000 });
+    await formBtn.click();
+    await page.waitForLoadState("networkidle");
+
     // Click Vista Previa (should be visible on the form page)
     log("Haciendo click en Vista Previa...");
     const vistaPrevia = page.locator(SEL.vistaPrevia);
