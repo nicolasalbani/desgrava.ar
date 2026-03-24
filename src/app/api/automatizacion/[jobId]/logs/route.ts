@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import {
   getJobLogs,
   getJobStatus,
+  getJobStep,
   getJobScreenshots,
   getJobVideoFilenames,
 } from "@/lib/automation/job-processor";
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
   let lastLogIndex = 0;
   let lastScreenshotIndex = 0;
   let lastSentStatus = "";
+  let lastSentStep = "";
   let closed = false;
 
   const stream = new ReadableStream({
@@ -94,6 +96,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
           lastScreenshotIndex++;
         }
 
+        // Send step changes
+        const currentStep = getJobStep(jobId);
+        if (currentStep && currentStep !== lastSentStep) {
+          lastSentStep = currentStep;
+          enqueue(JSON.stringify({ step: currentStep }));
+        }
+
         // Send status changes
         const currentStatus = getJobStatus(jobId);
         if (currentStatus && currentStatus !== lastSentStatus) {
@@ -124,10 +133,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
           try {
             const dbJob = await prisma.automationJob.findUnique({
               where: { id: jobId },
-              select: { status: true },
+              select: { status: true, currentStep: true },
             });
             if (dbJob) {
               status = dbJob.status;
+              if (dbJob.currentStep && dbJob.currentStep !== lastSentStep) {
+                lastSentStep = dbJob.currentStep;
+                enqueue(JSON.stringify({ step: dbJob.currentStep }));
+              }
             }
           } catch {
             // DB query failed, will retry next interval

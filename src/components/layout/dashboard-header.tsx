@@ -3,7 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Menu, Sun, Moon, Monitor, ChevronDown, Check } from "lucide-react";
@@ -53,6 +53,7 @@ export function DashboardHeader() {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-[280px] p-0">
+          <SheetTitle className="sr-only">Navegación</SheetTitle>
           <DashboardMobileNav onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>

@@ -63,7 +63,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 - **All monetary calculations** use `Decimal.js` (never floating-point) for tax math precision.
 - **ARCA credentials** are encrypted with AES-256-GCM, decrypted only on-demand for automation jobs, never kept in memory.
-- **Automation jobs** are queued with status tracking (PENDING → RUNNING → COMPLETED/FAILED), real-time JSON logs, screenshot capture. Job status is embedded inline in each invoice/receipt row (no separate page). Each row shows its latest job status and can expand to show full job history. There is no retry — users re-send to create a fresh job. Jobs are audit records deleted only via cascade when the parent invoice/receipt is deleted.
+- **Automation jobs** are queued with status tracking (PENDING → RUNNING → COMPLETED/FAILED), real-time step-based progress, screenshot capture. Job status is embedded inline in each invoice/receipt row (no separate page). Each row shows its latest job status and can expand to show full job history with step checklist. There is no retry — users re-send to create a fresh job. Jobs are audit records deleted only via cascade when the parent invoice/receipt is deleted. Step definitions live in `src/lib/automation/job-steps.ts` (`JOB_TYPE_STEPS`) — the single source of truth for all user-facing progress steps. Raw logs are still stored in the DB for debugging but never shown to users; the `StepProgress` component (`src/components/shared/step-progress.tsx`) renders the checklist UI.
 - **ARCA login** (`arca-navigator.ts`) uses `domcontentloaded` + explicit element waits (not `networkidle`) because ARCA's login pages have persistent connections that cause `networkidle` to hang, especially from remote servers. The ARCA portal and SiRADIG popup use `networkidle` for their `goto`/load since they are SPAs that render content via AJAX after the `load` event fires.
 - **SiRADIG** is a single-page jQuery app. After the initial page load, all interactions are AJAX. Use `networkidle` for waits inside SiRADIG (it works because AJAX requests are finite), but never for ARCA login page navigation.
 - **OCR pipeline** tries pdf-parse for text-based PDFs, falls back to Tesseract for scanned documents.
@@ -76,7 +76,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 ## Testing
 
-**Framework**: Vitest with 537+ tests across 22 test files.
+**Framework**: Vitest with 614+ tests across 27 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -85,7 +85,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `simulador/` — calculator, deduction-rules, tax-tables, schemas (125 tests)
 - `validators/` — cuit, invoice, credentials (55 tests)
 - `crypto/` — encryption round-trip and tamper detection (17 tests)
-- `automation/` — deduction-mapper, selectors, presentacion selectors (101 tests)
+- `automation/` — deduction-mapper, selectors, presentacion selectors, job-steps (107 tests)
 - `ocr/` — field-extractor, pipeline (22 tests)
 - `catalog/` — provider-catalog HTML parser (8 tests)
 - `ocr/` — receipt-extractor for domestic worker salary receipts (26 tests)

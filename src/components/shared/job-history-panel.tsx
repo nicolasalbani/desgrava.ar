@@ -1,14 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Loader2, ChevronDown, ChevronUp, AlertCircle, ExternalLink } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { StepProgress } from "@/components/shared/step-progress";
+import { getStepsForJobType } from "@/lib/automation/job-steps";
 
 interface JobEntry {
   id: string;
+  jobType: string;
   status: string;
   errorMessage: string | null;
+  currentStep: string | null;
   createdAt: string;
   completedAt: string | null;
   logs: unknown;
@@ -28,26 +32,6 @@ interface JobHistoryPanelProps {
   latestJobStatus?: string | null;
   onCancel?: (jobId: string) => void;
   cancelling?: boolean;
-}
-
-function LogsContainer({ logs }: { logs: string[] }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (ref.current) {
-      ref.current.scrollTop = ref.current.scrollHeight;
-    }
-  }, [logs]);
-
-  return (
-    <div ref={ref} className="bg-muted/30 max-h-32 space-y-0.5 overflow-y-auto rounded-md p-2">
-      {logs.map((entry, i) => (
-        <p key={i} className="text-muted-foreground text-[10px] leading-4">
-          {entry}
-        </p>
-      ))}
-    </div>
-  );
 }
 
 export function JobHistoryPanel({
@@ -118,23 +102,7 @@ export function JobHistoryPanel({
         const cfg = STATUS_CONFIG[job.status];
         const isExpanded = expandedJobId === job.id;
         const canCancel = job.status === "PENDING" || job.status === "RUNNING";
-        const logs = Array.isArray(job.logs) ? (job.logs as string[]) : [];
-
-        // Extract error summary from logs when errorMessage is missing
-        let errorSummary = job.errorMessage;
-        if (!errorSummary && job.status === "FAILED" && logs.length > 0) {
-          // Look for the direct error message first (e.g. "Error al guardar: * CUIT/CUIL inválida")
-          // then fall back to any "Error" log entry
-          const stripTs = (l: string) => l.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, "");
-          const direct = logs.find(
-            (l) => l.includes("Error al guardar:") && !l.includes("deduccion para"),
-          );
-          const fallback = logs.findLast((l) => /Error/i.test(l));
-          const match = direct ?? fallback;
-          if (match) {
-            errorSummary = stripTs(match);
-          }
-        }
+        const steps = getStepsForJobType(job.jobType);
 
         return (
           <div key={job.id} className="border-border/50 rounded-lg border">
@@ -166,14 +134,14 @@ export function JobHistoryPanel({
 
             {isExpanded && (
               <div className="border-border/50 space-y-2 border-t px-3 py-2">
-                {errorSummary && (
-                  <div className="flex items-start gap-1.5">
-                    <AlertCircle className="mt-0.5 h-3 w-3 shrink-0 text-rose-400" />
-                    <p className="text-xs text-rose-400/90">{errorSummary}</p>
-                  </div>
+                {steps.length > 0 && (
+                  <StepProgress
+                    steps={steps}
+                    currentStep={job.currentStep}
+                    status={job.status}
+                    errorMessage={job.errorMessage}
+                  />
                 )}
-
-                {logs.length > 0 && <LogsContainer logs={logs} />}
 
                 <div className="flex items-center gap-2">
                   <Button

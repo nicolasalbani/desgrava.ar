@@ -10,9 +10,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, CheckCircle2, XCircle, Download } from "lucide-react";
+import { CheckCircle2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useFiscalYear } from "@/contexts/fiscal-year";
+import { StepProgress } from "@/components/shared/step-progress";
+import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
 
 type ImportState = "idle" | "running" | "completed" | "failed";
 
@@ -36,15 +38,15 @@ export function ImportArcaDialog({
 }) {
   const { fiscalYear } = useFiscalYear();
   const [state, setState] = useState<ImportState>("idle");
-  const [logs, setLogs] = useState<string[]>([]);
+  const [currentStep, setCurrentStep] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const [_jobId, setJobId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [skipped, setSkipped] = useState(false);
   const skippedBoolRef = useRef(false);
   const [skipPrefLoaded, setSkipPrefLoaded] = useState(false);
   const skippedRef = useRef<string[]>([]);
   const autoStartedRef = useRef(false);
-  const logsEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const cleanup = useCallback(() => {
@@ -58,11 +60,31 @@ export function ImportArcaDialog({
     return cleanup;
   }, [cleanup]);
 
+  // Poll job status as fallback for SSE step events
   useEffect(() => {
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [logs]);
+    if (state !== "running" || !jobId) return;
+    const interval = setInterval(() => {
+      fetch(`/api/automatizacion/${jobId}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.job?.currentStep) {
+            setCurrentStep(d.job.currentStep);
+          }
+          if (d.job?.status === "COMPLETED") {
+            cleanup();
+            setState("completed");
+            if (d.job.resultData) setResult(d.job.resultData as ImportResult);
+            onImportComplete?.();
+          } else if (d.job?.status === "FAILED") {
+            cleanup();
+            if (d.job.errorMessage) setErrorMessage(d.job.errorMessage);
+            setState("failed");
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [state, jobId, cleanup, onImportComplete]);
 
   // Fetch skip preference on mount
   useEffect(() => {
@@ -83,7 +105,8 @@ export function ImportArcaDialog({
   useEffect(() => {
     if (open) {
       setState("idle");
-      setLogs([]);
+      setCurrentStep(null);
+      setErrorMessage(null);
       setResult(null);
       setJobId(null);
       autoStartedRef.current = false;
@@ -99,7 +122,8 @@ export function ImportArcaDialog({
     }
 
     setState("running");
-    setLogs([]);
+    setCurrentStep(null);
+    setErrorMessage(null);
     setResult(null);
 
     try {
@@ -129,8 +153,8 @@ export function ImportArcaDialog({
         try {
           const payload = JSON.parse(event.data);
 
-          if (payload.log) {
-            setLogs((prev) => [...prev, payload.log]);
+          if (payload.step) {
+            setCurrentStep(payload.step);
           }
 
           if (payload.done) {
@@ -146,10 +170,22 @@ export function ImportArcaDialog({
                   if (d.job?.resultData) {
                     setResult(d.job.resultData as ImportResult);
                   }
+                  if (d.job?.errorMessage) {
+                    setErrorMessage(d.job.errorMessage);
+                  }
                 })
                 .catch(() => {});
               onImportComplete?.();
             } else {
+              // Fetch error message for failed state
+              fetch(`/api/automatizacion/${newJobId}`)
+                .then((r) => r.json())
+                .then((d) => {
+                  if (d.job?.errorMessage) {
+                    setErrorMessage(d.job.errorMessage);
+                  }
+                })
+                .catch(() => {});
               setState("failed");
             }
           }
@@ -248,7 +284,13 @@ export function ImportArcaDialog({
             </div>
           )}
 
-          {state === "running" && <RunningView logs={logs} />}
+          {state === "running" && (
+            <StepProgress
+              steps={JOB_TYPE_STEPS.PULL_COMPROBANTES}
+              currentStep={currentStep}
+              status="RUNNING"
+            />
+          )}
 
           {state === "completed" && (
             <CompletedView result={result} onClose={() => onOpenChange(false)} />
@@ -256,11 +298,12 @@ export function ImportArcaDialog({
 
           {state === "failed" && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <XCircle className="h-5 w-5 text-rose-500" />
-                <span className="text-sm font-medium">Error en la importación</span>
-              </div>
-              <LogPanel logs={logs} logsEndRef={logsEndRef} />
+              <StepProgress
+                steps={JOB_TYPE_STEPS.PULL_COMPROBANTES}
+                currentStep={currentStep}
+                status="FAILED"
+                errorMessage={errorMessage}
+              />
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
                   Cerrar
@@ -274,57 +317,6 @@ export function ImportArcaDialog({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** Strip "[HH:MM:SS] " and "job:xxx " prefixes from log lines */
-function cleanLog(log: string): string {
-  return log.replace(/^\[[\d:]+\]\s*/, "").replace(/^\[job:\w+\]\s*/, "");
-}
-
-/** Parse progress from log lines like "Progreso: 170 importadas, 0 duplicadas, 0 errores (170/224)" */
-function parseProgress(logs: string[]): {
-  current: number;
-  total: number;
-  lastStatus: string;
-} | null {
-  for (let i = logs.length - 1; i >= 0; i--) {
-    const match = logs[i].match(/(\d+)\/(\d+)\)?$/);
-    if (match) return { current: +match[1], total: +match[2], lastStatus: cleanLog(logs[i]) };
-  }
-  return null;
-}
-
-function RunningView({ logs }: { logs: string[] }) {
-  const progress = parseProgress(logs);
-  const lastLog = logs.length > 0 ? cleanLog(logs[logs.length - 1]) : "";
-  const pct = progress ? Math.round((progress.current / progress.total) * 100) : 0;
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-2">
-            <Loader2 className="text-primary h-4 w-4 animate-spin" />
-            <span className="font-medium">Importando comprobantes...</span>
-          </div>
-          {progress && (
-            <span className="text-muted-foreground text-xs tabular-nums">
-              {progress.current}/{progress.total}
-            </span>
-          )}
-        </div>
-        {progress && (
-          <div className="bg-muted h-2 overflow-hidden rounded-full">
-            <div
-              className="bg-primary h-full rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        )}
-      </div>
-      <p className="text-muted-foreground truncate text-xs">{lastLog}</p>
-    </div>
   );
 }
 
@@ -384,29 +376,6 @@ function CompletedView({ result, onClose }: { result: ImportResult | null; onClo
       <Button variant="outline" onClick={onClose} className="w-full">
         Cerrar
       </Button>
-    </div>
-  );
-}
-
-function LogPanel({
-  logs,
-  logsEndRef,
-}: {
-  logs: string[];
-  logsEndRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  if (logs.length === 0) return null;
-
-  return (
-    <div className="bg-muted/30 max-h-40 overflow-y-auto rounded-lg p-3">
-      <div className="space-y-0.5 font-mono text-[11px]">
-        {logs.map((log, i) => (
-          <p key={i} className="text-muted-foreground/70 leading-relaxed">
-            {cleanLog(log)}
-          </p>
-        ))}
-        <div ref={logsEndRef} />
-      </div>
     </div>
   );
 }

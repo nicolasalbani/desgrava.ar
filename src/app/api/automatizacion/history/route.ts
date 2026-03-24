@@ -33,8 +33,10 @@ export async function GET(req: NextRequest) {
       },
       select: {
         id: true,
+        jobType: true,
         status: true,
         errorMessage: true,
+        currentStep: true,
         createdAt: true,
         completedAt: true,
         logs: true,
@@ -54,8 +56,10 @@ export async function GET(req: NextRequest) {
       },
       select: {
         id: true,
+        jobType: true,
         status: true,
         errorMessage: true,
+        currentStep: true,
         createdAt: true,
         completedAt: true,
         logs: true,

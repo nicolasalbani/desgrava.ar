@@ -40,6 +40,7 @@ export type LogCallback = (jobId: string, message: string) => void;
 // In-memory log storage for SSE streaming
 const jobLogs = new Map<string, string[]>();
 const jobStatuses = new Map<string, string>();
+const jobSteps = new Map<string, string>();
 const jobVideoReady = new Map<string, string[]>();
 
 export { getJobScreenshots };
@@ -53,6 +54,10 @@ export function getJobStatus(jobId: string): string | undefined {
   return jobStatuses.get(jobId);
 }
 
+export function getJobStep(jobId: string): string | undefined {
+  return jobSteps.get(jobId);
+}
+
 export function getJobVideoFilenames(jobId: string): string[] {
   return jobVideoReady.get(jobId) ?? [];
 }
@@ -60,12 +65,16 @@ export function getJobVideoFilenames(jobId: string): string[] {
 export function clearJobLogs(jobId: string): void {
   jobLogs.delete(jobId);
   jobStatuses.delete(jobId);
+  jobSteps.delete(jobId);
   jobVideoReady.delete(jobId);
   clearJobArtifacts(jobId);
 }
 
 function setJobStatus(jobId: string, status: string) {
   jobStatuses.set(jobId, status);
+  if (status === "COMPLETED") {
+    jobSteps.set(jobId, "done");
+  }
 }
 
 async function appendLog(jobId: string, message: string, onLog?: LogCallback) {
@@ -85,6 +94,15 @@ async function appendLog(jobId: string, message: string, onLog?: LogCallback) {
     data: {
       logs: logs,
     },
+  });
+}
+
+async function appendStep(jobId: string, stepKey: string, _onLog?: LogCallback) {
+  jobSteps.set(jobId, stepKey);
+  // Persist to DB
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: { currentStep: stepKey },
   });
 }
 
@@ -417,6 +435,7 @@ async function processPullDomesticWorkers(
     onScreenshot,
   );
 
+  await appendStep(jobId, "save", onLog);
   let workersCreated = 0;
   let workersUpdated = 0;
 
@@ -544,6 +563,7 @@ async function processPullDomesticReceipts(
   );
 
   // Upsert receipts
+  await appendStep(jobId, "save", onLog);
   let receiptsCreated = 0;
   let receiptsUpdated = 0;
 
@@ -683,6 +703,7 @@ async function processPullComprobantes(
   onLog: LogCallback | undefined,
   onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
+  appendStepFn: typeof appendStep,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
 
@@ -771,6 +792,7 @@ async function processPullComprobantes(
   );
 
   // ── Phase 1: Parallel category resolution ─────────────────
+  await appendStepFn(jobId, "classify", onLog);
   const categoryCache = new Map<string, string>();
 
   // Collect unique CUITs that need resolution, with representative invoice data
@@ -822,6 +844,7 @@ async function processPullComprobantes(
   }
 
   // ── Phase 2: Batch database inserts ───────────────────────
+  await appendStepFn(jobId, "save", onLog);
   const INSERT_BATCH_SIZE = 50;
   const invoicesToInsert: Prisma.InvoiceCreateManyInput[] = [];
 
@@ -1430,6 +1453,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
     try {
       // Decrypt credentials
+      await appendStep(jobId, "login", onLog);
       await appendLog(jobId, "Desencriptando credenciales...", onLog);
       const clave = decrypt(credential.encryptedClave, credential.iv, credential.authTag);
 
@@ -1468,23 +1492,35 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
         // ── PULL_COMPROBANTES flow (stays on ARCA portal, no SiRADIG) ──
         if (job.jobType === "PULL_COMPROBANTES") {
-          await processPullComprobantes(page, job, jobId, onLog, onScreenshot, appendLog);
+          await appendStep(jobId, "download", onLog);
+          await processPullComprobantes(
+            page,
+            job,
+            jobId,
+            onLog,
+            onScreenshot,
+            appendLog,
+            appendStep,
+          );
           return;
         }
 
         // ── PULL_DOMESTIC_WORKERS flow (workers only, no receipts) ──
         if (job.jobType === "PULL_DOMESTIC_WORKERS") {
+          await appendStep(jobId, "download", onLog);
           await processPullDomesticWorkers(page, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
 
         // ── PULL_DOMESTIC_RECEIPTS flow (workers + receipts) ──
         if (job.jobType === "PULL_DOMESTIC_RECEIPTS") {
+          await appendStep(jobId, "download", onLog);
           await processPullDomesticReceipts(page, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
 
         // Navigate to SiRADIG (opens in a new tab)
+        await appendStep(jobId, "siradig", onLog);
         const siradigPage = await navigateToSiradig(
           page,
           (msg) => appendLog(jobId, msg, onLog),
@@ -1506,6 +1542,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
         // ── PULL_FAMILY_DEPENDENTS flow ──
         if (job.jobType === "PULL_FAMILY_DEPENDENTS") {
+          await appendStep(jobId, "extract", onLog);
           await processPullFamilyDependents(
             siradigPage,
             job,
@@ -1519,6 +1556,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
         // ── PUSH_FAMILY_DEPENDENTS flow ──
         if (job.jobType === "PUSH_FAMILY_DEPENDENTS") {
+          await appendStep(jobId, "upload", onLog);
           await processPushFamilyDependents(
             siradigPage,
             job,
@@ -1532,6 +1570,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
         // ── SUBMIT_DOMESTIC_DEDUCTION flow ──
         if (job.jobType === "SUBMIT_DOMESTIC_DEDUCTION") {
+          await appendStep(jobId, "fill", onLog);
           await processSubmitDomesticDeduction(
             siradigPage,
             job,
@@ -1560,6 +1599,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             });
             return;
           }
+          await appendStep(jobId, "download", onLog);
           await processPullPresentaciones(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
@@ -1581,6 +1621,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             });
             return;
           }
+          await appendStep(jobId, "submit", onLog);
           await processSubmitPresentacion(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
@@ -1609,6 +1650,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           }
 
           // Fill the deduction form (category selection + comprobante dialog)
+          await appendStep(jobId, "fill", onLog);
           const fillResult = await fillDeductionForm(
             siradigPage,
             {

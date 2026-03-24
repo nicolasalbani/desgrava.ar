@@ -138,6 +138,7 @@ model AutomationJob {
   screenshotUrl     String?
   errorMessage      String?
   resultData        Json?
+  currentStep       String?
   fiscalYear        Int?
   startedAt         DateTime?
   completedAt       DateTime?

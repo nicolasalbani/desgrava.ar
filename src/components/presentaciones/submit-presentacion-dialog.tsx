@@ -10,9 +10,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Loader2, Send, CheckCircle2, XCircle } from "lucide-react";
+import { Send, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useFiscalYear } from "@/contexts/fiscal-year";
+import { StepProgress } from "@/components/shared/step-progress";
+import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
 
 type Status = "idle" | "running" | "completed" | "failed";
 
@@ -29,23 +31,15 @@ export function SubmitPresentacionDialog({
   const year = fiscalYear ?? new Date().getFullYear();
 
   const [status, setStatus] = useState<Status>("idle");
-  const [logs, setLogs] = useState<string[]>([]);
-  const [logCount, setLogCount] = useState(0);
+  const [currentStep, setCurrentStep] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [skipped, setSkipped] = useState(false);
   const skippedBoolRef = useRef(false);
   const [skipPrefLoaded, setSkipPrefLoaded] = useState(false);
   const skippedRef = useRef<string[]>([]);
   const autoStartedRef = useRef(false);
   const eventSourceRef = useRef<EventSource | null>(null);
-  const logsContainerRef = useRef<HTMLDivElement>(null);
   const connectedJobRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const container = logsContainerRef.current;
-    if (container) {
-      container.scrollTop = container.scrollHeight;
-    }
-  }, [logs]);
 
   useEffect(() => {
     return () => {
@@ -71,8 +65,8 @@ export function SubmitPresentacionDialog({
   useEffect(() => {
     if (open && status !== "running") {
       setStatus("idle");
-      setLogs([]);
-      setLogCount(0);
+      setCurrentStep(null);
+      setErrorMessage(null);
       autoStartedRef.current = false;
     }
   }, [open, status]);
@@ -91,9 +85,8 @@ export function SubmitPresentacionDialog({
       es.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.log) {
-            setLogCount((c) => c + 1);
-            setLogs((prev) => [...prev.slice(-49), data.log]);
+          if (data.step) {
+            setCurrentStep(data.step);
           }
           if (data.done) {
             es.close();
@@ -105,6 +98,15 @@ export function SubmitPresentacionDialog({
               onSubmitComplete();
               setTimeout(() => onOpenChange(false), 1500);
             } else {
+              // Fetch error message for failed state
+              fetch(`/api/automatizacion/${jobId}`)
+                .then((r) => r.json())
+                .then((d) => {
+                  if (d.job?.errorMessage) {
+                    setErrorMessage(d.job.errorMessage);
+                  }
+                })
+                .catch(() => {});
               setStatus("failed");
               toast.error("Error al enviar presentacion");
             }
@@ -145,8 +147,8 @@ export function SubmitPresentacionDialog({
 
   const handleStart = useCallback(async () => {
     setStatus("running");
-    setLogs([]);
-    setLogCount(0);
+    setCurrentStep(null);
+    setErrorMessage(null);
 
     try {
       const res = await fetch("/api/presentaciones/enviar", {
@@ -181,6 +183,37 @@ export function SubmitPresentacionDialog({
       handleStart();
     }
   }, [open, skipPrefLoaded, status, handleStart]);
+
+  // Poll job status as fallback for SSE step events
+  useEffect(() => {
+    if (status !== "running" || !connectedJobRef.current) return;
+    const interval = setInterval(() => {
+      const jobId = connectedJobRef.current;
+      if (!jobId) return;
+      fetch(`/api/automatizacion/${jobId}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.job?.currentStep) {
+            setCurrentStep(d.job.currentStep);
+          }
+          if (d.job?.status === "COMPLETED") {
+            eventSourceRef.current?.close();
+            eventSourceRef.current = null;
+            connectedJobRef.current = null;
+            setStatus("completed");
+            onSubmitComplete();
+          } else if (d.job?.status === "FAILED") {
+            eventSourceRef.current?.close();
+            eventSourceRef.current = null;
+            connectedJobRef.current = null;
+            if (d.job.errorMessage) setErrorMessage(d.job.errorMessage);
+            setStatus("failed");
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [status, onSubmitComplete]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -229,22 +262,11 @@ export function SubmitPresentacionDialog({
           )}
 
           {status === "running" && (
-            <div>
-              <div className="mb-3 flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
-                <span className="text-sm font-medium">Enviando presentacion...</span>
-                {logCount > 0 && (
-                  <span className="text-muted-foreground text-xs">({logCount} eventos)</span>
-                )}
-              </div>
-              <div ref={logsContainerRef} className="bg-muted h-48 overflow-y-auto rounded-lg p-3">
-                {logs.map((log, i) => (
-                  <p key={i} className="text-muted-foreground text-xs leading-relaxed">
-                    {log}
-                  </p>
-                ))}
-              </div>
-            </div>
+            <StepProgress
+              steps={JOB_TYPE_STEPS.SUBMIT_PRESENTACION}
+              currentStep={currentStep}
+              status="RUNNING"
+            />
           )}
 
           {status === "completed" && (
@@ -258,23 +280,20 @@ export function SubmitPresentacionDialog({
           )}
 
           {status === "failed" && (
-            <div className="flex flex-col items-center gap-3 py-4">
-              <XCircle className="h-8 w-8 text-red-500" />
-              <p className="text-sm font-medium">Error al enviar la presentacion</p>
-              {logs.length > 0 && (
-                <div className="bg-muted max-h-32 w-full overflow-y-auto rounded-lg p-3">
-                  {logs.slice(-5).map((log, i) => (
-                    <p key={i} className="text-muted-foreground text-xs leading-relaxed">
-                      {log}
-                    </p>
-                  ))}
-                </div>
-              )}
+            <div className="space-y-4">
+              <StepProgress
+                steps={JOB_TYPE_STEPS.SUBMIT_PRESENTACION}
+                currentStep={currentStep}
+                status="FAILED"
+                errorMessage={errorMessage}
+              />
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
                   Cerrar
                 </Button>
-                <Button onClick={handleStart}>Reintentar</Button>
+                <Button onClick={handleStart} className="flex-1">
+                  Reintentar
+                </Button>
               </div>
             </div>
           )}
