@@ -46,6 +46,8 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { StepProgress } from "@/components/shared/step-progress";
+import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
 
 // ── Constants ────────────────────────────────────────────────────
 
@@ -529,8 +531,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
   // Import from SiRADIG state
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [importLogs, setImportLogs] = useState<string[]>([]);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importStep, setImportStep] = useState<string | null>(null);
   const [skippedDependents, setSkippedDependents] = useState(false);
   const skippedArcaRef = useRef<string[]>([]);
   const [highlightedIds, setHighlightedIds] = useState<Map<string, "created" | "updated">>(
@@ -544,7 +545,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
   const [exportResults, setExportResults] = useState<
     Map<string, { status: "success" | "failed"; error?: string }>
   >(new Map());
-  const [exportLogs, setExportLogs] = useState<string[]>([]);
+  const [exportStep, setExportStep] = useState<string | null>(null);
   const exportEventSourceRef = useRef<EventSource | null>(null);
 
   // Keep ref in sync for use in SSE callbacks
@@ -564,11 +565,8 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
         try {
           const data = JSON.parse(event.data);
 
-          if (data.log) {
-            setImportLogs((prev) => [...prev, data.log]);
-          }
-          if (data.status) {
-            setImportStatus(data.status);
+          if (data.step) {
+            setImportStep(data.step);
           }
           if (data.done) {
             es.close();
@@ -613,7 +611,6 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
         es.close();
         eventSourceRef.current = null;
         setImporting(false);
-        setImportStatus("FAILED");
         toast.error("Se perdio la conexion con el servidor");
       };
     },
@@ -658,11 +655,9 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
         );
         if (activeJob && !cancelled) {
           setImporting(true);
-          // Restore existing logs from DB
-          if (Array.isArray(activeJob.logs) && activeJob.logs.length > 0) {
-            setImportLogs(activeJob.logs);
+          if (activeJob.currentStep) {
+            setImportStep(activeJob.currentStep);
           }
-          setImportStatus(activeJob.status);
           connectToJobSSE(activeJob.id);
         }
       } catch {
@@ -731,8 +726,8 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
       try {
         const data = JSON.parse(event.data);
 
-        if (data.log) {
-          setExportLogs((prev) => [...prev, data.log]);
+        if (data.step) {
+          setExportStep(data.step);
         }
         if (data.done) {
           es.close();
@@ -835,8 +830,8 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
         );
         if (activeJob && !cancelled) {
           setExportingId(activeJob.familyDependentId);
-          if (Array.isArray(activeJob.logs) && activeJob.logs.length > 0) {
-            setExportLogs(activeJob.logs);
+          if (activeJob.currentStep) {
+            setExportStep(activeJob.currentStep);
           }
           connectToExportJobSSE(activeJob.id, activeJob.familyDependentId);
         }
@@ -861,7 +856,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
   const handleExportDependent = useCallback(
     async (dependentId: string) => {
       setExportingId(dependentId);
-      setExportLogs([]);
+      setExportStep(null);
       // Clear previous result for this dependent
       setExportResults((prev) => {
         const next = new Map(prev);
@@ -903,8 +898,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
 
   const handleImportFromSiradig = useCallback(async () => {
     setImporting(true);
-    setImportLogs([]);
-    setImportStatus(null);
+    setImportStep(null);
     setHighlightedIds(new Map());
 
     try {
@@ -1072,39 +1066,22 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
       {/* Import progress */}
       {importing && (
         <div className="border-border bg-muted rounded-xl border p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
-            <span className="text-sm font-medium">Importando desde SiRADIG...</span>
-            {importStatus && (
-              <span className="text-muted-foreground text-xs">({importStatus})</span>
-            )}
-          </div>
-          {importLogs.length > 0 && (
-            <div className="bg-card max-h-32 overflow-y-auto rounded-lg p-2">
-              {importLogs.slice(-8).map((log, i) => (
-                <p key={i} className="text-muted-foreground text-xs leading-relaxed">
-                  {log}
-                </p>
-              ))}
-            </div>
-          )}
+          <StepProgress
+            steps={JOB_TYPE_STEPS.PULL_FAMILY_DEPENDENTS}
+            currentStep={importStep}
+            status="RUNNING"
+          />
         </div>
       )}
 
-      {/* Export progress log (shown below cards while any dependent is exporting) */}
-      {isExporting && exportLogs.length > 0 && (
+      {/* Export progress (shown below cards while any dependent is exporting) */}
+      {isExporting && (
         <div className="border-border bg-muted rounded-xl border p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
-            <span className="text-sm font-medium">Exportando a SiRADIG...</span>
-          </div>
-          <div className="bg-card max-h-32 overflow-y-auto rounded-lg p-2">
-            {exportLogs.slice(-8).map((log, i) => (
-              <p key={i} className="text-muted-foreground text-xs leading-relaxed">
-                {log}
-              </p>
-            ))}
-          </div>
+          <StepProgress
+            steps={JOB_TYPE_STEPS.PUSH_FAMILY_DEPENDENTS}
+            currentStep={exportStep}
+            status="RUNNING"
+          />
         </div>
       )}
 

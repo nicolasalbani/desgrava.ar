@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Plus, Pencil, Trash2, UserRound, Download } from "lucide-react";
 import { toast } from "sonner";
+import { StepProgress } from "@/components/shared/step-progress";
+import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
 import {
   TIPO_TRABAJO_OPTIONS,
   HORAS_SEMANALES_OPTIONS,
@@ -359,8 +361,7 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
   // Import from ARCA state
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [importLogs, setImportLogs] = useState<string[]>([]);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importStep, setImportStep] = useState<string | null>(null);
   const [skippedWorkers, setSkippedWorkers] = useState(false);
   const skippedArcaRef = useRef<string[]>([]);
   const [highlightedIds, setHighlightedIds] = useState<Map<string, "created" | "updated">>(
@@ -383,8 +384,7 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
       es.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.log) setImportLogs((prev) => [...prev, data.log]);
-          if (data.status) setImportStatus(data.status);
+          if (data.step) setImportStep(data.step);
           if (data.done) {
             es.close();
             eventSourceRef.current = null;
@@ -425,7 +425,6 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
         es.close();
         eventSourceRef.current = null;
         setImporting(false);
-        setImportStatus("FAILED");
         toast.error("Se perdio la conexion con el servidor");
       };
     },
@@ -469,10 +468,9 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
         );
         if (activeJob && !cancelled) {
           setImporting(true);
-          if (Array.isArray(activeJob.logs) && activeJob.logs.length > 0) {
-            setImportLogs(activeJob.logs);
+          if (activeJob.currentStep) {
+            setImportStep(activeJob.currentStep);
           }
-          setImportStatus(activeJob.status);
           connectToJobSSE(activeJob.id);
         }
       } catch {
@@ -530,8 +528,7 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
 
   const handleImportFromArca = useCallback(async () => {
     setImporting(true);
-    setImportLogs([]);
-    setImportStatus(null);
+    setImportStep(null);
     setHighlightedIds(new Map());
 
     try {
@@ -638,22 +635,11 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
       {/* Import progress */}
       {importing && (
         <div className="border-border bg-muted rounded-xl border p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
-            <span className="text-sm font-medium">Importando desde ARCA...</span>
-            {importStatus && (
-              <span className="text-muted-foreground text-xs">({importStatus})</span>
-            )}
-          </div>
-          {importLogs.length > 0 && (
-            <div className="bg-card max-h-32 overflow-y-auto rounded-lg p-2">
-              {importLogs.slice(-8).map((log, i) => (
-                <p key={i} className="text-muted-foreground text-xs leading-relaxed">
-                  {log}
-                </p>
-              ))}
-            </div>
-          )}
+          <StepProgress
+            steps={JOB_TYPE_STEPS.PULL_DOMESTIC_WORKERS}
+            currentStep={importStep}
+            status="RUNNING"
+          />
         </div>
       )}
 
