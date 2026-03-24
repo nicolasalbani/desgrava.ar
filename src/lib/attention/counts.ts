@@ -32,6 +32,7 @@ export async function getAttentionCounts(
       FROM "Invoice" i
       WHERE i."userId" = $1
         ${yearFilter}
+        AND i."deductionCategory" != 'NO_DEDUCIBLE'
         AND (
           -- No SUBMIT_INVOICE job exists
           NOT EXISTS (

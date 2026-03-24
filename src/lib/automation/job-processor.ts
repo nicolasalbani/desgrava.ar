@@ -906,7 +906,15 @@ async function processPullComprobantes(
     );
   }
 
-  const summary = `Importacion completada: ${imported} importadas, ${skipped} duplicadas, ${errors} errores de ${comprobantes.length} total`;
+  // Count deducible vs non-deducible among successfully prepared invoices
+  const deducible = invoicesToInsert.filter(
+    (inv) => inv.deductionCategory !== "NO_DEDUCIBLE",
+  ).length;
+  const nonDeducible = invoicesToInsert.filter(
+    (inv) => inv.deductionCategory === "NO_DEDUCIBLE",
+  ).length;
+
+  const summary = `Importacion completada: ${imported} importadas (${deducible} deducibles, ${nonDeducible} no deducibles), ${skipped} duplicadas, ${errors} errores de ${comprobantes.length} total`;
   await appendLogFn(jobId, summary, onLog);
 
   setJobStatus(jobId, "COMPLETED");
@@ -921,6 +929,8 @@ async function processPullComprobantes(
           imported,
           skipped,
           errors,
+          deducible,
+          nonDeducible,
         }),
       ),
     },

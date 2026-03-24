@@ -20,6 +20,8 @@ export const DEDUCTION_CATEGORIES = [
   "OTRAS_DEDUCCIONES",
 ] as const;
 
+export const ALL_DEDUCTION_CATEGORIES = [...DEDUCTION_CATEGORIES, "NO_DEDUCIBLE"] as const;
+
 export const INVOICE_TYPES = [
   "FACTURA_A",
   "FACTURA_B",
@@ -52,6 +54,7 @@ export const DEDUCTION_CATEGORY_LABELS: Record<string, string> = {
   INTERESES_CORREDORES: "Intereses de corredores y viajantes de comercio",
   GASTOS_EDUCATIVOS: "Gastos de Educación",
   OTRAS_DEDUCCIONES: "Otras deducciones",
+  NO_DEDUCIBLE: "No deducible",
 };
 
 export const INVOICE_TYPE_LABELS: Record<string, string> = {

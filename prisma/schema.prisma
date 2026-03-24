@@ -198,6 +198,7 @@ enum DeductionCategory {
   INTERESES_CORREDORES
   GASTOS_EDUCATIVOS
   OTRAS_DEDUCCIONES
+  NO_DEDUCIBLE
 }
 
 enum InvoiceType {

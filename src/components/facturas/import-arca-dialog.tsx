@@ -21,6 +21,8 @@ interface ImportResult {
   imported: number;
   skipped: number;
   errors: number;
+  deducible?: number;
+  nonDeducible?: number;
 }
 
 export function ImportArcaDialog({
@@ -346,6 +348,22 @@ function CompletedView({ result, onClose }: { result: ImportResult | null; onClo
               </p>
               <p className="text-muted-foreground text-xs">Importados</p>
             </div>
+            {result.deducible != null && (
+              <div>
+                <p className="text-2xl font-semibold text-emerald-700 tabular-nums dark:text-emerald-400">
+                  {result.deducible}
+                </p>
+                <p className="text-muted-foreground text-xs">Deducibles</p>
+              </div>
+            )}
+            {result.nonDeducible != null && (
+              <div>
+                <p className="text-foreground/50 text-2xl font-semibold tabular-nums">
+                  {result.nonDeducible}
+                </p>
+                <p className="text-muted-foreground text-xs">No deducibles</p>
+              </div>
+            )}
             <div>
               <p className="text-foreground/50 text-2xl font-semibold tabular-nums">
                 {result.skipped}

@@ -417,6 +417,15 @@ export function InvoiceList({
         failCount++;
         continue;
       }
+      if (inv && inv.deductionCategory === "NO_DEDUCIBLE") {
+        toast.error(
+          `"${inv.providerName || inv.providerCuit}" está marcada como no deducible. Cambiá la categoría si corresponde.`,
+          { duration: 6000 },
+        );
+        failedIds.add(invoiceId);
+        failCount++;
+        continue;
+      }
       if (inv && inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId) {
         toast.error(
           `"${inv.providerName || "Factura"}" es un gasto educativo sin familiar vinculado. Vinculá un familiar antes de enviar.`,
@@ -485,6 +494,12 @@ export function InvoiceList({
     if (inv.fiscalYear !== fiscalYear) {
       toast.error(
         `"${inv.providerName || inv.providerCuit}" es del año ${inv.fiscalYear}, pero el año fiscal activo es ${fiscalYear}.`,
+      );
+      return;
+    }
+    if (inv.deductionCategory === "NO_DEDUCIBLE") {
+      toast.error(
+        "Esta factura está marcada como no deducible. Cambiá la categoría si corresponde.",
       );
       return;
     }
@@ -1025,16 +1040,25 @@ export function InvoiceList({
                             </div>
                           </TableCell>
                           <TableCell className="max-w-[200px]">
-                            <span
-                              className="text-muted-foreground block truncate text-sm"
-                              title={
-                                DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
-                                inv.deductionCategory
-                              }
-                            >
-                              {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
-                                inv.deductionCategory}
-                            </span>
+                            {inv.deductionCategory === "NO_DEDUCIBLE" ? (
+                              <span
+                                className="inline-block truncate rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                                title="No deducible"
+                              >
+                                No deducible
+                              </span>
+                            ) : (
+                              <span
+                                className="text-muted-foreground block truncate text-sm"
+                                title={
+                                  DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                                  inv.deductionCategory
+                                }
+                              >
+                                {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                                  inv.deductionCategory}
+                              </span>
+                            )}
                             {inv.deductionCategory === "GASTOS_EDUCATIVOS" && (
                               <select
                                 className="text-muted-foreground mt-0.5 max-w-full truncate border-none bg-transparent p-0 text-xs outline-none"

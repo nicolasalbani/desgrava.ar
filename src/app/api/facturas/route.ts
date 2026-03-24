@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
 
   const where: Prisma.InvoiceWhereInput = {
     userId: session.user.id,
+    NOT: { deductionCategory: "NO_DEDUCIBLE" },
   };
 
   if (fiscalYear) where.fiscalYear = parseInt(fiscalYear);

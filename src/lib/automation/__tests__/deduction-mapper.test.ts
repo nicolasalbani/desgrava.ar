@@ -143,6 +143,17 @@ describe("isSchoolProvider", () => {
   });
 });
 
+describe("NO_DEDUCIBLE", () => {
+  it("has no SiRADIG category text mapping", () => {
+    expect(SIRADIG_CATEGORY_MAP).not.toHaveProperty("NO_DEDUCIBLE");
+  });
+
+  it("has no SiRADIG link ID mapping", () => {
+    expect(getSiradigCategoryLinkId("NO_DEDUCIBLE")).toBeUndefined();
+    expect(SIRADIG_CATEGORY_LINK_MAP).not.toHaveProperty("NO_DEDUCIBLE");
+  });
+});
+
 describe("data integrity", () => {
   it("all three maps have the same set of category keys", () => {
     const categoryKeys = Object.keys(SIRADIG_CATEGORY_MAP).sort();

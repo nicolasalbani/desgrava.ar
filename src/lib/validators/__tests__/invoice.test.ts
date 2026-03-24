@@ -3,6 +3,7 @@ import {
   createInvoiceSchema,
   updateInvoiceSchema,
   DEDUCTION_CATEGORIES,
+  ALL_DEDUCTION_CATEGORIES,
   INVOICE_TYPES,
 } from "@/lib/validators/invoice";
 
@@ -50,6 +51,14 @@ describe("createInvoiceSchema", () => {
     const result = createInvoiceSchema.safeParse({
       ...validInvoice,
       deductionCategory: "INVALID_CATEGORY",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject NO_DEDUCIBLE as a user-selectable category", () => {
+    const result = createInvoiceSchema.safeParse({
+      ...validInvoice,
+      deductionCategory: "NO_DEDUCIBLE",
     });
     expect(result.success).toBe(false);
   });
@@ -206,5 +215,22 @@ describe("updateInvoiceSchema", () => {
   it("should accept a full valid invoice as an update", () => {
     const result = updateInvoiceSchema.safeParse(validInvoice);
     expect(result.success).toBe(true);
+  });
+});
+
+describe("ALL_DEDUCTION_CATEGORIES", () => {
+  it("includes all user-selectable categories plus NO_DEDUCIBLE", () => {
+    for (const cat of DEDUCTION_CATEGORIES) {
+      expect(ALL_DEDUCTION_CATEGORIES).toContain(cat);
+    }
+    expect(ALL_DEDUCTION_CATEGORIES).toContain("NO_DEDUCIBLE");
+  });
+
+  it("has exactly one more entry than DEDUCTION_CATEGORIES", () => {
+    expect(ALL_DEDUCTION_CATEGORIES.length).toBe(DEDUCTION_CATEGORIES.length + 1);
+  });
+
+  it("DEDUCTION_CATEGORIES does not include NO_DEDUCIBLE", () => {
+    expect((DEDUCTION_CATEGORIES as readonly string[]).includes("NO_DEDUCIBLE")).toBe(false);
   });
 });
