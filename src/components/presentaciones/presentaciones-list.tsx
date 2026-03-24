@@ -114,7 +114,90 @@ export function PresentacionesList({ onInitialLoad }: { onInitialLoad?: (count: 
         </div>
       )}
 
-      <div className="border-border rounded-xl border">
+      {/* Mobile card layout */}
+      <div className="divide-border divide-y rounded-xl border md:hidden">
+        {presentaciones.map((p) => {
+          const isExpanded = expandedRowId === p.id;
+          const syntheticJob: LatestJob | null =
+            p.latestJob ??
+            (p.siradiqStatus === "SUBMITTED"
+              ? {
+                  id: "",
+                  status: "COMPLETED",
+                  createdAt: p.createdAt,
+                  errorMessage: null,
+                }
+              : null);
+
+          return (
+            <div key={p.id}>
+              <div className="space-y-2 p-4">
+                {/* Row 1: N° + Description */}
+                <div className="flex items-baseline gap-2">
+                  <span className="text-foreground shrink-0 text-sm font-medium">
+                    N° {p.numero}
+                  </span>
+                  <span className="text-muted-foreground truncate text-sm">{p.descripcion}</span>
+                </div>
+
+                {/* Row 2: Dates + Amount */}
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-muted-foreground">Envio: {formatDate(p.fechaEnvio)}</span>
+                  <span className="text-muted-foreground">
+                    Lectura: {p.fechaLectura ? formatDate(p.fechaLectura) : "—"}
+                  </span>
+                  <span className="ml-auto font-mono text-sm">
+                    {p.montoTotal ? formatAmount(p.montoTotal) : "—"}
+                  </span>
+                </div>
+
+                {/* Row 3: Status badge + PDF */}
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => setExpandedRowId(isExpanded ? null : p.id)}
+                    className="inline-flex items-center gap-1"
+                  >
+                    <JobStatusBadge job={syntheticJob} />
+                    {p.latestJob &&
+                      (isExpanded ? (
+                        <ChevronUp className="text-muted-foreground/40 h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="text-muted-foreground/40 h-3 w-3" />
+                      ))}
+                  </button>
+                  {p.hasFile ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-foreground h-8 w-8"
+                      onClick={() => window.open(`/api/presentaciones/${p.id}/pdf`, "_blank")}
+                      title="Descargar PDF"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground/30 text-sm">—</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Expanded job history */}
+              {isExpanded && (
+                <div className="bg-muted/20 border-border border-t px-4 py-3">
+                  <JobHistoryPanel
+                    entityId={p.id}
+                    entityType="presentacion"
+                    latestJobStatus={p.latestJob?.status}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop table layout */}
+      <div className="border-border hidden rounded-xl border md:block">
         <Table>
           <TableHeader>
             <TableRow>

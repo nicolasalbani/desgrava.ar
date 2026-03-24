@@ -657,7 +657,7 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={openAdd}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Agregar trabajador

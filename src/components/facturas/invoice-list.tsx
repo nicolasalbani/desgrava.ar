@@ -705,7 +705,124 @@ export function InvoiceList({
         </div>
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border">
+          {/* Mobile card layout */}
+          <div className="divide-border divide-y rounded-xl border md:hidden">
+            {invoices.length === 0 ? (
+              <p className="text-muted-foreground/50 p-4 text-center text-sm">Sin resultados</p>
+            ) : (
+              invoices.map((inv) => {
+                const isFuture = isFutureMonth(inv);
+                const isExpanded = expandedRowId === inv.id;
+                const isInFlight =
+                  inv.latestJob?.status === "PENDING" || inv.latestJob?.status === "RUNNING";
+                return (
+                  <div key={inv.id}>
+                    <div className="space-y-2 p-3">
+                      {/* Row 1: Checkbox + Provider + Amount */}
+                      <div className="flex items-start gap-2">
+                        <Checkbox
+                          checked={selectedIds.has(inv.id)}
+                          onCheckedChange={() => toggleSelect(inv.id)}
+                          disabled={isFuture || isInFlight}
+                          className="mt-0.5"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
+                            {inv.providerName || inv.providerCuit}
+                          </p>
+                          {inv.providerName && (
+                            <p className="text-muted-foreground text-xs">{inv.providerCuit}</p>
+                          )}
+                        </div>
+                        <p className="shrink-0 text-sm font-medium tabular-nums">
+                          ${parseFloat(inv.amount).toLocaleString("es-AR")}
+                        </p>
+                      </div>
+                      {/* Row 2: Category + Date */}
+                      <div className="flex items-center gap-2 pl-6">
+                        {inv.deductionCategory === "NO_DEDUCIBLE" ? (
+                          <span className="inline-block truncate rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                            No deducible
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground truncate text-xs">
+                            {DEDUCTION_CATEGORY_LABELS[inv.deductionCategory] ??
+                              inv.deductionCategory}
+                          </span>
+                        )}
+                        <span className="text-muted-foreground/50 text-xs">·</span>
+                        <span className="text-muted-foreground shrink-0 text-xs">
+                          {inv.invoiceDate
+                            ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
+                            : `${inv.fiscalMonth}/${inv.fiscalYear}`}
+                        </span>
+                      </div>
+                      {/* Row 3: Status + Actions */}
+                      <div className="flex items-center justify-between pl-6">
+                        <button
+                          onClick={() => setExpandedRowId(isExpanded ? null : inv.id)}
+                          className="inline-flex items-center gap-1"
+                        >
+                          <JobStatusBadge job={inv.latestJob} />
+                          {inv.latestJob &&
+                            (isExpanded ? (
+                              <ChevronUp className="text-muted-foreground/40 h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="text-muted-foreground/40 h-3 w-3" />
+                            ))}
+                        </button>
+                        <div className="flex gap-0.5">
+                          {!isFuture && !isInFlight && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => handleSendSingle(inv.id)}
+                              title="Enviar a SiRADIG"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setEditTarget(inv)}
+                            title="Editar"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setDeleteTarget(inv.id)}
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div className="bg-muted/20 border-border/50 border-t px-4 py-3">
+                        <JobHistoryPanel
+                          entityId={inv.id}
+                          entityType="invoice"
+                          latestJobStatus={inv.latestJob?.status}
+                          onCancel={handleCancelJob}
+                          cancelling={!!cancellingJobId}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop table layout */}
+          <div className="hidden overflow-hidden rounded-xl border md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1222,7 +1339,7 @@ export function InvoiceList({
       </AlertDialog>
 
       <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <DialogContent className="max-h-[90vh] max-w-2xl [grid-template-rows:auto_1fr] overflow-hidden">
+        <DialogContent className="max-h-[90vh] [grid-template-rows:auto_1fr] overflow-hidden sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Editar comprobante</DialogTitle>
           </DialogHeader>

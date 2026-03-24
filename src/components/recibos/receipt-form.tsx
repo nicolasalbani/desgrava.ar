@@ -142,7 +142,7 @@ export function ReceiptForm({ onSaved, onCancel }: { onSaved: () => void; onCanc
       </div>
 
       {/* Period */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Mes</Label>
           <Controller
@@ -179,7 +179,7 @@ export function ReceiptForm({ onSaved, onCancel }: { onSaved: () => void; onCanc
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
           <Label>
             Basico <span className="text-muted-foreground/50 text-xs font-normal">(opcional)</span>
@@ -198,7 +198,7 @@ export function ReceiptForm({ onSaved, onCancel }: { onSaved: () => void; onCanc
       <div className="border-border border-t" />
 
       {/* Contribution */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
           <Label>
             Contribucion (aportes){" "}

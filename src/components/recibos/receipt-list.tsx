@@ -488,7 +488,140 @@ export function ReceiptList({
         </div>
       )}
 
-      <div className="border-border rounded-xl border">
+      {/* Mobile card layout */}
+      <div className="divide-border divide-y rounded-xl border md:hidden">
+        {receipts.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-muted-foreground/70 text-sm font-medium">Sin resultados</p>
+            <p className="text-muted-foreground/50 mt-1 text-xs">
+              Proba con otros filtros o terminos de busqueda
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="text-primary hover:text-primary/80 mt-3 text-xs transition-colors"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        ) : (
+          receipts.map((r) => {
+            const isExpanded = expandedRowId === r.id;
+            const isInFlight =
+              r.latestJob?.status === "PENDING" || r.latestJob?.status === "RUNNING";
+            const canCancel = isInFlight;
+            return (
+              <div key={r.id}>
+                <div className="space-y-1.5 px-4 py-3">
+                  {/* Row 1: Checkbox + Worker + Total */}
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectedIds.has(r.id)}
+                      onCheckedChange={() => toggleSelect(r.id)}
+                      disabled={isInFlight}
+                      title={isInFlight ? "Hay un envio en curso" : undefined}
+                      aria-label={`Seleccionar recibo ${r.id}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      {r.domesticWorker ? (
+                        <p className="truncate text-sm font-medium">
+                          {r.domesticWorker.apellidoNombre}
+                        </p>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Sin asignar</span>
+                      )}
+                    </div>
+                    <span className="shrink-0 font-mono text-sm">{formatAmount(r.total)}</span>
+                  </div>
+                  {/* Row 2: Category + Period */}
+                  <div className="flex items-center gap-2 pl-6">
+                    <span className="text-muted-foreground truncate text-xs">
+                      {r.categoriaProfesional ?? "—"}
+                    </span>
+                    <span className="text-muted-foreground/40 text-xs">&middot;</span>
+                    <span className="text-muted-foreground shrink-0 text-xs">{r.periodo}</span>
+                  </div>
+                  {/* Row 3: Job status + Actions */}
+                  <div className="flex items-center justify-between pl-6">
+                    <button
+                      onClick={() => setExpandedRowId(isExpanded ? null : r.id)}
+                      className="inline-flex items-center gap-1"
+                    >
+                      <JobStatusBadge job={r.latestJob} />
+                      {r.latestJob &&
+                        (isExpanded ? (
+                          <ChevronUp className="text-muted-foreground/40 h-3 w-3" />
+                        ) : (
+                          <ChevronDown className="text-muted-foreground/40 h-3 w-3" />
+                        ))}
+                    </button>
+                    <div className="flex items-center gap-0.5">
+                      {!isInFlight && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-foreground h-7 w-7"
+                          onClick={() => handleSendSingle(r.id)}
+                          title="Enviar a SiRADIG"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {canCancel && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-foreground h-7 w-7"
+                          onClick={() => handleCancelJob(r.latestJob!.id)}
+                          disabled={cancellingJobId === r.latestJob!.id}
+                          title="Cancelar envio"
+                        >
+                          <Square className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {r.hasFile && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-foreground h-7 w-7"
+                          onClick={() => window.open(`/api/recibos/${r.id}/file`, "_blank")}
+                          title="Ver archivo"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive h-7 w-7"
+                        onClick={() => setDeleteId(r.id)}
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                {isExpanded && (
+                  <div className="bg-muted/20 border-border/50 border-t px-4 py-3">
+                    <JobHistoryPanel
+                      entityId={r.id}
+                      entityType="receipt"
+                      latestJobStatus={r.latestJob?.status}
+                      onCancel={handleCancelJob}
+                      cancelling={!!cancellingJobId}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Desktop table layout */}
+      <div className="border-border hidden rounded-xl border md:block">
         <Table>
           <TableHeader>
             <TableRow>

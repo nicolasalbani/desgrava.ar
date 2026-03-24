@@ -36,14 +36,14 @@ export function PaginationControls({
 
   return (
     <div className="flex items-center justify-between px-1 pt-3">
-      <div className="text-muted-foreground flex items-center gap-3 text-sm">
+      <div className="text-muted-foreground flex items-center gap-2 text-sm md:gap-3">
         <span className="tabular-nums">
           {start}–{end} de {totalCount}
         </span>
         <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground/60 text-xs">Mostrar</span>
+          <span className="text-muted-foreground/60 hidden text-xs md:inline">Mostrar</span>
           <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-            <SelectTrigger className="h-7 w-[68px] text-xs">
+            <SelectTrigger className="h-7 w-[60px] text-xs md:w-[68px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

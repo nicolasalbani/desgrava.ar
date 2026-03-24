@@ -43,7 +43,7 @@ export default function ConfiguracionPage() {
   }
 
   return (
-    <div className="max-w-xl space-y-10">
+    <div className="w-full max-w-xl space-y-10">
       <div
         className="animate-in fade-in slide-in-from-bottom-2 duration-500"
         style={{ animationFillMode: "backwards" }}
