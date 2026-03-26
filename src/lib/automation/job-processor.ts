@@ -14,8 +14,20 @@ import {
   navigateToCargasFamilia,
   extractCargasFamilia,
   pushCargasFamilia,
+  extractSiradigDeductions,
+  isAlquilerExtraction,
+  isDomesticoExtraction,
+  isStandardExtraction,
+  parseSiradigAmount,
 } from "./siradig-navigator";
-import type { SiradigFamilyDependent, DomesticWorkerDeduction } from "./siradig-navigator";
+import type {
+  SiradigFamilyDependent,
+  DomesticWorkerDeduction,
+  ExtractedEntry,
+  ExtractedDeduction,
+  ExtractedAlquilerDeduction,
+  ExtractedDomesticoDeduction,
+} from "./siradig-navigator";
 import { navigateToMisComprobantes } from "./mis-comprobantes-navigator";
 import { pullDomesticReceipts, pullDomesticWorkersOnly } from "./domestic-navigator";
 import {
@@ -960,6 +972,637 @@ async function processPullComprobantes(
   });
 }
 
+// ─── SiRADIG Deduction Extraction Phase ──────────────────────────────────
+
+/**
+ * Non-fatal phase that opens SiRADIG after ARCA import and extracts
+ * existing deductions, upserting them into desgrava.ar.
+ *
+ * @param mode "invoices" extracts standard + alquiler + education categories as Invoice records.
+ *             "domestic" extracts SERVICIO_DOMESTICO as DomesticReceipt records.
+ */
+async function runSiradigExtractionPhase(
+  arcaPage: Page,
+  job: { userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+  appendStepFn: typeof appendStep,
+  mode: "invoices" | "domestic",
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  await appendStepFn(jobId, "siradig", onLog);
+  await appendLogFn(jobId, "Abriendo SiRADIG para leer deducciones existentes...", onLog);
+
+  const siradigPage = await navigateToSiradig(
+    arcaPage,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!siradigPage) {
+    const error = "No se pudo abrir SiRADIG";
+    await appendLogFn(jobId, error, onLog);
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: error, completedAt: new Date() },
+    });
+    throw new Error(error);
+  }
+
+  try {
+    // Navigate to deductions section
+    const navResult = await navigateToDeductionSection(
+      siradigPage,
+      fiscalYear,
+      (msg) => appendLogFn(jobId, msg, onLog),
+      onScreenshot,
+    );
+
+    if (!navResult.success) {
+      const error = `No se pudo navegar a deducciones en SiRADIG: ${navResult.error}`;
+      await appendLogFn(jobId, error, onLog);
+      setJobStatus(jobId, "FAILED");
+      await prisma.automationJob.update({
+        where: { id: jobId },
+        data: { status: "FAILED", errorMessage: error, completedAt: new Date() },
+      });
+      throw new Error(error);
+    }
+
+    await appendStepFn(jobId, "siradig_extract", onLog);
+
+    // Determine which categories to extract based on mode
+    const categories =
+      mode === "invoices"
+        ? new Set([
+            "GASTOS_MEDICOS",
+            "PRIMAS_SEGURO_MUERTE",
+            "GASTOS_INDUMENTARIA_TRABAJO",
+            "ALQUILER_VIVIENDA",
+            "GASTOS_EDUCATIVOS",
+            "CUOTAS_MEDICO_ASISTENCIALES",
+          ])
+        : new Set(["SERVICIO_DOMESTICO"]);
+
+    const entries = await extractSiradigDeductions(
+      siradigPage,
+      categories,
+      (msg) => appendLogFn(jobId, msg, onLog),
+      onScreenshot,
+    );
+
+    if (entries.length === 0) {
+      await appendLogFn(jobId, "No se encontraron deducciones en SiRADIG", onLog);
+      return;
+    }
+
+    // Upsert extracted entries into the database
+    const counts = await upsertExtractedDeductions(entries, job.userId, fiscalYear, (msg) =>
+      appendLogFn(jobId, msg, onLog),
+    );
+
+    await appendLogFn(
+      jobId,
+      `SiRADIG: ${counts.created} nuevas, ${counts.updated} actualizadas de ${entries.length} entradas`,
+      onLog,
+    );
+
+    // Update job resultData with extraction counts
+    const currentJob = await prisma.automationJob.findUnique({
+      where: { id: jobId },
+      select: { resultData: true },
+    });
+    const currentData =
+      currentJob?.resultData && typeof currentJob.resultData === "object"
+        ? (currentJob.resultData as Record<string, unknown>)
+        : {};
+
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        resultData: JSON.parse(
+          JSON.stringify({
+            ...currentData,
+            siradigExtracted: entries.length,
+            siradigCreated: counts.created,
+            siradigUpdated: counts.updated,
+          }),
+        ),
+      },
+    });
+  } finally {
+    // Close the SiRADIG tab
+    await siradigPage.close().catch(() => {});
+  }
+}
+
+/**
+ * Upsert extracted SiRADIG deductions into the database.
+ * Returns counts of created and updated records.
+ */
+async function upsertExtractedDeductions(
+  entries: ExtractedEntry[],
+  userId: string,
+  fiscalYear: number,
+  log: (msg: string) => void,
+): Promise<{ created: number; updated: number }> {
+  let created = 0;
+  let updated = 0;
+
+  for (const entry of entries) {
+    try {
+      if (isAlquilerExtraction(entry)) {
+        const result = await upsertAlquilerDeduction(entry, userId, fiscalYear);
+        created += result.created;
+        updated += result.updated;
+      } else if (isDomesticoExtraction(entry)) {
+        const result = await upsertDomesticoDeduction(entry, userId, fiscalYear);
+        created += result.created;
+        updated += result.updated;
+      } else if (isStandardExtraction(entry)) {
+        const result = await upsertStandardDeduction(entry, userId, fiscalYear);
+        created += result.created;
+        updated += result.updated;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      log(`Error upserting ${entry.category}: ${msg}`);
+    }
+  }
+
+  return { created, updated };
+}
+
+/**
+ * Ensure an invoice has a COMPLETED SUBMIT_INVOICE job so the UI shows "Completado".
+ * If one already exists, skip. Otherwise create a synthetic one.
+ */
+async function ensureCompletedJob(invoiceId: string, userId: string): Promise<void> {
+  const existing = await prisma.automationJob.findFirst({
+    where: { invoiceId, jobType: "SUBMIT_INVOICE", status: "COMPLETED" },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  await prisma.automationJob.create({
+    data: {
+      userId,
+      invoiceId,
+      jobType: "SUBMIT_INVOICE",
+      status: "COMPLETED",
+      startedAt: new Date(),
+      completedAt: new Date(),
+      logs: JSON.parse(JSON.stringify(["Importado desde SiRADIG"])),
+    },
+  });
+}
+
+/**
+ * Ensure a domestic receipt has a COMPLETED SUBMIT_DOMESTIC_DEDUCTION job.
+ */
+async function ensureCompletedDomesticJob(receiptIds: string[], userId: string): Promise<void> {
+  if (receiptIds.length === 0) return;
+
+  // Check if there's already a completed job linked to any of these receipts
+  const existing = await prisma.automationJob.findFirst({
+    where: {
+      userId,
+      jobType: "SUBMIT_DOMESTIC_DEDUCTION",
+      status: "COMPLETED",
+      domesticReceipts: { some: { id: { in: receiptIds } } },
+    },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  await prisma.automationJob.create({
+    data: {
+      userId,
+      jobType: "SUBMIT_DOMESTIC_DEDUCTION",
+      status: "COMPLETED",
+      startedAt: new Date(),
+      completedAt: new Date(),
+      logs: JSON.parse(JSON.stringify(["Importado desde SiRADIG"])),
+      domesticReceipts: { connect: receiptIds.map((id) => ({ id })) },
+    },
+  });
+}
+
+/**
+ * Upsert a standard deduction entry. Each comprobante becomes an Invoice record.
+ */
+async function upsertStandardDeduction(
+  entry: ExtractedDeduction,
+  userId: string,
+  fiscalYear: number,
+): Promise<{ created: number; updated: number }> {
+  let created = 0;
+  let updated = 0;
+  const cuit = entry.providerCuit.replace(/[-\s]/g, "");
+
+  // If there are comprobantes, create one invoice per comprobante
+  if (entry.comprobantes.length > 0) {
+    for (const comp of entry.comprobantes) {
+      // Determine fiscal month from the comprobante date or the entry period
+      let fiscalMonth = entry.periodoDesde;
+      if (comp.fechaEmision) {
+        // Try to parse DD/MM/YYYY
+        const parts = comp.fechaEmision.split("/");
+        if (parts.length === 3) {
+          const monthNum = parseInt(parts[1], 10);
+          if (monthNum >= 1 && monthNum <= 12) fiscalMonth = monthNum;
+        }
+      }
+
+      const invoiceNumber =
+        comp.puntoVenta && comp.numero
+          ? `${comp.puntoVenta.padStart(5, "0")}-${comp.numero.padStart(8, "0")}`
+          : undefined;
+
+      // Parse invoice date from DD/MM/YYYY to ISO
+      let invoiceDate: Date | undefined;
+      if (comp.fechaEmision) {
+        const parts = comp.fechaEmision.split("/");
+        if (parts.length === 3) {
+          invoiceDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+        }
+      }
+
+      const amount = parseFloat(comp.montoFacturado) || 0;
+
+      // Match by invoice number first (most specific), fall back to CUIT+month+category
+      const existing = invoiceNumber
+        ? await prisma.invoice.findFirst({
+            where: { userId, providerCuit: cuit, invoiceNumber, fiscalYear },
+          })
+        : await prisma.invoice.findFirst({
+            where: {
+              userId,
+              providerCuit: cuit,
+              fiscalYear,
+              fiscalMonth,
+              deductionCategory:
+                entry.category as import("@/generated/prisma/client").DeductionCategory,
+            },
+          });
+
+      // For GASTOS_EDUCATIVOS, try to link family dependent
+      let familyDependentId: string | null = null;
+      if (entry.category === "GASTOS_EDUCATIVOS" && entry.familiarName) {
+        familyDependentId = await linkEducationFamilyDependent(entry, userId, fiscalYear);
+      }
+
+      let invoiceId: string;
+      if (existing) {
+        await prisma.invoice.update({
+          where: { id: existing.id },
+          data: {
+            amount: new Prisma.Decimal(amount),
+            invoiceNumber,
+            invoiceDate,
+            invoiceType: (comp.tipoEnum ??
+              existing.invoiceType) as import("@/generated/prisma/client").InvoiceType,
+            providerName: entry.providerName || existing.providerName,
+            familyDependentId: familyDependentId ?? existing.familyDependentId,
+            siradiqStatus: "SUBMITTED",
+            source: "ARCA",
+          },
+        });
+        invoiceId = existing.id;
+        updated++;
+      } else {
+        const inv = await prisma.invoice.create({
+          data: {
+            userId,
+            providerCuit: cuit,
+            providerName: entry.providerName,
+            invoiceType: (comp.tipoEnum ??
+              "FACTURA_B") as import("@/generated/prisma/client").InvoiceType,
+            invoiceNumber,
+            invoiceDate,
+            amount: new Prisma.Decimal(amount),
+            fiscalYear,
+            fiscalMonth,
+            deductionCategory:
+              entry.category as import("@/generated/prisma/client").DeductionCategory,
+            familyDependentId,
+            siradiqStatus: "SUBMITTED",
+            source: "ARCA",
+          },
+        });
+        invoiceId = inv.id;
+        created++;
+      }
+      await ensureCompletedJob(invoiceId, userId);
+    }
+  } else {
+    // No comprobantes — create a single invoice from the entry's total
+    const amount = parseFloat(parseSiradigAmount(entry.montoTotal)) || 0;
+
+    const existing = await prisma.invoice.findFirst({
+      where: {
+        userId,
+        providerCuit: cuit,
+        fiscalYear,
+        fiscalMonth: entry.periodoDesde,
+        deductionCategory: entry.category as import("@/generated/prisma/client").DeductionCategory,
+      },
+    });
+
+    let invoiceId: string;
+    if (existing) {
+      await prisma.invoice.update({
+        where: { id: existing.id },
+        data: {
+          amount: new Prisma.Decimal(amount),
+          providerName: entry.providerName || existing.providerName,
+          siradiqStatus: "SUBMITTED",
+          source: "ARCA",
+        },
+      });
+      invoiceId = existing.id;
+      updated++;
+    } else {
+      const inv = await prisma.invoice.create({
+        data: {
+          userId,
+          providerCuit: cuit,
+          providerName: entry.providerName,
+          invoiceType: "FACTURA_B",
+          amount: new Prisma.Decimal(amount),
+          fiscalYear,
+          fiscalMonth: entry.periodoDesde,
+          deductionCategory:
+            entry.category as import("@/generated/prisma/client").DeductionCategory,
+          siradiqStatus: "SUBMITTED",
+          source: "ARCA",
+        },
+      });
+      invoiceId = inv.id;
+      created++;
+    }
+    await ensureCompletedJob(invoiceId, userId);
+  }
+
+  return { created, updated };
+}
+
+/**
+ * Upsert GASTOS_EDUCATIVOS with family dependent linking.
+ * Falls through to upsertStandardDeduction but also tries to match familiarName
+ * to an existing FamilyDependent.
+ */
+async function linkEducationFamilyDependent(
+  entry: ExtractedDeduction,
+  userId: string,
+  fiscalYear: number,
+): Promise<string | null> {
+  if (!entry.familiarName) return null;
+
+  // Try to find a matching family dependent by name
+  const dependents = await prisma.familyDependent.findMany({
+    where: { userId, fiscalYear },
+    select: { id: true, nombre: true, apellido: true },
+  });
+
+  // Normalize: strip commas, extra spaces, and lowercase for comparison.
+  // SiRADIG uses "APELLIDO, NOMBRE" while DB stores "APELLIDO" + "NOMBRE" separately.
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[,.\-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const familiarNorm = normalize(entry.familiarName);
+  const match = dependents.find((d) => {
+    const fullName = normalize(`${d.apellido} ${d.nombre}`);
+    return familiarNorm.includes(fullName) || fullName.includes(familiarNorm);
+  });
+
+  return match?.id ?? null;
+}
+
+/**
+ * Upsert an ALQUILER_VIVIENDA deduction. Each month becomes a separate Invoice.
+ */
+async function upsertAlquilerDeduction(
+  entry: ExtractedAlquilerDeduction,
+  userId: string,
+  fiscalYear: number,
+): Promise<{ created: number; updated: number }> {
+  let created = 0;
+  let updated = 0;
+  const cuit = entry.providerCuit.replace(/[-\s]/g, "");
+
+  // Parse contract dates from DD/MM/YYYY to ISO
+  const parseDate = (ddmmyyyy: string | undefined): Date | undefined => {
+    if (!ddmmyyyy) return undefined;
+    const parts = ddmmyyyy.split("/");
+    if (parts.length !== 3) return undefined;
+    return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+  };
+
+  const contractStart = parseDate(entry.contractStartDate);
+  const contractEnd = parseDate(entry.contractEndDate);
+
+  // Build a lookup of comprobantes by month (from their fechaEmision DD/MM/YYYY)
+  const compsByMonth = new Map<number, (typeof entry.comprobantes)[number][]>();
+  for (const comp of entry.comprobantes) {
+    if (comp.fechaEmision) {
+      const parts = comp.fechaEmision.split("/");
+      if (parts.length === 3) {
+        const monthNum = parseInt(parts[1], 10);
+        if (monthNum >= 1 && monthNum <= 12) {
+          const arr = compsByMonth.get(monthNum) ?? [];
+          arr.push(comp);
+          compsByMonth.set(monthNum, arr);
+        }
+      }
+    }
+  }
+
+  for (const m of entry.months) {
+    const amount = parseFloat(m.amount) || 0;
+    const monthComps = compsByMonth.get(m.month) ?? [];
+    const comp = monthComps[0]; // Use first comprobante for this month
+
+    // Build invoice number and date from comprobante if available
+    const invoiceNumber =
+      comp?.puntoVenta && comp?.numero
+        ? `${comp.puntoVenta.padStart(5, "0")}-${comp.numero.padStart(8, "0")}`
+        : undefined;
+
+    let invoiceDate: Date | undefined;
+    if (comp?.fechaEmision) {
+      const parts = comp.fechaEmision.split("/");
+      if (parts.length === 3) {
+        invoiceDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+      }
+    }
+
+    const invoiceType = (comp?.tipoEnum ??
+      "FACTURA_B") as import("@/generated/prisma/client").InvoiceType;
+
+    // Match by invoice number first (most specific), fall back to CUIT+month+category
+    const existing = invoiceNumber
+      ? await prisma.invoice.findFirst({
+          where: { userId, providerCuit: cuit, invoiceNumber, fiscalYear },
+        })
+      : await prisma.invoice.findFirst({
+          where: {
+            userId,
+            providerCuit: cuit,
+            fiscalYear,
+            fiscalMonth: m.month,
+            deductionCategory: "ALQUILER_VIVIENDA",
+          },
+        });
+
+    let invoiceId: string;
+    if (existing) {
+      await prisma.invoice.update({
+        where: { id: existing.id },
+        data: {
+          amount: new Prisma.Decimal(amount),
+          invoiceNumber: invoiceNumber ?? existing.invoiceNumber,
+          invoiceDate: invoiceDate ?? existing.invoiceDate,
+          invoiceType: invoiceType ?? existing.invoiceType,
+          providerName: entry.providerName || existing.providerName,
+          contractStartDate: contractStart ?? existing.contractStartDate,
+          contractEndDate: contractEnd ?? existing.contractEndDate,
+          siradiqStatus: "SUBMITTED",
+          source: "ARCA",
+        },
+      });
+      invoiceId = existing.id;
+      updated++;
+    } else {
+      const inv = await prisma.invoice.create({
+        data: {
+          userId,
+          providerCuit: cuit,
+          providerName: entry.providerName,
+          invoiceType,
+          invoiceNumber,
+          invoiceDate,
+          amount: new Prisma.Decimal(amount),
+          fiscalYear,
+          fiscalMonth: m.month,
+          deductionCategory: "ALQUILER_VIVIENDA",
+          contractStartDate: contractStart,
+          contractEndDate: contractEnd,
+          siradiqStatus: "SUBMITTED",
+          source: "ARCA",
+        },
+      });
+      invoiceId = inv.id;
+      created++;
+    }
+    await ensureCompletedJob(invoiceId, userId);
+  }
+
+  return { created, updated };
+}
+
+/**
+ * Upsert SERVICIO_DOMESTICO deductions as DomesticReceipt records.
+ */
+async function upsertDomesticoDeduction(
+  entry: ExtractedDomesticoDeduction,
+  userId: string,
+  fiscalYear: number,
+): Promise<{ created: number; updated: number }> {
+  let created = 0;
+  let updated = 0;
+  const receiptIds: string[] = [];
+
+  // Find the matching DomesticWorker by CUIL
+  const worker = await prisma.domesticWorker.findFirst({
+    where: { userId, fiscalYear, cuil: entry.workerCuil },
+    select: { id: true },
+  });
+
+  if (!worker) {
+    // Worker not in DB — can't create receipts without a worker reference
+    return { created: 0, updated: 0 };
+  }
+
+  for (const detail of entry.monthlyDetails) {
+    const contribAmount = parseFloat(detail.contributionAmount) || 0;
+    const salaryAmount = parseFloat(detail.salaryAmount) || 0;
+
+    // Build month name for periodo field
+    const monthNames = [
+      "",
+      "Enero",
+      "Febrero",
+      "Marzo",
+      "Abril",
+      "Mayo",
+      "Junio",
+      "Julio",
+      "Agosto",
+      "Septiembre",
+      "Octubre",
+      "Noviembre",
+      "Diciembre",
+    ];
+    const periodo = `${monthNames[detail.month]} ${fiscalYear}`;
+
+    const existing = await prisma.domesticReceipt.findFirst({
+      where: {
+        userId,
+        domesticWorkerId: worker.id,
+        fiscalYear,
+        fiscalMonth: detail.month,
+      },
+    });
+
+    let receiptId: string;
+    if (existing) {
+      await prisma.domesticReceipt.update({
+        where: { id: existing.id },
+        data: {
+          total: new Prisma.Decimal(salaryAmount || existing.total.toNumber()),
+          contributionAmount: new Prisma.Decimal(contribAmount),
+          contributionDate: detail.contributionDate || existing.contributionDate,
+          siradiqStatus: "SUBMITTED",
+          source: "ARCA",
+        },
+      });
+      receiptId = existing.id;
+      updated++;
+    } else {
+      const receipt = await prisma.domesticReceipt.create({
+        data: {
+          userId,
+          domesticWorkerId: worker.id,
+          fiscalYear,
+          fiscalMonth: detail.month,
+          periodo,
+          total: new Prisma.Decimal(salaryAmount || 0),
+          contributionAmount: new Prisma.Decimal(contribAmount),
+          contributionDate: detail.contributionDate || null,
+          siradiqStatus: "SUBMITTED",
+          source: "ARCA",
+        },
+      });
+      receiptId = receipt.id;
+      created++;
+    }
+    receiptIds.push(receiptId);
+  }
+
+  // Create a single COMPLETED job linking all receipts for this worker
+  await ensureCompletedDomesticJob(receiptIds, userId);
+
+  return { created, updated };
+}
+
 /**
  * Submit domestic worker deductions to SiRADIG.
  *
@@ -1490,8 +2133,21 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           return;
         }
 
-        // ── PULL_COMPROBANTES flow (stays on ARCA portal, no SiRADIG) ──
+        // ── PULL_COMPROBANTES flow (SiRADIG extraction first, then ARCA import) ──
         if (job.jobType === "PULL_COMPROBANTES") {
+          // Phase 1: Extract already-deducted entries from SiRADIG (fails job on error)
+          await runSiradigExtractionPhase(
+            page,
+            job,
+            jobId,
+            onLog,
+            onScreenshot,
+            appendLog,
+            appendStep,
+            "invoices",
+          );
+
+          // Phase 2: Import from Mis Comprobantes CSV
           await appendStep(jobId, "download", onLog);
           await processPullComprobantes(
             page,
@@ -1512,8 +2168,21 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           return;
         }
 
-        // ── PULL_DOMESTIC_RECEIPTS flow (workers + receipts) ──
+        // ── PULL_DOMESTIC_RECEIPTS flow (SiRADIG extraction first, then ARCA import) ──
         if (job.jobType === "PULL_DOMESTIC_RECEIPTS") {
+          // Phase 1: Extract already-deducted domestic entries from SiRADIG (fails job on error)
+          await runSiradigExtractionPhase(
+            page,
+            job,
+            jobId,
+            onLog,
+            onScreenshot,
+            appendLog,
+            appendStep,
+            "domestic",
+          );
+
+          // Phase 2: Import receipts from ARCA
           await appendStep(jobId, "download", onLog);
           await processPullDomesticReceipts(page, job, jobId, onLog, onScreenshot, appendLog);
           return;

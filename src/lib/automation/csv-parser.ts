@@ -21,7 +21,8 @@ export interface ParsedComprobante {
   cuitEmisor: string; // raw digits: "30612865333"
   denominacionEmisor: string;
   importeTotal: number;
-  moneda: string;
+  moneda: string; // "PES", "DOL", "USD", etc.
+  tipoCambio: number; // exchange rate (1 for ARS, >1 for foreign currencies)
 }
 
 export interface MappedInvoice {
@@ -116,6 +117,9 @@ export function parseComprobantesCSV(csvContent: string): ParsedComprobante[] {
     const importe = parseArgentineNumber(importeStr);
     if (isNaN(importe) || importe === 0) continue;
 
+    const tipoCambioStr = getField(fields, colIndex.tipoCambio);
+    const tipoCambio = tipoCambioStr ? parseArgentineNumber(tipoCambioStr) : 1;
+
     results.push({
       fecha: getField(fields, colIndex.fecha),
       tipo: getField(fields, colIndex.tipo),
@@ -125,6 +129,7 @@ export function parseComprobantesCSV(csvContent: string): ParsedComprobante[] {
       denominacionEmisor: getField(fields, colIndex.denominacionEmisor),
       importeTotal: importe,
       moneda: getField(fields, colIndex.moneda) || "PES",
+      tipoCambio: isNaN(tipoCambio) || tipoCambio <= 0 ? 1 : tipoCambio,
     });
   }
 
@@ -153,13 +158,16 @@ export function mapComprobantesToInvoices(
       const numero = c.numeroDesde.padStart(8, "0");
       const invoiceNumber = `${puntoVenta}-${numero}`;
 
+      // Convert foreign currency to ARS using the exchange rate
+      const amountARS = c.tipoCambio > 1 ? c.importeTotal * c.tipoCambio : c.importeTotal;
+
       return {
         providerCuit: cuit,
         providerName: c.denominacionEmisor.trim(),
         invoiceType,
         invoiceNumber,
         invoiceDate: date,
-        amount: Math.abs(c.importeTotal),
+        amount: Math.abs(amountARS),
         fiscalYear,
         fiscalMonth: date.getMonth() + 1,
       };
@@ -254,6 +262,7 @@ interface ColumnIndices {
   denominacionEmisor: number;
   importeTotal: number;
   moneda: number;
+  tipoCambio: number;
 }
 
 function resolveColumnIndices(headers: string[]): ColumnIndices {
@@ -276,6 +285,7 @@ function resolveColumnIndices(headers: string[]): ColumnIndices {
     ]),
     importeTotal: findColumn(headers, ["imp total", "importe total", "total"]),
     moneda: findColumn(headers, ["moneda"]),
+    tipoCambio: findColumn(headers, ["tipo cambio", "tipo de cambio", "tc"]),
   };
 }
 

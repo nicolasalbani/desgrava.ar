@@ -61,8 +61,8 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   GASTOS_EDUCATIVOS:
     "Gastos de educación: importes abonados por servicios educativos con reconocimiento oficial para hijos, hijastros o personas a cargo menores de 24 años. Incluye herramientas con fines educativos, útiles escolares, guardapolvos y uniformes. Límite: hasta el 40% de la ganancia no imponible anual.",
 
-  OTRAS_DEDUCCIONES:
-    "Otras deducciones: conceptos deducibles no comprendidos en las categorías anteriores. Incluye, entre otros: aportes jubilatorios voluntarios para la ANSES, aportes a cajas de jubilación provinciales, impuesto sobre débitos y créditos bancarios (impuesto al cheque), y otros conceptos admitidos por la normativa vigente.",
+  // OTRAS_DEDUCCIONES intentionally excluded from AI classification — unreliable as auto-category.
+  // Users can assign it manually. If the AI can't determine a category, it should return NO_DEDUCIBLE.
 
   NO_DEDUCIBLE:
     "No deducible: el comprobante NO corresponde a ninguna categoría de deducción del Impuesto a las Ganancias. Incluye compras de supermercado, combustible, restaurantes, indumentaria personal, electrónica de uso personal, servicios públicos (luz, gas, agua), suscripciones de entretenimiento (Netflix, Spotify), transporte, y cualquier otro gasto de consumo personal que no sea deducible según la normativa vigente. Usá esta categoría cuando el proveedor o servicio claramente no encaja en ninguna deducción permitida.",
@@ -81,7 +81,7 @@ INSTRUCCIONES:
 - Basate en el tipo de servicio o bien que describe la factura, el rubro del proveedor, y cualquier otro dato relevante.
 - Respondé ÚNICAMENTE con el identificador exacto de la categoría (por ejemplo: CUOTAS_MEDICO_ASISTENCIALES).
 - Si el comprobante claramente no corresponde a ninguna deducción fiscal (supermercado, combustible, restaurante, consumo personal, etc.), respondé NO_DEDUCIBLE.
-- Si el comprobante podría ser deducible pero no podés determinar la categoría exacta con certeza, respondé OTRAS_DEDUCCIONES.
+- Si el comprobante podría ser deducible pero no podés determinar la categoría exacta con certeza, respondé NO_DEDUCIBLE. El usuario podrá reclasificarlo manualmente.
 - No incluyas explicaciones, solo el identificador.`;
 
 /**
@@ -121,6 +121,9 @@ export async function classifyCategory(invoiceText: string): Promise<string> {
     const result = response.choices[0]?.message?.content?.trim() ?? "";
 
     if ((ALL_DEDUCTION_CATEGORIES as readonly string[]).includes(result)) {
+      // OTRAS_DEDUCCIONES is unreliable from automatic classification —
+      // treat as NO_DEDUCIBLE so the user can reclassify manually.
+      if (result === "OTRAS_DEDUCCIONES") return "NO_DEDUCIBLE";
       return result;
     }
 

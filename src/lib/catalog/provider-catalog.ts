@@ -18,9 +18,60 @@ export interface CatalogEntry {
 }
 
 /**
+ * Keywords in provider names that indicate a non-deductible business.
+ * Checked before calling the AI to avoid misclassification of obvious cases.
+ */
+const NON_DEDUCTIBLE_KEYWORDS = [
+  "supermercado",
+  "autoservicio",
+  "mayorista",
+  "diarco",
+  "carrefour",
+  "coto",
+  "jumbo",
+  "disco",
+  "vea ",
+  "changomas",
+  "dia %",
+  "walmart",
+  "hipermercado",
+  "almacen",
+  "almacén",
+  "kiosco",
+  "maxiconsumo",
+  "estacion de servicio",
+  "estación de servicio",
+  "combustible",
+  "shell ",
+  "axion",
+  "ypf ",
+  "nafta",
+  "gasoil",
+  "restaurant",
+  "restaurante",
+  "rotiseria",
+  "rotisería",
+  "panaderia",
+  "panadería",
+  "pizzeria",
+  "pizzería",
+  "delivery",
+  "rappi",
+  "pedidosya",
+  "mercadolibre",
+  "mercado libre",
+];
+
+export function isObviouslyNonDeductible(providerName: string): boolean {
+  const lower = providerName.toLowerCase();
+  return NON_DEDUCTIBLE_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+/**
  * Resolve the deduction category for a CUIT.
  *
  * Priority:
+ *  0. Keyword check → if provider name is obviously non-deductible, skip AI
  *  1. Catalog hit → return immediately
  *  2. PDF text available → classify from PDF → write catalog (AI_PDF)
  *  3. Fetch business info from sistemas360.ar → classify → write catalog (AI_WEB_LOOKUP)
@@ -28,6 +79,12 @@ export interface CatalogEntry {
  */
 export async function resolveCategory(input: ResolveCategoryInput): Promise<string> {
   const { cuit } = input;
+
+  // 0. Keyword-based pre-check for obvious non-deductible providers
+  if (input.providerName && isObviouslyNonDeductible(input.providerName)) {
+    await writeCatalogEntry(cuit, input.providerName, "NO_DEDUCIBLE", "AI_INVOICE");
+    return "NO_DEDUCIBLE";
+  }
 
   // 1. Check catalog
   const existing = await getCatalogEntry(cuit);

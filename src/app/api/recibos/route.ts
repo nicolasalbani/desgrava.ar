@@ -72,54 +72,101 @@ export async function GET(req: NextRequest) {
 
   const baseWhere: Prisma.DomesticReceiptWhereInput = { ...where };
 
-  const [receipts, totalCount, distinctJobStatuses, receiptsWithoutJobs] = await Promise.all([
-    prisma.domesticReceipt.findMany({
-      where,
-      select: {
-        id: true,
-        domesticWorkerId: true,
-        fiscalYear: true,
-        fiscalMonth: true,
-        periodo: true,
-        categoriaProfesional: true,
-        total: true,
-        contributionAmount: true,
-        source: true,
-        siradiqStatus: true,
-        originalFilename: true,
-        fileMimeType: true,
-        createdAt: true,
-        domesticWorker: {
-          select: { id: true, apellidoNombre: true, cuil: true },
-        },
-        automationJobs: {
-          where: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { id: true, status: true, createdAt: true, errorMessage: true },
-        },
-      },
-      orderBy: [{ fiscalYear: "desc" }, { fiscalMonth: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.domesticReceipt.count({ where }),
-    prisma.automationJob.groupBy({
-      by: ["status"],
-      where: {
-        jobType: "SUBMIT_DOMESTIC_DEDUCTION",
-        domesticReceipts: { some: { ...baseWhere } },
-      },
-    }),
-    prisma.domesticReceipt.count({
-      where: {
-        ...baseWhere,
-        automationJobs: { none: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" } },
-      },
-    }),
-  ]);
+  // Apply status filter at DB level (pre-pagination) via automationJobs relation
+  if (statuses) {
+    const statusList = statuses.split(",").filter(Boolean);
+    if (statusList.length > 0) {
+      const NO_JOB = "__NO_JOB__";
+      const hasNoJob = statusList.includes(NO_JOB);
+      const jobStatuses = statusList.filter((s) => s !== NO_JOB);
 
-  let result = receipts.map((r) => {
+      const statusConditions: Prisma.DomesticReceiptWhereInput[] = [];
+      if (jobStatuses.length > 0) {
+        statusConditions.push({
+          automationJobs: {
+            some: {
+              jobType: "SUBMIT_DOMESTIC_DEDUCTION",
+              status: { in: jobStatuses as Prisma.EnumJobStatusFilter["in"] },
+            },
+          },
+        });
+      }
+      if (hasNoJob) {
+        statusConditions.push({
+          automationJobs: { none: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" } },
+        });
+      }
+      if (statusConditions.length === 1) {
+        Object.assign(where, statusConditions[0]);
+      } else if (statusConditions.length > 1) {
+        where.OR = [...(where.OR ?? []), ...statusConditions];
+      }
+    }
+  }
+
+  // Apply attention filter at DB level (pre-pagination)
+  if (attentionFilter === "true") {
+    where.OR = [
+      { automationJobs: { none: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" } } },
+      { automationJobs: { some: { jobType: "SUBMIT_DOMESTIC_DEDUCTION", status: "FAILED" } } },
+      { domesticWorkerId: null },
+    ];
+  }
+
+  const [receipts, totalCount, distinctJobStatuses, receiptsWithoutJobs, distinctCategories] =
+    await Promise.all([
+      prisma.domesticReceipt.findMany({
+        where,
+        select: {
+          id: true,
+          domesticWorkerId: true,
+          fiscalYear: true,
+          fiscalMonth: true,
+          periodo: true,
+          categoriaProfesional: true,
+          total: true,
+          contributionAmount: true,
+          source: true,
+          siradiqStatus: true,
+          originalFilename: true,
+          fileMimeType: true,
+          createdAt: true,
+          domesticWorker: {
+            select: { id: true, apellidoNombre: true, cuil: true },
+          },
+          automationJobs: {
+            where: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { id: true, status: true, createdAt: true, errorMessage: true },
+          },
+        },
+        orderBy: [{ fiscalYear: "desc" }, { fiscalMonth: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.domesticReceipt.count({ where }),
+      prisma.automationJob.groupBy({
+        by: ["status"],
+        where: {
+          jobType: "SUBMIT_DOMESTIC_DEDUCTION",
+          domesticReceipts: { some: { ...baseWhere } },
+        },
+      }),
+      prisma.domesticReceipt.count({
+        where: {
+          ...baseWhere,
+          automationJobs: { none: { jobType: "SUBMIT_DOMESTIC_DEDUCTION" } },
+        },
+      }),
+      // Distinct categories across all matching receipts (for filter options)
+      prisma.domesticReceipt.groupBy({
+        by: ["categoriaProfesional"],
+        where: { ...baseWhere, categoriaProfesional: { not: null } },
+      }),
+    ]);
+
+  const result = receipts.map((r) => {
     const { automationJobs, ...rest } = r;
     return {
       ...rest,
@@ -128,27 +175,12 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  // Attention filter: no job, failed job, or missing worker link
-  if (attentionFilter === "true") {
-    result = result.filter((r) => {
-      return !r.latestJob || r.latestJob.status === "FAILED" || !r.domesticWorkerId;
-    });
-  }
-
-  // Post-query job status filter
-  if (statuses) {
-    const statusList = statuses.split(",").filter(Boolean);
-    if (statusList.length > 0) {
-      const NO_JOB = "__NO_JOB__";
-      result = result.filter((r) => {
-        const jobStatus = r.latestJob?.status ?? NO_JOB;
-        return statusList.includes(jobStatus);
-      });
-    }
-  }
-
   const availableStatuses: string[] = distinctJobStatuses.map((s) => s.status);
   if (receiptsWithoutJobs > 0) availableStatuses.push("__NO_JOB__");
+
+  const availableCategories: string[] = distinctCategories
+    .map((c) => c.categoriaProfesional)
+    .filter((c): c is string => c !== null);
 
   return NextResponse.json({
     receipts: result,
@@ -159,6 +191,7 @@ export async function GET(req: NextRequest) {
       totalPages: Math.ceil(totalCount / pageSize),
     },
     availableStatuses,
+    availableCategories,
   });
 }
 

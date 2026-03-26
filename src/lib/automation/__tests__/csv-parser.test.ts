@@ -316,3 +316,41 @@ describe("parseArgentineDate", () => {
     expect(parseArgentineDate("2025-03-00")).toBeNull();
   });
 });
+
+// ── Foreign currency (tipo de cambio) ─────────────────────────
+
+describe("foreign currency conversion", () => {
+  // CSV with a USD invoice: 7500 USD at exchange rate 1356,5 = 10,173,750 ARS
+  const CSV_WITH_USD = `"Fecha de Emisión";"Tipo de Comprobante";"Punto de Venta";"Número Desde";"Número Hasta";"Cód. Autorización";"Tipo Doc. Emisor";"Nro. Doc. Emisor";"Denominación Emisor";"Tipo Doc. Receptor";"Nro. Doc. Receptor";"Tipo Cambio";"Moneda";"Imp. Neto Gravado IVA 0%";"IVA 2,5%";"Imp. Neto Gravado IVA 2,5%";"IVA 5%";"Imp. Neto Gravado IVA 5%";"IVA 10,5%";"Imp. Neto Gravado IVA 10,5%";"IVA 21%";"Imp. Neto Gravado IVA 21%";"IVA 27%";"Imp. Neto Gravado IVA 27%";"Imp. Neto Gravado Total";"Imp. Neto No Gravado";"Imp. Op. Exentas";"Otros Tributos";"Total IVA";"Imp. Total"
+2025-08-27;6;5;686;686;12345678901234;80;30717540871;BAREDES S A;80;20314468849;1356,5000;DOL;0,00;0,00;0,00;0,00;0,00;0,00;0,00;0,00;0,00;0,00;0,00;0,00;0,00;0,00;0,00;0,00;7500,00`;
+
+  it("parses tipoCambio from CSV", () => {
+    const parsed = parseComprobantesCSV(CSV_WITH_USD);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].moneda).toBe("DOL");
+    expect(parsed[0].tipoCambio).toBeCloseTo(1356.5, 1);
+    expect(parsed[0].importeTotal).toBeCloseTo(7500, 2);
+  });
+
+  it("converts USD amount to ARS using exchange rate", () => {
+    const parsed = parseComprobantesCSV(CSV_WITH_USD);
+    const invoices = mapComprobantesToInvoices(parsed, 2025);
+    expect(invoices).toHaveLength(1);
+    // 7500 * 1356.5 = 10,173,750
+    expect(invoices[0].amount).toBeCloseTo(10173750, 0);
+  });
+
+  it("does not convert ARS invoices (tipoCambio = 1)", () => {
+    const parsed = parseComprobantesCSV(SAMPLE_CSV_ARCA);
+    const invoices = mapComprobantesToInvoices(parsed, 2025);
+    // First invoice: 306800 ARS with tipoCambio 1
+    expect(invoices[0].amount).toBeCloseTo(306800, 2);
+  });
+
+  it("defaults tipoCambio to 1 when column is missing", () => {
+    const parsed = parseComprobantesCSV(SAMPLE_CSV_LEGACY);
+    expect(parsed[0].tipoCambio).toBe(1);
+    const invoices = mapComprobantesToInvoices(parsed, 2025);
+    expect(invoices[0].amount).toBeCloseTo(1210, 2);
+  });
+});

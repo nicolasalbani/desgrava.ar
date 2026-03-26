@@ -74,62 +74,109 @@ export async function GET(req: NextRequest) {
     if (amountMax) where.amount.lte = new Prisma.Decimal(amountMax);
   }
 
-  // Build a "base" where without statuses/attentionFilter so we can derive available statuses
+  // Build a "base" where without statuses/attentionFilter so we can derive available filter options
   const baseWhere: Prisma.InvoiceWhereInput = { ...where };
 
-  const [invoices, totalCount, distinctJobStatuses, invoicesWithoutJobs] = await Promise.all([
-    prisma.invoice.findMany({
-      where,
-      select: {
-        id: true,
-        deductionCategory: true,
-        providerCuit: true,
-        providerName: true,
-        invoiceType: true,
-        invoiceNumber: true,
-        invoiceDate: true,
-        amount: true,
-        fiscalYear: true,
-        fiscalMonth: true,
-        source: true,
-        siradiqStatus: true,
-        originalFilename: true,
-        fileMimeType: true,
-        contractStartDate: true,
-        contractEndDate: true,
-        familyDependentId: true,
-        familyDependent: { select: { id: true, nombre: true, apellido: true } },
-        createdAt: true,
-        automationJobs: {
-          where: { jobType: "SUBMIT_INVOICE" },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { id: true, status: true, createdAt: true, errorMessage: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.invoice.count({ where }),
-    // Distinct job statuses across all matching invoices (for filter options)
-    prisma.automationJob.groupBy({
-      by: ["status"],
-      where: {
-        jobType: "SUBMIT_INVOICE",
-        invoice: { ...baseWhere },
-      },
-    }),
-    // Check if any matching invoices have no jobs at all
-    prisma.invoice.count({
-      where: {
-        ...baseWhere,
-        automationJobs: { none: { jobType: "SUBMIT_INVOICE" } },
-      },
-    }),
-  ]);
+  // Apply status filter at DB level (pre-pagination) via automationJobs relation
+  if (statuses) {
+    const statusList = statuses.split(",").filter(Boolean);
+    if (statusList.length > 0) {
+      const NO_JOB = "__NO_JOB__";
+      const hasNoJob = statusList.includes(NO_JOB);
+      const jobStatuses = statusList.filter((s) => s !== NO_JOB);
 
-  let result = invoices.map((inv) => {
+      const statusConditions: Prisma.InvoiceWhereInput[] = [];
+      if (jobStatuses.length > 0) {
+        statusConditions.push({
+          automationJobs: {
+            some: {
+              jobType: "SUBMIT_INVOICE",
+              status: { in: jobStatuses as Prisma.EnumJobStatusFilter["in"] },
+            },
+          },
+        });
+      }
+      if (hasNoJob) {
+        statusConditions.push({
+          automationJobs: { none: { jobType: "SUBMIT_INVOICE" } },
+        });
+      }
+      if (statusConditions.length === 1) {
+        Object.assign(where, statusConditions[0]);
+      } else if (statusConditions.length > 1) {
+        where.OR = [...(where.OR ?? []), ...statusConditions];
+      }
+    }
+  }
+
+  // Apply attention filter at DB level (pre-pagination)
+  if (attentionFilter === "true") {
+    where.OR = [
+      { automationJobs: { none: { jobType: "SUBMIT_INVOICE" } } },
+      { automationJobs: { some: { jobType: "SUBMIT_INVOICE", status: "FAILED" } } },
+      { deductionCategory: "GASTOS_EDUCATIVOS", familyDependentId: null },
+    ];
+  }
+
+  const [invoices, totalCount, distinctJobStatuses, invoicesWithoutJobs, distinctCategories] =
+    await Promise.all([
+      prisma.invoice.findMany({
+        where,
+        select: {
+          id: true,
+          deductionCategory: true,
+          providerCuit: true,
+          providerName: true,
+          invoiceType: true,
+          invoiceNumber: true,
+          invoiceDate: true,
+          amount: true,
+          fiscalYear: true,
+          fiscalMonth: true,
+          source: true,
+          siradiqStatus: true,
+          originalFilename: true,
+          fileMimeType: true,
+          contractStartDate: true,
+          contractEndDate: true,
+          familyDependentId: true,
+          familyDependent: { select: { id: true, nombre: true, apellido: true } },
+          createdAt: true,
+          automationJobs: {
+            where: { jobType: "SUBMIT_INVOICE" },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { id: true, status: true, createdAt: true, errorMessage: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.invoice.count({ where }),
+      // Distinct job statuses across all matching invoices (for filter options)
+      prisma.automationJob.groupBy({
+        by: ["status"],
+        where: {
+          jobType: "SUBMIT_INVOICE",
+          invoice: { ...baseWhere },
+        },
+      }),
+      // Check if any matching invoices have no jobs at all
+      prisma.invoice.count({
+        where: {
+          ...baseWhere,
+          automationJobs: { none: { jobType: "SUBMIT_INVOICE" } },
+        },
+      }),
+      // Distinct categories across all matching invoices (for filter options)
+      prisma.invoice.groupBy({
+        by: ["deductionCategory"],
+        where: baseWhere,
+      }),
+    ]);
+
+  const result = invoices.map((inv) => {
     const { automationJobs, ...rest } = inv;
     return {
       ...rest,
@@ -138,31 +185,10 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  // Attention filter: no job, failed job, or education invoice without dependent
-  if (attentionFilter === "true") {
-    result = result.filter((inv) => {
-      return (
-        !inv.latestJob ||
-        inv.latestJob.status === "FAILED" ||
-        (inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId)
-      );
-    });
-  }
-
-  // Post-query job status filter (since job status lives on the relation)
-  if (statuses) {
-    const statusList = statuses.split(",").filter(Boolean);
-    if (statusList.length > 0) {
-      const NO_JOB = "__NO_JOB__";
-      result = result.filter((inv) => {
-        const jobStatus = inv.latestJob?.status ?? NO_JOB;
-        return statusList.includes(jobStatus);
-      });
-    }
-  }
-
   const availableStatuses: string[] = distinctJobStatuses.map((s) => s.status);
   if (invoicesWithoutJobs > 0) availableStatuses.push("__NO_JOB__");
+
+  const availableCategories: string[] = distinctCategories.map((c) => c.deductionCategory);
 
   return NextResponse.json({
     invoices: result,
@@ -173,6 +199,7 @@ export async function GET(req: NextRequest) {
       totalPages: Math.ceil(totalCount / pageSize),
     },
     availableStatuses,
+    availableCategories,
   });
 }
 

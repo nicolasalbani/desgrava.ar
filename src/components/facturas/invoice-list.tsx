@@ -565,8 +565,9 @@ export function InvoiceList({
     }
   }
 
-  // Available job statuses from the API (only statuses that exist in data)
+  // Available filter options from the API (only values that exist in data)
   const availableStatuses = (meta.availableStatuses as string[]) ?? [];
+  const availableCategories = (meta.availableCategories as string[]) ?? [];
 
   // --- Filter active helpers ---
   const isCategoryActive = categories.size > 0;
@@ -869,7 +870,7 @@ export function InvoiceList({
                               )}
                             </div>
                             <div className="max-h-48 space-y-1 overflow-y-auto">
-                              {DEDUCTION_CATEGORIES.map((cat) => (
+                              {availableCategories.map((cat) => (
                                 <label
                                   key={cat}
                                   className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"
@@ -888,7 +889,11 @@ export function InvoiceList({
                                       });
                                     }}
                                   />
-                                  <span className="text-xs">{DEDUCTION_CATEGORY_LABELS[cat]}</span>
+                                  <span className="text-xs">
+                                    {DEDUCTION_CATEGORY_LABELS[
+                                      cat as keyof typeof DEDUCTION_CATEGORY_LABELS
+                                    ] ?? cat}
+                                  </span>
                                 </label>
                               ))}
                             </div>

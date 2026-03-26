@@ -11,6 +11,8 @@ export const JOB_TYPE_STEPS: Record<string, StepDefinition[]> = {
   ],
   PULL_COMPROBANTES: [
     { key: "login", label: "Iniciando sesión en ARCA" },
+    { key: "siradig", label: "Abriendo SiRADIG" },
+    { key: "siradig_extract", label: "Leyendo deducciones de SiRADIG" },
     { key: "download", label: "Descargando comprobantes" },
     { key: "classify", label: "Clasificando proveedores" },
     { key: "save", label: "Guardando facturas" },
@@ -48,6 +50,8 @@ export const JOB_TYPE_STEPS: Record<string, StepDefinition[]> = {
   ],
   PULL_DOMESTIC_RECEIPTS: [
     { key: "login", label: "Iniciando sesión en ARCA" },
+    { key: "siradig", label: "Abriendo SiRADIG" },
+    { key: "siradig_extract", label: "Leyendo deducciones de SiRADIG" },
     { key: "download", label: "Descargando recibos" },
     { key: "save", label: "Guardando recibos" },
     { key: "done", label: "Listo" },

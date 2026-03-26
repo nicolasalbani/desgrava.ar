@@ -124,3 +124,73 @@ export function isSchoolProvider(denomination: string): boolean {
   const lower = denomination.toLowerCase();
   return SCHOOL_KEYWORDS.some((kw) => lower.includes(kw));
 }
+
+// Reverse mapping: SiRADIG legend text (lowercase) → DeductionCategory enum
+// Legend text in SiRADIG may differ slightly from dropdown text, so we use
+// keyword-based matching rather than exact string comparison.
+const REVERSE_CATEGORY_KEYWORDS: Array<{ keywords: string[]; category: string }> = [
+  { keywords: ["cuotas médico", "cuotas medico"], category: "CUOTAS_MEDICO_ASISTENCIALES" },
+  {
+    keywords: ["primas de seguro para el caso de muerte", "primas de seguro"],
+    category: "PRIMAS_SEGURO_MUERTE",
+  },
+  { keywords: ["primas de ahorro"], category: "PRIMAS_AHORRO_SEGUROS_MIXTOS" },
+  { keywords: ["aportes correspondientes a planes"], category: "APORTES_RETIRO_PRIVADO" },
+  { keywords: ["donaciones"], category: "DONACIONES" },
+  {
+    keywords: ["intereses préstamo hipotecario", "intereses prestamo"],
+    category: "INTERESES_HIPOTECARIOS",
+  },
+  { keywords: ["gastos de sepelio", "sepelio"], category: "GASTOS_SEPELIO" },
+  {
+    keywords: ["gastos médicos y paramédicos", "gastos medicos y paramedicos"],
+    category: "GASTOS_MEDICOS",
+  },
+  {
+    keywords: ["indumentaria y equipamiento", "indumentaria"],
+    category: "GASTOS_INDUMENTARIA_TRABAJO",
+  },
+  {
+    keywords: ["alquiler de inmuebles", "locatarios", "inquilinos"],
+    category: "ALQUILER_VIVIENDA",
+  },
+  { keywords: ["personal doméstico", "personal domestico"], category: "SERVICIO_DOMESTICO" },
+  {
+    keywords: ["sociedades de garantía recíproca", "sociedades de garantia"],
+    category: "APORTE_SGR",
+  },
+  {
+    keywords: ["vehículos de corredores", "vehiculos de corredores"],
+    category: "VEHICULOS_CORREDORES",
+  },
+  { keywords: ["intereses de corredores"], category: "INTERESES_CORREDORES" },
+  { keywords: ["gastos de educación", "gastos de educacion"], category: "GASTOS_EDUCATIVOS" },
+  { keywords: ["otras deducciones"], category: "OTRAS_DEDUCCIONES" },
+];
+
+/**
+ * Reverse-lookup: given a SiRADIG legend/section text, return the matching DeductionCategory enum.
+ * Returns undefined if no match found.
+ */
+export function reverseLookupCategory(legendText: string): string | undefined {
+  const lower = legendText.toLowerCase();
+  for (const entry of REVERSE_CATEGORY_KEYWORDS) {
+    if (entry.keywords.some((kw) => lower.includes(kw))) {
+      return entry.category;
+    }
+  }
+  return undefined;
+}
+
+// Reverse mapping: SiRADIG invoice type text → InvoiceType enum
+const REVERSE_INVOICE_TYPE_MAP = new Map<string, string>();
+for (const [enumVal, text] of Object.entries(SIRADIG_INVOICE_TYPE_MAP)) {
+  REVERSE_INVOICE_TYPE_MAP.set(text.toLowerCase(), enumVal);
+}
+
+/**
+ * Reverse-lookup: given SiRADIG invoice type display text, return the InvoiceType enum value.
+ */
+export function reverseLookupInvoiceType(typeText: string): string | undefined {
+  return REVERSE_INVOICE_TYPE_MAP.get(typeText.toLowerCase());
+}

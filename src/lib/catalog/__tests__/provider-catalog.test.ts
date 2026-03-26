@@ -3,6 +3,7 @@ import {
   parseBusinessInfo,
   parseCuitOnlineSearch,
   parseCuitOnlineActivities,
+  isObviouslyNonDeductible,
 } from "@/lib/catalog/provider-catalog";
 
 // ── parseBusinessInfo ────────────────────────────────────────
@@ -175,5 +176,48 @@ describe("parseCuitOnlineActivities", () => {
   it("returns empty array for HTML with no activities", () => {
     const html = `<html><body><p>No data</p></body></html>`;
     expect(parseCuitOnlineActivities(html)).toEqual([]);
+  });
+});
+
+// ── isObviouslyNonDeductible ──────────────────────────────────
+
+describe("isObviouslyNonDeductible", () => {
+  it.each([
+    "AUTOSERVICIO MAYORISTA DIARCO SA",
+    "SUPERMERCADO CARREFOUR",
+    "COTO CICSA",
+    "JUMBO RETAIL ARGENTINA SA",
+    "DISCO SA",
+    "HIPERMERCADO LIBERTAD SA",
+    "ESTACION DE SERVICIO EL CRUCE",
+    "YPF SA",
+    "SHELL CAPSA",
+    "AXION ENERGY ARGENTINA SRL",
+    "RAPPI ARG SAS",
+    "PEDIDOSYA SA",
+    "MERCADOLIBRE SRL",
+    "MERCADO LIBRE SRL",
+    "MAXICONSUMO SA",
+    "RESTAURANTE LA PARRILLA",
+    "PANADERIA EL TRIGAL",
+  ])("returns true for '%s'", (name) => {
+    expect(isObviouslyNonDeductible(name)).toBe(true);
+  });
+
+  it("is case-insensitive", () => {
+    expect(isObviouslyNonDeductible("autoservicio mayorista diarco sa")).toBe(true);
+    expect(isObviouslyNonDeductible("SUPERMERCADO CARREFOUR")).toBe(true);
+  });
+
+  it.each([
+    "OSDE",
+    "SWISS MEDICAL",
+    "FUNDACION ESCUELAS SAN JUAN",
+    "DA SILVA BAREIRO VIVIANA ELIZABETH",
+    "SANCOR COOPERATIVA DE SEGUROS LIMITADA",
+    "STARLINK ARGENTINA S R L",
+    "",
+  ])("returns false for '%s'", (name) => {
+    expect(isObviouslyNonDeductible(name)).toBe(false);
   });
 });

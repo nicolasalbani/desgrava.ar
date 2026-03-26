@@ -127,9 +127,15 @@ export const ARCA_SELECTORS = {
   // SiRADIG deduction edit flow (verified 2026-03-15)
   siradigEdit: {
     // Deduction list tables — each category has its own table
+    // NOTE: table IDs are dynamic per SiRADIG version; when a specific ID isn't
+    // known, use fieldset legend text matching via reverseLookupCategory() instead.
     gastosMedicosTable: "#nueva_tabla_deducciones7",
     gastosIndumentariaTable: "#nueva_tabla_deducciones21",
     gastosEducativosTable: "#nueva_tabla_deducciones32",
+
+    // Container for all deduction fieldsets
+    deductionsContainer: "#div_tabla_deducciones_agrupadas",
+    fieldsetSelector: "fieldset.grupo_deducciones",
 
     // Common selectors for deduction list rows
     listRow: "tbody tr[data-id-reg]",

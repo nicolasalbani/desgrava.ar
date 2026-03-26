@@ -8,6 +8,8 @@ import {
   isEducationCategory,
   isIndumentariaTrabajoCategory,
   isSchoolProvider,
+  reverseLookupCategory,
+  reverseLookupInvoiceType,
 } from "./deduction-mapper";
 import { ARCA_SELECTORS } from "./selectors";
 import type { ScreenshotCallback } from "./arca-navigator";
@@ -2666,4 +2668,644 @@ async function addMonthlyDetails(
 
     log(`Detalle de pago ${monthNames[m.fiscalMonth]} agregado`);
   }
+}
+
+// ─── SiRADIG Deduction Extraction ─────────────────────────────────────────
+
+/** A single comprobante extracted from a deduction edit form */
+export interface ExtractedComprobante {
+  fechaEmision: string; // DD/MM/YYYY
+  tipo: string; // SiRADIG display text (e.g., "Factura B")
+  tipoEnum?: string; // InvoiceType enum (e.g., "FACTURA_B")
+  puntoVenta: string;
+  numero: string;
+  montoFacturado: string;
+  montoReintegrado: string;
+}
+
+/** Extracted data for a standard deduction entry (Gastos Médicos, Indumentaria, etc.) */
+export interface ExtractedDeduction {
+  category: string; // DeductionCategory enum
+  providerCuit: string;
+  providerName: string;
+  periodoDesde: number; // 1-12
+  periodoHasta: number; // 1-12
+  montoTotal: string;
+  comprobantes: ExtractedComprobante[];
+  /** For GASTOS_EDUCATIVOS: name of the family dependent */
+  familiarName?: string;
+}
+
+/** Extracted data for an alquiler entry */
+export interface ExtractedAlquilerDeduction {
+  category: "ALQUILER_VIVIENDA";
+  providerCuit: string;
+  providerName: string;
+  contractStartDate?: string; // DD/MM/YYYY
+  contractEndDate?: string; // DD/MM/YYYY
+  months: Array<{
+    month: number; // 1-12
+    amount: string;
+  }>;
+  comprobantes: ExtractedComprobante[];
+}
+
+/** Extracted data for a domestic worker deduction */
+export interface ExtractedDomesticoDeduction {
+  category: "SERVICIO_DOMESTICO";
+  workerCuil: string;
+  workerName: string;
+  periodoDesde: number;
+  periodoHasta: number;
+  montoTotal: string;
+  monthlyDetails: Array<{
+    month: number; // 1-12
+    contributionAmount: string;
+    contributionDate: string; // DD/MM/YYYY
+    salaryAmount: string;
+    salaryDate: string; // DD/MM/YYYY
+  }>;
+}
+
+export type ExtractedEntry =
+  | ExtractedDeduction
+  | ExtractedAlquilerDeduction
+  | ExtractedDomesticoDeduction;
+
+/**
+ * Parse a SiRADIG amount string to a clean decimal string.
+ *
+ * SiRADIG uses two formats:
+ * - Comprobantes table:  "524399.00"  (dot = decimal)
+ * - Form fields:         "524399,00"  (comma = decimal, Argentine locale)
+ *
+ * SiRADIG never uses dots as thousands separators, so dots are always decimal.
+ */
+export function parseSiradigAmount(raw: string): string {
+  const cleaned = raw.replace(/[$\s]/g, "").trim();
+  if (!cleaned) return "0";
+  // If it has a comma, treat comma as decimal (Argentine format)
+  if (cleaned.includes(",")) {
+    return cleaned.replace(/\./g, "").replace(",", ".");
+  }
+  // Otherwise the dot is already the decimal separator
+  return cleaned;
+}
+
+// Month name → month number reverse lookup
+const MONTH_NAME_TO_NUM: Record<string, number> = {};
+for (let i = 1; i <= 12; i++) {
+  MONTH_NAME_TO_NUM[MONTH_NAMES[i].toLowerCase()] = i;
+}
+
+/**
+ * Parse a SiRADIG month string (e.g., "Enero", "01", "1", "01 - Enero") to a month number.
+ */
+export function parseMonthValue(text: string): number {
+  const trimmed = text.trim().toLowerCase();
+  // Try direct name match
+  if (MONTH_NAME_TO_NUM[trimmed]) return MONTH_NAME_TO_NUM[trimmed];
+  // Try "01 - Enero" format
+  for (const [name, num] of Object.entries(MONTH_NAME_TO_NUM)) {
+    if (trimmed.includes(name)) return num;
+  }
+  // Try numeric
+  const num = parseInt(trimmed, 10);
+  if (num >= 1 && num <= 12) return num;
+  return 0;
+}
+
+/**
+ * Extract all existing deductions from SiRADIG's "Deducciones y desgravaciones" section.
+ *
+ * The page must already be on the "Carga de Formulario" view with the
+ * "Deducciones y desgravaciones" accordion expanded (call `navigateToDeductionSection()` first).
+ *
+ * For each category fieldset, iterates rows, clicks edit to extract full details,
+ * then clicks "Volver" to return to the list.
+ *
+ * @param categories - Set of DeductionCategory enum values to extract. Unmatched categories are skipped.
+ */
+export async function extractSiradigDeductions(
+  page: Page,
+  categories: Set<string>,
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback,
+): Promise<ExtractedEntry[]> {
+  const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
+  const sel = ARCA_SELECTORS.siradigEdit;
+  const results: ExtractedEntry[] = [];
+
+  // Enumerate all fieldsets in the deductions container
+  const fieldsetCount = await page
+    .locator(`${sel.deductionsContainer} ${sel.fieldsetSelector}`)
+    .count();
+
+  log(`Encontrados ${fieldsetCount} secciones de deducciones`);
+
+  for (let f = 0; f < fieldsetCount; f++) {
+    const fieldset = page.locator(`${sel.deductionsContainer} ${sel.fieldsetSelector}`).nth(f);
+    const legendText = (await fieldset.locator("legend").textContent()) ?? "";
+    const category = reverseLookupCategory(legendText);
+
+    if (!category || !categories.has(category)) {
+      if (category) {
+        log(`Saltando categoría no solicitada: ${legendText}`);
+      } else if (legendText.trim()) {
+        log(`Categoría no reconocida: ${legendText}`);
+      }
+      continue;
+    }
+
+    const rows = fieldset.locator(sel.listRow);
+    const rowCount = await rows.count();
+
+    if (rowCount === 0) {
+      log(`${legendText}: sin entradas, saltando`);
+      continue;
+    }
+
+    log(`${legendText}: ${rowCount} entrada(s) encontrada(s)`);
+
+    for (let r = 0; r < rowCount; r++) {
+      log(`${legendText}: leyendo entrada ${r + 1}/${rowCount}...`);
+
+      try {
+        // Click edit on this row. Some categories trigger AJAX, others cause
+        // full-page navigation — use Promise.all to handle both cases.
+        await Promise.all([
+          page.waitForLoadState("networkidle").catch(() => {}),
+          page
+            .evaluate(
+              ({ containerSel, fieldsetSel, editBtnSel, fIdx, rIdx, rowSel }) => {
+                const fieldsets = document
+                  .querySelector(containerSel)!
+                  .querySelectorAll(fieldsetSel);
+                const theRows = fieldsets[fIdx].querySelectorAll(rowSel);
+                const editBtn = theRows[rIdx].querySelector(editBtnSel);
+                if (editBtn) (editBtn as HTMLElement).click();
+              },
+              {
+                containerSel: sel.deductionsContainer as string,
+                fieldsetSel: sel.fieldsetSelector as string,
+                editBtnSel: sel.editButton as string,
+                rowSel: sel.listRow as string,
+                fIdx: f,
+                rIdx: r,
+              },
+            )
+            .catch(() => {
+              // page.evaluate may fail if the click triggers navigation
+              // that destroys the execution context — this is expected
+            }),
+        ]);
+        await page.waitForTimeout(2000);
+
+        // Extract based on category type
+        let entry: ExtractedEntry | null = null;
+
+        if (category === "ALQUILER_VIVIENDA") {
+          entry = await extractAlquilerEditForm(page, log);
+        } else if (category === "SERVICIO_DOMESTICO") {
+          entry = await extractDomesticoEditForm(page, log);
+        } else {
+          entry = await extractStandardEditForm(page, category, log);
+        }
+
+        if (entry) {
+          results.push(entry);
+        }
+
+        await capture(
+          await page.screenshot({ fullPage: true }),
+          `extract-${category.toLowerCase()}-${r + 1}`,
+          `Extraída entrada ${r + 1} de ${legendText}`,
+        );
+
+        // Click "Volver" to return to the list view
+        const volverBtn = page.locator(sel.editVolverBtn);
+        await volverBtn.waitFor({ state: "visible", timeout: 10_000 });
+        await Promise.all([
+          page.waitForLoadState("networkidle").catch(() => {}),
+          volverBtn.click(),
+        ]);
+        await page.waitForTimeout(2000);
+
+        // Re-expand deductions accordion if it collapsed after Volver
+        const isExpanded = await page
+          .locator(sel.deductionsContainer)
+          .isVisible()
+          .catch(() => false);
+        if (!isExpanded) {
+          log("Re-expandiendo sección de deducciones...");
+          const deductionsHeader = page.getByText("Deducciones y desgravaciones").first();
+          await deductionsHeader.waitFor({ state: "visible", timeout: 10_000 });
+          await deductionsHeader.click();
+          await page.waitForLoadState("networkidle").catch(() => {});
+          await page.waitForTimeout(1000);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Error desconocido";
+        log(`Error extrayendo entrada ${r + 1} de ${legendText}: ${msg}`);
+        // Try to recover by going back
+        try {
+          const volverBtn = page.locator(sel.editVolverBtn);
+          if (await volverBtn.isVisible().catch(() => false)) {
+            await volverBtn.click();
+            await page.waitForLoadState("networkidle").catch(() => {});
+            await page.waitForTimeout(1500);
+          }
+        } catch {
+          /* recovery failed, continue */
+        }
+      }
+    }
+  }
+
+  log(`Extracción completada: ${results.length} entradas extraídas`);
+  return results;
+}
+
+/**
+ * Extract data from a standard deduction edit form (Gastos Médicos, Indumentaria, etc.).
+ * Assumes the edit form is already open.
+ */
+async function extractStandardEditForm(
+  page: Page,
+  category: string,
+  log: (msg: string) => void,
+): Promise<ExtractedDeduction | null> {
+  const sel = ARCA_SELECTORS.siradigEdit;
+
+  // Wait for the edit form to fully load (CUIT field gets populated via AJAX)
+  try {
+    await page.waitForFunction(
+      (cuitSel: string) => {
+        const el = document.querySelector(cuitSel) as HTMLInputElement;
+        return el && el.value.length > 0;
+      },
+      sel.editCuit as string,
+      { timeout: 10_000 },
+    );
+  } catch {
+    log("  Formulario de edición no cargó el CUIT, saltando entrada");
+    return null;
+  }
+
+  // Read main form fields
+  const formData = await page.evaluate(
+    (selectors) => {
+      const getValue = (id: string) =>
+        (document.querySelector(id) as HTMLInputElement)?.value ?? "";
+      const getSelectText = (id: string) => {
+        const el = document.querySelector(id) as HTMLSelectElement;
+        if (!el) return "";
+        return el.options[el.selectedIndex]?.text ?? el.value;
+      };
+
+      return {
+        cuit: getValue(selectors.editCuit),
+        denominacion: getValue(selectors.editDenominacion),
+        periodoDesde: getSelectText(selectors.editPeriodo),
+        montoTotal: getValue(selectors.editMontoTotal),
+      };
+    },
+    {
+      editCuit: sel.editCuit as string,
+      editDenominacion: sel.editDenominacion as string,
+      editPeriodo: sel.editPeriodo as string,
+      editMontoTotal: sel.editMontoTotal as string,
+    },
+  );
+
+  // Also try to read periodoHasta if it exists
+  const periodoHasta = await page.evaluate(() => {
+    const el = document.querySelector("#mesHasta") as HTMLSelectElement;
+    if (!el) return "";
+    return el.options[el.selectedIndex]?.text ?? el.value;
+  });
+
+  // For GASTOS_EDUCATIVOS, try to read the familiar (dependent) name
+  // Verified via agent-browser on 2026-03-26: the dependent name is in #apellidoNombreFam
+  let familiarName: string | undefined;
+  if (category === "GASTOS_EDUCATIVOS") {
+    familiarName = await page.evaluate(() => {
+      // Primary: #apellidoNombreFam contains "APELLIDO, NOMBRE" of the dependent
+      const nameInput = document.querySelector("#apellidoNombreFam") as HTMLInputElement;
+      if (nameInput?.value) return nameInput.value;
+      // Fallback: try select-based familiar fields
+      const familiarEl =
+        (document.querySelector("#familiar") as HTMLSelectElement) ??
+        (document.querySelector("#idFamiliar") as HTMLSelectElement);
+      if (familiarEl?.tagName === "SELECT" && familiarEl.selectedIndex >= 0) {
+        return familiarEl.options[familiarEl.selectedIndex]?.text ?? undefined;
+      }
+      return undefined;
+    });
+  }
+
+  // Extract comprobantes from sub-table
+  const comprobantes = await extractComprobantesTable(page);
+
+  const desdeNum = parseMonthValue(formData.periodoDesde);
+  const hastaNum = periodoHasta ? parseMonthValue(periodoHasta) : desdeNum;
+
+  log(
+    `  CUIT: ${formData.cuit}, Denominación: ${formData.denominacion}, ` +
+      `Periodo: ${formData.periodoDesde}${periodoHasta ? ` - ${periodoHasta}` : ""}, ` +
+      `Monto: ${formData.montoTotal}, Comprobantes: ${comprobantes.length}`,
+  );
+
+  return {
+    category,
+    providerCuit: formData.cuit,
+    providerName: formData.denominacion,
+    periodoDesde: desdeNum,
+    periodoHasta: hastaNum || desdeNum,
+    montoTotal: formData.montoTotal,
+    comprobantes,
+    familiarName,
+  };
+}
+
+/**
+ * Extract data from an ALQUILER_VIVIENDA edit form.
+ * Reads contract dates and monthly detail rows from #tabla_meses.
+ */
+async function extractAlquilerEditForm(
+  page: Page,
+  log: (msg: string) => void,
+): Promise<ExtractedAlquilerDeduction | null> {
+  const sel = ARCA_SELECTORS.siradigEdit;
+
+  // Wait for the edit form to fully load (CUIT field gets populated via AJAX)
+  try {
+    await page.waitForFunction(
+      (cuitSel: string) => {
+        const el = document.querySelector(cuitSel) as HTMLInputElement;
+        return el && el.value.length > 0;
+      },
+      sel.editCuit as string,
+      { timeout: 10_000 },
+    );
+  } catch {
+    log("  Alquiler: formulario de edición no cargó el CUIT, saltando entrada");
+    return null;
+  }
+
+  // Read main form fields (locador CUIT, name, contract dates)
+  const formData = await page.evaluate(
+    (selectors) => {
+      const getValue = (id: string) =>
+        (document.querySelector(id) as HTMLInputElement)?.value ?? "";
+
+      return {
+        cuit: getValue(selectors.editCuit),
+        denominacion: getValue(selectors.editDenominacion),
+        contractStart: getValue("#fechaVigenciaDesde"),
+        contractEnd: getValue("#fechaVigenciaHasta"),
+      };
+    },
+    { editCuit: sel.editCuit as string, editDenominacion: sel.editDenominacion as string },
+  );
+
+  // Extract monthly amounts from #tabla_meses
+  // Columns: Mes | Monto Tope (deductible cap) | Monto Comprobantes Ingresados (actual rent) | Actions
+  // We want "Monto Comprobantes Ingresados" (cells[2]) — the actual rent paid,
+  // not "Monto Tope" (cells[1]) which is the 40% deductible cap calculated by SiRADIG.
+  const months = await page.evaluate(() => {
+    const table = document.querySelector("#tabla_meses");
+    if (!table) return [];
+    const rows = table.querySelectorAll("tbody tr");
+    const result: Array<{ monthText: string; amount: string }> = [];
+    for (let i = 0; i < rows.length; i++) {
+      const cells = Array.from(rows[i].querySelectorAll("td"));
+      if (cells.length >= 3) {
+        result.push({
+          monthText: cells[0].textContent?.trim() ?? "",
+          amount: cells[2].textContent?.trim() ?? "",
+        });
+      }
+    }
+    return result;
+  });
+
+  const parsedMonths = months
+    .map((m) => ({
+      month: parseMonthValue(m.monthText),
+      amount: parseSiradigAmount(m.amount),
+    }))
+    .filter((m) => m.month > 0);
+
+  // Extract comprobantes
+  const comprobantes = await extractComprobantesTable(page);
+
+  log(
+    `  Alquiler — CUIT: ${formData.cuit}, Denominación: ${formData.denominacion}, ` +
+      `Vigencia: ${formData.contractStart} - ${formData.contractEnd}, ` +
+      `Meses: ${parsedMonths.length}, Comprobantes: ${comprobantes.length}`,
+  );
+
+  return {
+    category: "ALQUILER_VIVIENDA",
+    providerCuit: formData.cuit,
+    providerName: formData.denominacion,
+    contractStartDate: formData.contractStart || undefined,
+    contractEndDate: formData.contractEnd || undefined,
+    months: parsedMonths,
+    comprobantes,
+  };
+}
+
+/**
+ * Extract data from a SERVICIO_DOMESTICO edit form.
+ * Reads worker CUIL, name, period, and monthly payment details.
+ */
+async function extractDomesticoEditForm(
+  page: Page,
+  log: (msg: string) => void,
+): Promise<ExtractedDomesticoDeduction | null> {
+  const domSel = ARCA_SELECTORS.siradigDomestico;
+
+  // Wait for the edit form to fully load (CUIL field gets populated via AJAX)
+  try {
+    await page.waitForFunction(
+      (cuilSel: string) => {
+        const el = document.querySelector(cuilSel) as HTMLInputElement;
+        return el && el.value.length > 0;
+      },
+      domSel.formCuit as string,
+      { timeout: 10_000 },
+    );
+  } catch {
+    log("  Formulario doméstico no cargó el CUIL, saltando entrada");
+    return null;
+  }
+
+  const formData = await page.evaluate(
+    (selectors) => {
+      const getValue = (id: string) =>
+        (document.querySelector(id) as HTMLInputElement)?.value ?? "";
+      const getSelectText = (id: string) => {
+        const el = document.querySelector(id) as HTMLSelectElement;
+        if (!el) return "";
+        return el.options[el.selectedIndex]?.text ?? el.value;
+      };
+
+      return {
+        cuil: getValue(selectors.formCuit),
+        name: getValue(selectors.formApellidoNombre),
+        mesDesde: getSelectText(selectors.formMesDesde),
+        mesHasta: getSelectText(selectors.formMesHasta),
+        montoTotal: getValue(selectors.formMontoTotal),
+      };
+    },
+    {
+      formCuit: domSel.formCuit as string,
+      formApellidoNombre: domSel.formApellidoNombre as string,
+      formMesDesde: domSel.formMesDesde as string,
+      formMesHasta: domSel.formMesHasta as string,
+      formMontoTotal: domSel.formMontoTotal as string,
+    },
+  );
+
+  // Extract monthly detail rows from the detail table
+  // Verified via agent-browser on 2026-03-26: table ID is #tabla_pagos
+  const monthlyDetails = await page.evaluate(() => {
+    const table =
+      document.querySelector("#tabla_pagos") ??
+      document.querySelector("#tabla_detalle_pagos") ??
+      document.querySelector("#tabla_detalles");
+
+    if (!table) return [];
+
+    const rows = table.querySelectorAll("tbody tr");
+    const result: Array<{
+      monthText: string;
+      contribAmount: string;
+      contribDate: string;
+      salaryAmount: string;
+      salaryDate: string;
+    }> = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const cells = Array.from(rows[i].querySelectorAll("td"));
+      if (cells.length >= 5) {
+        result.push({
+          monthText: cells[0].textContent?.trim() ?? "",
+          contribAmount: cells[1].textContent?.trim() ?? "",
+          contribDate: cells[2].textContent?.trim() ?? "",
+          salaryAmount: cells[3].textContent?.trim() ?? "",
+          salaryDate: cells[4].textContent?.trim() ?? "",
+        });
+      }
+    }
+    return result;
+  });
+
+  const parsedDetails = monthlyDetails
+    .map((d) => ({
+      month: parseMonthValue(d.monthText),
+      contributionAmount: parseSiradigAmount(d.contribAmount),
+      contributionDate: d.contribDate,
+      salaryAmount: parseSiradigAmount(d.salaryAmount),
+      salaryDate: d.salaryDate,
+    }))
+    .filter((d) => d.month > 0);
+
+  log(
+    `  Doméstico — CUIL: ${formData.cuil}, Nombre: ${formData.name}, ` +
+      `Periodo: ${formData.mesDesde} - ${formData.mesHasta}, ` +
+      `Monto total: ${formData.montoTotal}, Meses con detalle: ${parsedDetails.length}`,
+  );
+
+  return {
+    category: "SERVICIO_DOMESTICO",
+    workerCuil: formData.cuil.replace(/[-\s]/g, ""),
+    workerName: formData.name,
+    periodoDesde: parseMonthValue(formData.mesDesde),
+    periodoHasta: parseMonthValue(formData.mesHasta),
+    montoTotal: formData.montoTotal,
+    monthlyDetails: parsedDetails,
+  };
+}
+
+/**
+ * Extract comprobantes from the #tabla_comprobantes sub-table in the current edit form.
+ *
+ * Column layouts vary by category:
+ * - Standard (Gastos Médicos): Fecha | Tipo | Número | Monto | Monto Reintegrado | (actions)
+ * - Indumentaria:              Fecha | Tipo | Número | Monto | (actions)
+ * - Primas de Seguro:          Asociado a | Fecha | Tipo | Número | Monto | (actions)
+ *
+ * We detect the layout by reading the header row.
+ */
+async function extractComprobantesTable(page: Page): Promise<ExtractedComprobante[]> {
+  const sel = ARCA_SELECTORS.siradigEdit;
+
+  const tableData = await page.evaluate((tableSelector) => {
+    const table = document.querySelector(tableSelector);
+    if (!table) return { headers: [] as string[], rows: [] as string[][] };
+    const headers = Array.from(table.querySelectorAll("thead th")).map(
+      (th) => th.textContent?.trim() ?? "",
+    );
+    const rows = Array.from(table.querySelectorAll("tbody tr")).map((tr) =>
+      Array.from(tr.querySelectorAll("td")).map((td) => td.textContent?.trim() ?? ""),
+    );
+    return { headers, rows };
+  }, sel.comprobantesTable as string);
+
+  const { headers, rows } = tableData;
+  if (rows.length === 0) return [];
+
+  // Detect column indices from headers (case-insensitive)
+  const lowerHeaders = headers.map((h) => h.toLowerCase());
+  const fechaIdx = lowerHeaders.findIndex((h) => h.includes("fecha"));
+  const tipoIdx = lowerHeaders.findIndex((h) => h.includes("tipo"));
+  const numIdx = lowerHeaders.findIndex((h) => h.includes("número") || h.includes("numero"));
+  const montoIdx = lowerHeaders.findIndex(
+    (h) =>
+      h === "monto" || h === "monto facturado" || (h.includes("monto") && !h.includes("reint")),
+  );
+  const reintIdx = lowerHeaders.findIndex((h) => h.includes("reint"));
+
+  return rows
+    .filter((cells) => cells.length >= 3)
+    .map((cells) => {
+      const tipo = tipoIdx >= 0 ? (cells[tipoIdx] ?? "") : "";
+      // Parse combined number column: "00004 - 00001074" or just "378874"
+      const numeroCombined = numIdx >= 0 ? (cells[numIdx] ?? "") : "";
+      const numParts = numeroCombined.split(/\s*-\s*/);
+      const puntoVenta = numParts.length > 1 ? (numParts[0]?.trim() ?? "") : "";
+      const numero = numParts.length > 1 ? (numParts[1]?.trim() ?? "") : numeroCombined.trim();
+
+      const montoRaw = montoIdx >= 0 ? (cells[montoIdx] ?? "") : "";
+      const reintRaw = reintIdx >= 0 ? (cells[reintIdx] ?? "") : "";
+
+      return {
+        fechaEmision: fechaIdx >= 0 ? (cells[fechaIdx] ?? "") : "",
+        tipo,
+        tipoEnum: reverseLookupInvoiceType(tipo),
+        puntoVenta,
+        numero,
+        montoFacturado: parseSiradigAmount(montoRaw),
+        montoReintegrado: parseSiradigAmount(reintRaw),
+      };
+    });
+}
+
+/** Check if an extracted entry is an alquiler deduction */
+export function isAlquilerExtraction(entry: ExtractedEntry): entry is ExtractedAlquilerDeduction {
+  return entry.category === "ALQUILER_VIVIENDA";
+}
+
+/** Check if an extracted entry is a domestic worker deduction */
+export function isDomesticoExtraction(entry: ExtractedEntry): entry is ExtractedDomesticoDeduction {
+  return entry.category === "SERVICIO_DOMESTICO";
+}
+
+/** Check if an extracted entry is a standard deduction */
+export function isStandardExtraction(entry: ExtractedEntry): entry is ExtractedDeduction {
+  return !isAlquilerExtraction(entry) && !isDomesticoExtraction(entry);
 }

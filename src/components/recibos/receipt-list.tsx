@@ -114,9 +114,7 @@ export function ReceiptList({
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
 
-  // Derive unique categories from current page data for filter options
-  // With server-side pagination we only see the current page, so we show all known categories
-  const [knownCategories, setKnownCategories] = useState<string[]>([]);
+  // Categories come from the API (all categories that have data, not just current page)
 
   // Paginated fetch
   const {
@@ -147,18 +145,6 @@ export function ReceiptList({
     onInitialLoad,
   });
 
-  // Build known categories from received data
-  useEffect(() => {
-    const cats = new Set(knownCategories);
-    for (const r of receipts) {
-      if (r.categoriaProfesional) cats.add(r.categoriaProfesional);
-    }
-    const sorted = Array.from(cats).sort();
-    if (sorted.join(",") !== knownCategories.join(",")) {
-      setKnownCategories(sorted);
-    }
-  }, [receipts, knownCategories]);
-
   // Sync local filter state to the hook
   useEffect(() => {
     setFilters({
@@ -184,6 +170,7 @@ export function ReceiptList({
   }, [receipts, setShouldPoll]);
 
   const availableStatuses = (meta.availableStatuses as string[]) ?? [];
+  const availableCategories = (meta.availableCategories as string[]) ?? [];
 
   const isCategoryActive = categories.size > 0;
   const isTotalActive = totalMin !== "" || totalMax !== "";
@@ -668,7 +655,7 @@ export function ReceiptList({
                           )}
                         </div>
                         <div className="max-h-48 space-y-1 overflow-y-auto">
-                          {knownCategories.map((cat) => (
+                          {availableCategories.map((cat) => (
                             <label
                               key={cat}
                               className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors"

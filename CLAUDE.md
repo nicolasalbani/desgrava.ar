@@ -76,7 +76,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 ## Testing
 
-**Framework**: Vitest with 614+ tests across 27 test files.
+**Framework**: Vitest with 656+ tests across 28 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -85,7 +85,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `simulador/` — calculator, deduction-rules, tax-tables, schemas (125 tests)
 - `validators/` — cuit, invoice, credentials (55 tests)
 - `crypto/` — encryption round-trip and tamper detection (17 tests)
-- `automation/` — deduction-mapper, selectors, presentacion selectors, job-steps (107 tests)
+- `automation/` — deduction-mapper, selectors, presentacion selectors, job-steps, siradig-extractor (149 tests)
 - `ocr/` — field-extractor, pipeline (22 tests)
 - `catalog/` — provider-catalog HTML parser (8 tests)
 - `ocr/` — receipt-extractor for domestic worker salary receipts (26 tests)
