@@ -52,8 +52,8 @@ Evaluate whether the feature description is clear enough to write a good spec. I
    - `status: draft`
    - `priority`: Infer from context (high/medium/low), or ask if unclear
    - **Summary**: One paragraph — what it does and why it's needed. Reference the user's problem, not implementation details.
-   - **Acceptance Criteria**: Specific, testable checklist items. Each criterion should be verifiable by looking at the code or running the app. Bad: "should work well". Good: "API returns paginated results with `total` count and `page`/`pageSize` parameters".
-   - **Technical Notes**: Reference actual project modules, patterns, and conventions. Mention specific files, libraries, or patterns from `CLAUDE.md` that apply. Include architecture decisions or constraints.
+   - **Acceptance Criteria**: Specific, testable checklist items. Each criterion should be verifiable by looking at the code or running the app. Bad: "should work well". Good: "API returns paginated results with `total` count and `page`/`pageSize` parameters". **If the feature includes UI**, always add a criterion for mobile responsiveness (e.g., "All new UI works on screens as narrow as 320px, using responsive breakpoints and mobile-first layout").
+   - **Technical Notes**: Reference actual project modules, patterns, and conventions. Mention specific files, libraries, or patterns from `CLAUDE.md` that apply. Include architecture decisions or constraints. **If the feature includes UI**, note the mobile-first requirement: design for 320px first, enhance with `sm:`/`md:`/`lg:` breakpoints, full-width modals/sheets on mobile, card layouts or horizontal scroll for tables on mobile, 44px minimum touch targets.
    - **Out of Scope**: Always populated. Explicitly list what this feature does NOT include to prevent scope creep.
 
 2. **Present the full spec** to the user in a code block for review.

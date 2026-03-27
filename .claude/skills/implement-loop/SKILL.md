@@ -95,6 +95,15 @@ Repeat the following cycle until all checks pass (max 10 iterations):
 If this is the first iteration, implement the task.
 If this is a subsequent iteration, fix the failures from the previous run.
 
+**If the task involves UI changes**, follow mobile-first principles:
+
+- Design for 320px minimum width first, then enhance for larger screens with `sm:`, `md:`, `lg:` breakpoints.
+- Never use fixed widths without responsive alternatives (e.g., `w-full sm:w-[280px]`).
+- Menus, modals, and sheets must be full-width on mobile.
+- Tables should use card layouts or horizontal scroll (`overflow-x-auto`) on mobile.
+- Touch targets must be at least 44px.
+- Add `overflow-x-hidden` to page containers to prevent horizontal scroll bleed.
+
 ### Step 2: Run All Checks
 
 Run these commands sequentially. If any fail, go back to Step 1.

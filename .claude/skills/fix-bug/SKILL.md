@@ -29,7 +29,13 @@ $ARGUMENTS
 1. Make the minimal change needed to fix the bug.
 2. Do NOT refactor, add features, or "improve" surrounding code.
 3. **If the bug is in ARCA/SiRADIG automation code** (`src/lib/automation/`), use `/implement-loop` to iterate: test against live SiRADIG, observe failures with `agent-browser`, fix, and re-test until the automation succeeds. Then continue to Phase 3.
-4. Run `npm run lint` and fix any issues introduced.
+4. **If the fix touches UI components**, ensure the fix is mobile-friendly:
+   - Use responsive classes (`sm:`, `md:`, `lg:`) — never fixed widths without mobile breakpoints.
+   - Test that layouts don't overflow on small screens (min 320px width).
+   - Menus, modals, and sheets should be full-width on mobile (`w-full sm:w-[fixed]`).
+   - Tables should use card layouts or horizontal scroll on mobile.
+   - Touch targets must be at least 44px.
+5. Run `npm run lint` and fix any issues introduced.
 
 ## Phase 3: Regression Test
 

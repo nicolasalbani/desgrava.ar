@@ -45,6 +45,15 @@ Once the plan is approved:
    - Use Zod for all input validation
    - Spanish names only in ARCA/SiRADIG automation code, English everywhere else
    - Follow the Jony Ive design system: clean whites, `border-gray-200`, `bg-gray-50`, generous whitespace
+   - **All UI must be mobile-friendly (mobile-first).** Rules:
+     - Design for 320px minimum width first, then enhance for larger screens with `sm:`, `md:`, `lg:` breakpoints.
+     - Never use fixed widths without responsive alternatives (e.g., `w-full sm:w-[280px]`, not `w-[280px]`).
+     - Menus, modals, and sheets must be full-width on mobile (`w-full sm:max-w-md`).
+     - Data tables must use card layouts or horizontal scroll (`overflow-x-auto`) on mobile.
+     - Touch targets must be at least 44px (use `min-h-[44px] min-w-[44px]` on interactive elements).
+     - Use `flex-col sm:flex-row` for layouts that stack vertically on mobile.
+     - Add `overflow-x-hidden` to page containers to prevent horizontal scroll bleed.
+     - Test that text doesn't overflow or get clipped on narrow screens.
    - **All UI must support dark mode.** The project uses `next-themes` with Tailwind's `dark:` variant (`@custom-variant dark (&:is(.dark *))`). Rules:
      - **Never use raw color classes** like `bg-gray-50`, `bg-white`, `text-gray-600` without a `dark:` counterpart. Prefer semantic tokens (`bg-muted`, `text-muted-foreground`, `bg-card`, `border-border`) which auto-adapt.
      - When semantic tokens aren't sufficient (e.g. success/error states), always pair light and dark variants: `bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 text-green-700 dark:text-green-400`.
