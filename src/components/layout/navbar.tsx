@@ -111,7 +111,7 @@ export function Navbar() {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[280px]">
+            <SheetContent side="right" className="w-full sm:w-[280px]">
               <SheetTitle className="sr-only">Menú</SheetTitle>
               <nav className="mt-8 flex flex-col gap-4">
                 {isLanding

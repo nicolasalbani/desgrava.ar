@@ -12,7 +12,7 @@ import { FadeIn } from "@/components/landing/fade-in";
 
 export default function LandingPage() {
   return (
-    <div className="bg-background flex min-h-screen flex-col">
+    <div className="bg-background flex min-h-screen flex-col overflow-x-hidden">
       <Navbar />
 
       <main className="flex-1">
