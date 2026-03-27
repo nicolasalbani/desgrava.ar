@@ -282,6 +282,20 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Prevent submitting rent invoices without contract dates
+      if (
+        invoice.deductionCategory === "ALQUILER_VIVIENDA" &&
+        (!invoice.contractStartDate || !invoice.contractEndDate)
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Las deducciones de alquiler requieren las fechas de vigencia del contrato (desde y hasta) antes de enviar a SiRADIG",
+          },
+          { status: 400 },
+        );
+      }
+
       // Prevent submitting invoices for future months
       const now = new Date();
       const currentYear = now.getFullYear();

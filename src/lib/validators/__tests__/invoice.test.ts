@@ -39,10 +39,16 @@ describe("createInvoiceSchema", () => {
 
   it("should accept all valid deduction categories", () => {
     for (const category of DEDUCTION_CATEGORIES) {
-      const result = createInvoiceSchema.safeParse({
-        ...validInvoice,
-        deductionCategory: category,
-      });
+      const data =
+        category === "ALQUILER_VIVIENDA"
+          ? {
+              ...validInvoice,
+              deductionCategory: category,
+              contractStartDate: "2025-01-01",
+              contractEndDate: "2025-12-31",
+            }
+          : { ...validInvoice, deductionCategory: category };
+      const result = createInvoiceSchema.safeParse(data);
       expect(result.success, `Category ${category} should be valid`).toBe(true);
     }
   });
@@ -183,6 +189,59 @@ describe("createInvoiceSchema", () => {
       providerCuit: "20273958601",
     });
     expect(result.success).toBe(false);
+  });
+
+  describe("ALQUILER_VIVIENDA contract dates", () => {
+    const alquilerBase = {
+      ...validInvoice,
+      deductionCategory: "ALQUILER_VIVIENDA" as const,
+    };
+
+    it("requires contractStartDate for ALQUILER_VIVIENDA", () => {
+      const result = createInvoiceSchema.safeParse({
+        ...alquilerBase,
+        contractEndDate: "2025-12-31",
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const paths = result.error.issues.map((i) => i.path.join("."));
+        expect(paths).toContain("contractStartDate");
+      }
+    });
+
+    it("requires contractEndDate for ALQUILER_VIVIENDA", () => {
+      const result = createInvoiceSchema.safeParse({
+        ...alquilerBase,
+        contractStartDate: "2025-01-01",
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const paths = result.error.issues.map((i) => i.path.join("."));
+        expect(paths).toContain("contractEndDate");
+      }
+    });
+
+    it("rejects ALQUILER_VIVIENDA with no contract dates", () => {
+      const result = createInvoiceSchema.safeParse(alquilerBase);
+      expect(result.success).toBe(false);
+    });
+
+    it("accepts ALQUILER_VIVIENDA with both contract dates", () => {
+      const result = createInvoiceSchema.safeParse({
+        ...alquilerBase,
+        contractStartDate: "2025-01-01",
+        contractEndDate: "2025-12-31",
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("does not require contract dates for other categories", () => {
+      const result = createInvoiceSchema.safeParse({
+        ...validInvoice,
+        deductionCategory: "GASTOS_MEDICOS",
+      });
+      expect(result.success).toBe(true);
+    });
   });
 });
 

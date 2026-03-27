@@ -71,7 +71,7 @@ export const INVOICE_TYPE_LABELS: Record<string, string> = {
   TICKET: "Ticket",
 };
 
-export const createInvoiceSchema = z.object({
+const invoiceBaseSchema = z.object({
   deductionCategory: z.enum(DEDUCTION_CATEGORIES),
   providerCuit: cuitSchema,
   providerName: z.string().optional(),
@@ -87,7 +87,23 @@ export const createInvoiceSchema = z.object({
   familyDependentId: z.string().nullable().optional(),
 });
 
+export const createInvoiceSchema = invoiceBaseSchema
+  .refine(
+    (data) => data.deductionCategory !== "ALQUILER_VIVIENDA" || data.contractStartDate != null,
+    {
+      message: "La fecha de inicio del contrato es obligatoria para alquiler",
+      path: ["contractStartDate"],
+    },
+  )
+  .refine(
+    (data) => data.deductionCategory !== "ALQUILER_VIVIENDA" || data.contractEndDate != null,
+    {
+      message: "La fecha de fin del contrato es obligatoria para alquiler",
+      path: ["contractEndDate"],
+    },
+  );
+
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 
-export const updateInvoiceSchema = createInvoiceSchema.partial();
+export const updateInvoiceSchema = invoiceBaseSchema.partial();
 export type UpdateInvoiceInput = z.infer<typeof updateInvoiceSchema>;
