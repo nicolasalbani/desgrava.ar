@@ -165,7 +165,8 @@ const REVERSE_CATEGORY_KEYWORDS: Array<{ keywords: string[]; category: string }>
   },
   { keywords: ["intereses de corredores"], category: "INTERESES_CORREDORES" },
   { keywords: ["gastos de educación", "gastos de educacion"], category: "GASTOS_EDUCATIVOS" },
-  { keywords: ["otras deducciones"], category: "OTRAS_DEDUCCIONES" },
+  // OTRAS_DEDUCCIONES intentionally excluded — should only be assigned manually by the user.
+  // SiRADIG entries under "Otras deducciones" will be skipped during extraction.
 ];
 
 /**

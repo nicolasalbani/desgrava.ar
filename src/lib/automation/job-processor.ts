@@ -1218,10 +1218,14 @@ async function upsertStandardDeduction(
         }
       }
 
-      const invoiceNumber =
-        comp.puntoVenta && comp.numero
-          ? `${comp.puntoVenta.padStart(5, "0")}-${comp.numero.padStart(8, "0")}`
-          : undefined;
+      // Build invoice number: "XXXXX-YYYYYYYY" if both parts exist, or just the number if no punto de venta
+      // (e.g., "Otros comprobantes documentos exceptuados" only has a plain number like "378874")
+      let invoiceNumber: string | undefined;
+      if (comp.puntoVenta && comp.numero) {
+        invoiceNumber = `${comp.puntoVenta.padStart(5, "0")}-${comp.numero.padStart(8, "0")}`;
+      } else if (comp.numero) {
+        invoiceNumber = comp.numero;
+      }
 
       // Parse invoice date from DD/MM/YYYY to ISO
       let invoiceDate: Date | undefined;
@@ -1426,83 +1430,94 @@ async function upsertAlquilerDeduction(
   }
 
   for (const m of entry.months) {
-    const amount = parseFloat(m.amount) || 0;
     const monthComps = compsByMonth.get(m.month) ?? [];
-    const comp = monthComps[0]; // Use first comprobante for this month
 
-    // Build invoice number and date from comprobante if available
-    const invoiceNumber =
-      comp?.puntoVenta && comp?.numero
-        ? `${comp.puntoVenta.padStart(5, "0")}-${comp.numero.padStart(8, "0")}`
-        : undefined;
+    // Process each comprobante for this month as a separate invoice.
+    // A single alquiler month can have multiple comprobantes (e.g., Factura + Nota de Débito).
+    // If no comprobantes, still create one invoice from the monthly amount.
+    const compsToProcess =
+      monthComps.length > 0 ? monthComps : [undefined as (typeof monthComps)[number] | undefined];
 
-    let invoiceDate: Date | undefined;
-    if (comp?.fechaEmision) {
-      const parts = comp.fechaEmision.split("/");
-      if (parts.length === 3) {
-        invoiceDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+    for (const comp of compsToProcess) {
+      const amount = comp
+        ? parseFloat(parseSiradigAmount(comp.montoFacturado)) || 0
+        : parseFloat(m.amount) || 0;
+
+      let invoiceNumber: string | undefined;
+      if (comp?.puntoVenta && comp?.numero) {
+        invoiceNumber = `${comp.puntoVenta.padStart(5, "0")}-${comp.numero.padStart(8, "0")}`;
+      } else if (comp?.numero) {
+        invoiceNumber = comp.numero;
       }
-    }
 
-    const invoiceType = (comp?.tipoEnum ??
-      "FACTURA_B") as import("@/generated/prisma/client").InvoiceType;
+      let invoiceDate: Date | undefined;
+      if (comp?.fechaEmision) {
+        const parts = comp.fechaEmision.split("/");
+        if (parts.length === 3) {
+          invoiceDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+        }
+      }
 
-    // Match by invoice number first (most specific), fall back to CUIT+month+category
-    const existing = invoiceNumber
-      ? await prisma.invoice.findFirst({
-          where: { userId, providerCuit: cuit, invoiceNumber, fiscalYear },
-        })
-      : await prisma.invoice.findFirst({
-          where: {
+      const invoiceType = (comp?.tipoEnum ??
+        "FACTURA_B") as import("@/generated/prisma/client").InvoiceType;
+
+      // Match by invoice number first (most specific), fall back to CUIT+month+category
+      const existing = invoiceNumber
+        ? await prisma.invoice.findFirst({
+            where: { userId, providerCuit: cuit, invoiceNumber, fiscalYear },
+          })
+        : await prisma.invoice.findFirst({
+            where: {
+              userId,
+              providerCuit: cuit,
+              fiscalYear,
+              fiscalMonth: m.month,
+              deductionCategory: "ALQUILER_VIVIENDA",
+            },
+          });
+
+      let invoiceId: string;
+      if (existing) {
+        await prisma.invoice.update({
+          where: { id: existing.id },
+          data: {
+            amount: new Prisma.Decimal(amount),
+            invoiceNumber: invoiceNumber ?? existing.invoiceNumber,
+            invoiceDate: invoiceDate ?? existing.invoiceDate,
+            invoiceType: invoiceType ?? existing.invoiceType,
+            providerName: entry.providerName || existing.providerName,
+            contractStartDate: contractStart ?? existing.contractStartDate,
+            contractEndDate: contractEnd ?? existing.contractEndDate,
+            siradiqStatus: "SUBMITTED",
+            source: "ARCA",
+          },
+        });
+        invoiceId = existing.id;
+        updated++;
+      } else {
+        const inv = await prisma.invoice.create({
+          data: {
             userId,
             providerCuit: cuit,
+            providerName: entry.providerName,
+            invoiceType,
+            invoiceNumber,
+            invoiceDate,
+            amount: new Prisma.Decimal(amount),
             fiscalYear,
             fiscalMonth: m.month,
             deductionCategory: "ALQUILER_VIVIENDA",
+            contractStartDate: contractStart,
+            contractEndDate: contractEnd,
+            siradiqStatus: "SUBMITTED",
+            source: "ARCA",
           },
         });
-
-    let invoiceId: string;
-    if (existing) {
-      await prisma.invoice.update({
-        where: { id: existing.id },
-        data: {
-          amount: new Prisma.Decimal(amount),
-          invoiceNumber: invoiceNumber ?? existing.invoiceNumber,
-          invoiceDate: invoiceDate ?? existing.invoiceDate,
-          invoiceType: invoiceType ?? existing.invoiceType,
-          providerName: entry.providerName || existing.providerName,
-          contractStartDate: contractStart ?? existing.contractStartDate,
-          contractEndDate: contractEnd ?? existing.contractEndDate,
-          siradiqStatus: "SUBMITTED",
-          source: "ARCA",
-        },
-      });
-      invoiceId = existing.id;
-      updated++;
-    } else {
-      const inv = await prisma.invoice.create({
-        data: {
-          userId,
-          providerCuit: cuit,
-          providerName: entry.providerName,
-          invoiceType,
-          invoiceNumber,
-          invoiceDate,
-          amount: new Prisma.Decimal(amount),
-          fiscalYear,
-          fiscalMonth: m.month,
-          deductionCategory: "ALQUILER_VIVIENDA",
-          contractStartDate: contractStart,
-          contractEndDate: contractEnd,
-          siradiqStatus: "SUBMITTED",
-          source: "ARCA",
-        },
-      });
-      invoiceId = inv.id;
-      created++;
+        invoiceId = inv.id;
+        created++;
+      }
+      await ensureCompletedJob(invoiceId, userId);
     }
-    await ensureCompletedJob(invoiceId, userId);
   }
 
   return { created, updated };

@@ -86,9 +86,12 @@ export async function resolveCategory(input: ResolveCategoryInput): Promise<stri
     return "NO_DEDUCIBLE";
   }
 
-  // 1. Check catalog
+  // 1. Check catalog (remap stale OTRAS_DEDUCCIONES → NO_DEDUCIBLE)
   const existing = await getCatalogEntry(cuit);
-  if (existing) return existing.deductionCategory;
+  if (existing) {
+    if (existing.deductionCategory === "OTRAS_DEDUCCIONES") return "NO_DEDUCIBLE";
+    return existing.deductionCategory;
+  }
 
   // 2. PDF-based classification
   if (input.pdfText && input.pdfText.length > 20) {

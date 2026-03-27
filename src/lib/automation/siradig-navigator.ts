@@ -2938,16 +2938,13 @@ async function extractStandardEditForm(
 ): Promise<ExtractedDeduction | null> {
   const sel = ARCA_SELECTORS.siradigEdit;
 
-  // Wait for the edit form to fully load (CUIT field gets populated via AJAX)
+  // Wait for the edit form to fully load (CUIT field gets populated via AJAX).
+  // Note: CSS [value] checks the HTML attribute, not the JS property.
+  // SiRADIG populates values via JS, so use evaluate to check the DOM property.
   try {
-    await page.waitForFunction(
-      (cuitSel: string) => {
-        const el = document.querySelector(cuitSel) as HTMLInputElement;
-        return el && el.value.length > 0;
-      },
-      sel.editCuit as string,
-      { timeout: 10_000 },
-    );
+    await page.waitForFunction(`document.querySelector("${sel.editCuit}")?.value?.length > 0`, {
+      timeout: 10_000,
+    });
   } catch {
     log("  Formulario de edición no cargó el CUIT, saltando entrada");
     return null;
@@ -2958,16 +2955,23 @@ async function extractStandardEditForm(
     (selectors) => {
       const getValue = (id: string) =>
         (document.querySelector(id) as HTMLInputElement)?.value ?? "";
-      const getSelectText = (id: string) => {
-        const el = document.querySelector(id) as HTMLSelectElement;
+      const getSelectOrInputText = (id: string) => {
+        const el = document.querySelector(id) as HTMLElement | null;
         if (!el) return "";
-        return el.options[el.selectedIndex]?.text ?? el.value;
+        // Handle both <select> and <input> elements
+        if (el.tagName === "SELECT") {
+          const sel = el as HTMLSelectElement;
+          return sel.selectedIndex >= 0
+            ? (sel.options[sel.selectedIndex]?.text ?? sel.value)
+            : sel.value;
+        }
+        return (el as HTMLInputElement).value ?? "";
       };
 
       return {
         cuit: getValue(selectors.editCuit),
         denominacion: getValue(selectors.editDenominacion),
-        periodoDesde: getSelectText(selectors.editPeriodo),
+        periodoDesde: getSelectOrInputText(selectors.editPeriodo),
         montoTotal: getValue(selectors.editMontoTotal),
       };
     },
@@ -2979,11 +2983,17 @@ async function extractStandardEditForm(
     },
   );
 
-  // Also try to read periodoHasta if it exists
+  // Also try to read periodoHasta if it exists (may be <select> or <input>)
   const periodoHasta = await page.evaluate(() => {
-    const el = document.querySelector("#mesHasta") as HTMLSelectElement;
+    const el = document.querySelector("#mesHasta") as HTMLElement | null;
     if (!el) return "";
-    return el.options[el.selectedIndex]?.text ?? el.value;
+    if (el.tagName === "SELECT") {
+      const sel = el as HTMLSelectElement;
+      return sel.selectedIndex >= 0
+        ? (sel.options[sel.selectedIndex]?.text ?? sel.value)
+        : sel.value;
+    }
+    return (el as HTMLInputElement).value ?? "";
   });
 
   // For GASTOS_EDUCATIVOS, try to read the familiar (dependent) name
@@ -3041,14 +3051,9 @@ async function extractAlquilerEditForm(
 
   // Wait for the edit form to fully load (CUIT field gets populated via AJAX)
   try {
-    await page.waitForFunction(
-      (cuitSel: string) => {
-        const el = document.querySelector(cuitSel) as HTMLInputElement;
-        return el && el.value.length > 0;
-      },
-      sel.editCuit as string,
-      { timeout: 10_000 },
-    );
+    await page.waitForFunction(`document.querySelector("${sel.editCuit}")?.value?.length > 0`, {
+      timeout: 10_000,
+    });
   } catch {
     log("  Alquiler: formulario de edición no cargó el CUIT, saltando entrada");
     return null;
@@ -3130,14 +3135,9 @@ async function extractDomesticoEditForm(
 
   // Wait for the edit form to fully load (CUIL field gets populated via AJAX)
   try {
-    await page.waitForFunction(
-      (cuilSel: string) => {
-        const el = document.querySelector(cuilSel) as HTMLInputElement;
-        return el && el.value.length > 0;
-      },
-      domSel.formCuit as string,
-      { timeout: 10_000 },
-    );
+    await page.waitForFunction(`document.querySelector("${domSel.formCuit}")?.value?.length > 0`, {
+      timeout: 10_000,
+    });
   } catch {
     log("  Formulario doméstico no cargó el CUIL, saltando entrada");
     return null;
@@ -3147,17 +3147,21 @@ async function extractDomesticoEditForm(
     (selectors) => {
       const getValue = (id: string) =>
         (document.querySelector(id) as HTMLInputElement)?.value ?? "";
-      const getSelectText = (id: string) => {
-        const el = document.querySelector(id) as HTMLSelectElement;
+      const getSelectOrInputText = (id: string) => {
+        const el = document.querySelector(id) as HTMLElement | null;
         if (!el) return "";
-        return el.options[el.selectedIndex]?.text ?? el.value;
+        if (el.tagName === "SELECT") {
+          const s = el as HTMLSelectElement;
+          return s.selectedIndex >= 0 ? (s.options[s.selectedIndex]?.text ?? s.value) : s.value;
+        }
+        return (el as HTMLInputElement).value ?? "";
       };
 
       return {
         cuil: getValue(selectors.formCuit),
         name: getValue(selectors.formApellidoNombre),
-        mesDesde: getSelectText(selectors.formMesDesde),
-        mesHasta: getSelectText(selectors.formMesHasta),
+        mesDesde: getSelectOrInputText(selectors.formMesDesde),
+        mesHasta: getSelectOrInputText(selectors.formMesHasta),
         montoTotal: getValue(selectors.formMontoTotal),
       };
     },

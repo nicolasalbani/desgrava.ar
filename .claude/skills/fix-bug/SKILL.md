@@ -28,7 +28,10 @@ $ARGUMENTS
 
 1. Make the minimal change needed to fix the bug.
 2. Do NOT refactor, add features, or "improve" surrounding code.
-3. **If the bug is in ARCA/SiRADIG automation code** (`src/lib/automation/`), use `/implement-loop` to iterate: test against live SiRADIG, observe failures with `agent-browser`, fix, and re-test until the automation succeeds. Then continue to Phase 3.
+3. **If the bug involves automation code or import flows** (`src/lib/automation/`, `src/lib/catalog/`, `src/lib/ocr/`, or anything that runs during ARCA/SiRADIG import), you MUST verify the fix works end-to-end:
+   - **For ARCA/SiRADIG browser automation**: Use `/implement-loop` to iterate: test against live SiRADIG, observe failures with `agent-browser`, fix, and re-test until the automation succeeds.
+   - **For import/classification/data pipeline bugs**: After making the fix, query the local database to verify the fix resolves the reported issue. Check for stale cached data (e.g., ProviderCatalog entries) that may bypass the fix. If stale data exists, clean it up AND add code to handle it going forward.
+   - **NEVER assume a fix works without verifying against actual data.** The fix must handle both new data and existing cached/stale data.
 4. **If the fix touches UI components**, ensure the fix is mobile-friendly:
    - Use responsive classes (`sm:`, `md:`, `lg:`) — never fixed widths without mobile breakpoints.
    - Test that layouts don't overflow on small screens (min 320px width).
@@ -57,3 +60,4 @@ All must pass.
 - What was changed
 - Regression test added
 - How to verify the fix
+- **For automation/import fixes**: Include evidence that the fix was verified against actual data (e.g., DB query results showing the issue is resolved)

@@ -38,7 +38,6 @@ describe("reverseLookupCategory", () => {
     ["Deducción del personal doméstico", "SERVICIO_DOMESTICO"],
     ["Gastos de Educación", "GASTOS_EDUCATIVOS"],
     ["Donaciones", "DONACIONES"],
-    ["Otras deducciones", "OTRAS_DEDUCCIONES"],
     ["Gastos de sepelio", "GASTOS_SEPELIO"],
     ["Intereses préstamo hipotecario", "INTERESES_HIPOTECARIOS"],
   ])("maps '%s' to %s", (legendText, expected) => {
@@ -68,8 +67,14 @@ describe("reverseLookupCategory", () => {
     expect(reverseLookupCategory("Retenciones")).toBeUndefined();
   });
 
-  it("maps all SIRADIG_CATEGORY_MAP values back to their enum key", () => {
+  it("does not map 'Otras deducciones' (should only be assigned manually)", () => {
+    expect(reverseLookupCategory("Otras deducciones")).toBeUndefined();
+    expect(reverseLookupCategory("Otras deducciones  +")).toBeUndefined();
+  });
+
+  it("maps all SIRADIG_CATEGORY_MAP values back to their enum key (except OTRAS_DEDUCCIONES)", () => {
     for (const [enumKey, displayText] of Object.entries(SIRADIG_CATEGORY_MAP)) {
+      if (enumKey === "OTRAS_DEDUCCIONES") continue; // intentionally excluded from reverse lookup
       const result = reverseLookupCategory(displayText);
       expect(result, `Should map '${displayText}' back to '${enumKey}'`).toBe(enumKey);
     }
