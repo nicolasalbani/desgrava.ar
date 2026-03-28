@@ -86,9 +86,10 @@ function AnimatedRatio({ value }: { value: number }) {
 }
 
 export function SimuladorResults({ result }: { result: SimplifiedSimulationResult }) {
+  const ahorroAnual = parseFloat(result.ahorroAnualHasta);
   const ahorroMensual = parseFloat(result.ahorroMensualHasta);
-  const netoMensual = parseFloat(result.ahorroNetoMensual);
   const netoAnual = parseFloat(result.ahorronetoAnual);
+  const netoMensual = parseFloat(result.ahorroNetoMensual);
   const planCostoMensual = PERSONAL_PLAN_MONTHLY_COST;
   const roiMultiplier = planCostoMensual > 0 ? Math.floor(ahorroMensual / planCostoMensual) : 0;
   const hasPositiveNet = netoMensual > 0;
@@ -98,7 +99,7 @@ export function SimuladorResults({ result }: { result: SimplifiedSimulationResul
     return (
       <div className="border-border bg-muted/50 rounded-xl border p-5">
         <p className="text-muted-foreground text-center text-sm">
-          {ahorroMensual > 0
+          {ahorroAnual > 0
             ? `Tus deducciones aun no cubren el costo del plan. Agrega mas gastos para ver tu ahorro.`
             : `Agrega gastos deducibles para ver cuanto podes ahorrar.`}
         </p>
@@ -109,9 +110,9 @@ export function SimuladorResults({ result }: { result: SimplifiedSimulationResul
   return (
     <div className="border-border rounded-xl border bg-green-50/50 p-5 dark:bg-green-950/20">
       <div className="flex flex-col gap-5">
-        {/* 1st: Before/after comparison */}
+        {/* 1st: Before/after comparison — annual-first */}
         <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
-          {/* "Sin" card: muted, de-emphasized */}
+          {/* "Sin" card */}
           <div className="border-border bg-muted/50 flex-1 rounded-lg border p-3 text-center">
             <p className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
               Sin desgrava.ar
@@ -121,23 +122,23 @@ export function SimuladorResults({ result }: { result: SimplifiedSimulationResul
           <div className="hidden items-center sm:flex">
             <ArrowRight className="text-muted-foreground h-5 w-5" />
           </div>
-          {/* "Con" card: prominent, green */}
+          {/* "Con" card — annual hero */}
           <div className="flex-1 rounded-lg border-2 border-green-300 bg-green-50 p-4 text-center dark:border-green-800 dark:bg-green-950/40">
             <p className="text-[10px] font-medium tracking-wider text-green-700 uppercase dark:text-green-400">
               Con desgrava.ar
             </p>
-            <p className="mt-1 text-xl font-bold text-green-600 tabular-nums dark:text-green-400">
-              +<AnimatedNumber value={netoMensual} />
-              <span className="text-sm font-normal">/mes</span>
+            <p className="mt-1 text-2xl font-bold text-green-600 tabular-nums dark:text-green-400">
+              +<AnimatedNumber value={netoAnual} />
+              <span className="text-sm font-normal">/año</span>
             </p>
             <p className="mt-1.5 text-xs font-medium text-green-600/80 tabular-nums dark:text-green-400/70">
-              <AnimatedNumber value={netoAnual} />
-              /año
+              <AnimatedNumber value={netoMensual} />
+              /mes
             </p>
           </div>
         </div>
 
-        {/* 2nd: ROI + CTA side by side */}
+        {/* 2nd: ROI + CTA */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <ShieldCheck className="h-8 w-8 shrink-0 text-green-600 dark:text-green-400" />

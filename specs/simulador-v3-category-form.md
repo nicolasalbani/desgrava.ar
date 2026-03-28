@@ -1,6 +1,6 @@
 ---
 title: Simulador v3 — Category Form UX
-status: draft
+status: implemented
 priority: high
 ---
 
