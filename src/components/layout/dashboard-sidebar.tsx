@@ -11,9 +11,9 @@ import {
   Receipt,
   Send,
   Settings,
-  Calculator,
   LogOut,
 } from "lucide-react";
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -48,7 +48,7 @@ export function DashboardSidebar() {
     <aside className="border-border bg-background hidden h-full w-64 flex-col border-r md:flex">
       <div className="border-border flex h-16 items-center border-b px-6">
         <Link href="/" className="flex items-center gap-2 text-lg font-bold">
-          <Calculator className="h-5 w-5" />
+          <Image src="/logo.png" alt="desgrava.ar" width={20} height={20} />
           desgrava.ar
         </Link>
       </div>

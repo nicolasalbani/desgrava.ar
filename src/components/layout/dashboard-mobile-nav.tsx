@@ -3,16 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import {
-  LayoutDashboard,
-  User,
-  KeyRound,
-  FileText,
-  Receipt,
-  Settings,
-  Calculator,
-  LogOut,
-} from "lucide-react";
+import { LayoutDashboard, User, KeyRound, FileText, Receipt, Settings, LogOut } from "lucide-react";
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -46,7 +38,7 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
     <div className="flex h-full flex-col">
       <div className="border-border flex h-16 items-center border-b px-6">
         <Link href="/" className="flex items-center gap-2 text-lg font-bold" onClick={onNavigate}>
-          <Calculator className="h-5 w-5" />
+          <Image src="/logo.png" alt="desgrava.ar" width={20} height={20} />
           desgrava.ar
         </Link>
       </div>
