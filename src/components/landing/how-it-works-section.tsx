@@ -7,21 +7,18 @@ interface Step {
 const steps: Step[] = [
   {
     number: 1,
-    title: "Simula tu ahorro",
-    description:
-      "Ingresa tu sueldo bruto y tus gastos deducibles. En segundos ves cuanto podes recuperar.",
+    title: "Crea tu cuenta",
+    description: "Crea tu cuenta e ingresa tu clave fiscal.",
   },
   {
     number: 2,
-    title: "Carga tus facturas",
-    description:
-      "Subi un PDF, cargalas a mano o importalas directo desde ARCA. La IA clasifica la categoria por vos.",
+    title: "Carga tus gastos",
+    description: "Importa tus gastos desde ARCA o cargalos en la app en minutos.",
   },
   {
     number: 3,
-    title: "Enviamos a SiRADIG",
-    description:
-      "Conecta tu clave fiscal y con un click cargamos todas tus deducciones en SiRADIG automaticamente.",
+    title: "Desgravá",
+    description: "Presentá tus deducciones con un click.",
   },
 ];
 

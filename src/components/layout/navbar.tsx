@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   Menu,
-  Calculator,
   Sun,
   Moon,
   Monitor,
@@ -23,7 +23,7 @@ import { usePathname } from "next/navigation";
 const themeIcons = { light: Sun, dark: Moon, system: Monitor } as const;
 
 const sectionLinks = [
-  { label: "Desgravá", href: "/#desgrava", icon: Sparkles },
+  { label: "Cómo funciona", href: "/#desgrava", icon: Sparkles },
   { label: "Simulador", href: "/#simulador", icon: BarChart3 },
   { label: "Planes", href: "/#planes", icon: CreditCard },
 ];
@@ -58,33 +58,33 @@ export function Navbar() {
               e.preventDefault();
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-            className="flex items-center gap-2 text-lg font-bold"
+            className="flex items-center gap-3 text-3xl font-bold"
           >
-            <Calculator className="h-5 w-5" />
+            <Image src="/logo.png" alt="desgrava.ar" width={40} height={40} className="h-10 w-10" />
             desgrava.ar
           </a>
         ) : (
-          <Link href="/" className="flex items-center gap-2 text-lg font-bold">
-            <Calculator className="h-5 w-5" />
+          <Link href="/" className="flex items-center gap-3 text-3xl font-bold">
+            <Image src="/logo.png" alt="desgrava.ar" width={40} height={40} className="h-10 w-10" />
             desgrava.ar
           </Link>
         )}
 
-        <nav className="hidden items-center gap-6 md:flex">
+        <nav className="hidden items-center gap-8 md:flex">
           <Button
             variant="ghost"
             size="icon"
             onClick={cycleTheme}
             className="text-muted-foreground hover:text-foreground"
           >
-            <ThemeIcon className="h-4 w-4" />
+            <ThemeIcon className="h-5 w-5" />
           </Button>
           {isLanding
             ? sectionLinks.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
-                  className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                  className="text-muted-foreground hover:text-foreground text-lg transition-colors"
                 >
                   {link.label}
                 </a>
@@ -93,12 +93,12 @@ export function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                  className="text-muted-foreground hover:text-foreground text-lg transition-colors"
                 >
                   {link.label}
                 </Link>
               ))}
-          <Button asChild size="sm">
+          <Button asChild size="lg">
             {session ? (
               <Link href="/dashboard">Ir al panel</Link>
             ) : (
@@ -116,86 +116,100 @@ export function Navbar() {
           >
             <ThemeIcon className="h-4 w-4" />
           </Button>
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[280px] p-0">
-              <SheetTitle className="sr-only">Menú</SheetTitle>
-              <div className="flex h-full flex-col">
-                <div className="border-border flex h-16 items-center border-b px-6">
-                  {isLanding ? (
-                    <a
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setOpen(false);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                      className="flex items-center gap-2 text-lg font-bold"
-                    >
-                      <Calculator className="h-5 w-5" />
-                      desgrava.ar
-                    </a>
-                  ) : (
-                    <Link
-                      href="/"
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-2 text-lg font-bold"
-                    >
-                      <Calculator className="h-5 w-5" />
-                      desgrava.ar
-                    </Link>
-                  )}
-                </div>
-                <nav className="flex flex-1 flex-col gap-0.5 px-3 py-4">
-                  {sectionLinks.map((link) => {
-                    const Icon = link.icon;
-                    return isLanding ? (
+          {mounted && (
+            <Sheet open={open} onOpenChange={setOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[280px] p-0">
+                <SheetTitle className="sr-only">Menú</SheetTitle>
+                <div className="flex h-full flex-col">
+                  <div className="border-border flex h-16 items-center border-b px-6">
+                    {isLanding ? (
                       <a
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setOpen(false)}
-                        className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150"
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setOpen(false);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className="flex items-center gap-3 text-2xl font-bold"
                       >
-                        <Icon className="h-4 w-4" />
-                        {link.label}
+                        <Image
+                          src="/logo.png"
+                          alt="desgrava.ar"
+                          width={48}
+                          height={48}
+                          className="h-12 w-12"
+                        />
+                        desgrava.ar
                       </a>
                     ) : (
                       <Link
-                        key={link.href}
-                        href={link.href}
+                        href="/"
                         onClick={() => setOpen(false)}
-                        className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150"
+                        className="flex items-center gap-3 text-2xl font-bold"
                       >
-                        <Icon className="h-4 w-4" />
-                        {link.label}
+                        <Image
+                          src="/logo.png"
+                          alt="desgrava.ar"
+                          width={48}
+                          height={48}
+                          className="h-12 w-12"
+                        />
+                        desgrava.ar
                       </Link>
-                    );
-                  })}
-                </nav>
-                <div className="border-border border-t p-3">
-                  {session ? (
-                    <Button asChild className="w-full">
-                      <Link href="/dashboard" onClick={() => setOpen(false)}>
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                        Ir al panel
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button asChild className="w-full">
-                      <Link href="/login" onClick={() => setOpen(false)}>
-                        <LogIn className="mr-2 h-4 w-4" />
-                        Iniciar sesion
-                      </Link>
-                    </Button>
-                  )}
+                    )}
+                  </div>
+                  <nav className="flex flex-1 flex-col gap-0.5 px-3 py-4">
+                    {sectionLinks.map((link) => {
+                      const Icon = link.icon;
+                      return isLanding ? (
+                        <a
+                          key={link.href}
+                          href={link.href}
+                          onClick={() => setOpen(false)}
+                          className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150"
+                        >
+                          <Icon className="h-4 w-4" />
+                          {link.label}
+                        </a>
+                      ) : (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          onClick={() => setOpen(false)}
+                          className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150"
+                        >
+                          <Icon className="h-4 w-4" />
+                          {link.label}
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                  <div className="border-border border-t p-3">
+                    {session ? (
+                      <Button asChild className="w-full">
+                        <Link href="/dashboard" onClick={() => setOpen(false)}>
+                          <LayoutDashboard className="mr-2 h-4 w-4" />
+                          Ir al panel
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button asChild className="w-full">
+                        <Link href="/login" onClick={() => setOpen(false)}>
+                          <LogIn className="mr-2 h-4 w-4" />
+                          Iniciar sesion
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </SheetContent>
-          </Sheet>
+              </SheetContent>
+            </Sheet>
+          )}
         </div>
       </div>
     </header>

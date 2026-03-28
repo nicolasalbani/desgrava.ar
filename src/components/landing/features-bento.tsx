@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Calculator, FileText, Bot, Shield, ScanText, Download } from "lucide-react";
+import { Calculator, FileText, Bot, Shield, ScanText, Download, SendIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 interface BentoCard {
@@ -16,51 +16,41 @@ interface BentoCard {
 const cards: BentoCard[] = [
   {
     icon: Calculator,
-    title: "Simulador de deducciones",
+    title: "Simulador",
     description: "Calcula cuanto podes recuperar de ganancias antes de cargar nada. Sin registro.",
     span: "wide",
     accent: "group-hover:text-violet-500 dark:group-hover:text-violet-400",
     accentGlow: "bg-violet-500/10 dark:bg-violet-400/10",
   },
   {
-    icon: ScanText,
-    title: "OCR inteligente",
-    description: "Subi un PDF y extraemos proveedor, CUIT, monto y fecha automaticamente.",
+    icon: Bot,
+    title: "Inteligencia artificial",
+    description:
+      "La inteligencia artificial detecta la categoria de deduccion de cada factura por vos.",
     span: "single",
     accent: "group-hover:text-sky-500 dark:group-hover:text-sky-400",
     accentGlow: "bg-sky-500/10 dark:bg-sky-400/10",
   },
   {
     icon: Download,
-    title: "Importa desde ARCA",
-    description:
-      "Conecta tu cuenta y traemos todos tus comprobantes recibidos del año en segundos.",
+    title: "Importá tus comprobantes",
+    description: "Carga tu clave fiscal y traemos todos tus comprobantes en segundos.",
     span: "single",
     accent: "group-hover:text-emerald-500 dark:group-hover:text-emerald-400",
     accentGlow: "bg-emerald-500/10 dark:bg-emerald-400/10",
   },
   {
-    icon: Bot,
-    title: "SiRADIG automatico",
-    description:
-      "Con un click cargamos todas tus deducciones en SiRADIG. Sin navegar ARCA manualmente.",
+    icon: SendIcon,
+    title: "Envío automático",
+    description: "Con un click cargas todas tus deducciones sin entrar a ARCA.",
     span: "wide",
     accent: "group-hover:text-amber-500 dark:group-hover:text-amber-400",
     accentGlow: "bg-amber-500/10 dark:bg-amber-400/10",
   },
   {
-    icon: FileText,
-    title: "Clasificacion AI",
-    description:
-      "La inteligencia artificial detecta la categoria de deduccion de cada factura por vos.",
-    span: "single",
-    accent: "group-hover:text-rose-500 dark:group-hover:text-rose-400",
-    accentGlow: "bg-rose-500/10 dark:bg-rose-400/10",
-  },
-  {
     icon: Shield,
-    title: "Encriptacion bancaria",
-    description: "Tu clave fiscal se encripta con AES-256-GCM. Nunca se almacena en texto plano.",
+    title: "Seguridad bancaria",
+    description: "Tu clave fiscal protegida con nivel de seguridad bancaria.",
     span: "single",
     accent: "group-hover:text-teal-500 dark:group-hover:text-teal-400",
     accentGlow: "bg-teal-500/10 dark:bg-teal-400/10",
