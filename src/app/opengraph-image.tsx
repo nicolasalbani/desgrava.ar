@@ -1,9 +1,14 @@
 import { ImageResponse } from "next/og";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function Image() {
+export default async function Image() {
+  const logoData = await readFile(join(process.cwd(), "public", "logo.png"));
+  const logoSrc = `data:image/png;base64,${logoData.toString("base64")}`;
+
   return new ImageResponse(
     <div
       style={{
@@ -17,39 +22,7 @@ export default function Image() {
         gap: 32,
       }}
     >
-      <div
-        style={{
-          background: "#000",
-          borderRadius: 24,
-          width: 100,
-          height: 100,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <svg
-          width="60"
-          height="60"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <rect width="16" height="20" x="4" y="2" rx="2" />
-          <line x1="8" x2="16" y1="6" y2="6" />
-          <line x1="16" x2="16" y1="14" y2="18" />
-          <path d="M16 10h.01" />
-          <path d="M12 10h.01" />
-          <path d="M8 10h.01" />
-          <path d="M12 14h.01" />
-          <path d="M8 14h.01" />
-          <path d="M12 18h.01" />
-          <path d="M8 18h.01" />
-        </svg>
-      </div>
+      <img src={logoSrc} alt="desgrava.ar" width={160} height={160} />
       <div
         style={{
           display: "flex",
