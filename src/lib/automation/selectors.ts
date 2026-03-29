@@ -69,6 +69,24 @@ export const ARCA_SELECTORS = {
       formProximosPeriodos: "#proximosPeriodos",
       formVolverBtn: "#btn_volver, button:has-text('Volver')",
     },
+
+    // Empleadores section (verified 2026-03-29)
+    empleadores: {
+      menuButton: "#btn_empleadores",
+      tabLink: "#tab_principal_empleadores",
+      tableRows: "tr[data-id-reg]",
+      editButton: ".act_editar",
+      nuevoEmpleadorBtn: "button:has-text('Nuevo Empleador')",
+      // Form fields
+      formEmpleadorSelect: "#idEmpleadores",
+      formCuit: "#cuit",
+      formRazonSocial: "#razonSocial",
+      formFechaInicio: "#fechaInicioRelacion",
+      formFechaFin: "#fechaFinRelacion",
+      formAgenteRetencion: "#agenteRetencion",
+      formVolverBtn: "#btn_volver, button:has-text('Volver')",
+      formGuardarBtn: "#btn_guardar, button:has-text('Guardar')",
+    },
   },
   // Mis Comprobantes service (fes.afip.gob.ar/mcmp/)
   // Verified with /arca-assisted-navigation on 2026-03-14

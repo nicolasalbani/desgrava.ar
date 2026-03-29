@@ -30,6 +30,7 @@ model User {
   yearPreferences  UserYearPreference[]
   emailIngestLogs  EmailIngestLog[]
   familyDependents FamilyDependent[]
+  employers        Employer[]
   domesticWorkers  DomesticWorker[]
   domesticReceipts DomesticReceipt[]
   presentaciones   Presentacion[]
@@ -148,6 +149,8 @@ model AutomationJob {
   user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   invoice          Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   familyDependent  FamilyDependent? @relation("AutomationJobFamilyDependent", fields: [familyDependentId], references: [id], onDelete: SetNull)
+  employerId       String?
+  employer         Employer?        @relation("AutomationJobEmployer", fields: [employerId], references: [id], onDelete: SetNull)
   domesticReceipts DomesticReceipt[]
   presentacion     Presentacion?    @relation(fields: [presentacionId], references: [id], onDelete: SetNull)
   presentacionId   String?
@@ -246,6 +249,8 @@ enum JobType {
   SUBMIT_DOMESTIC_DEDUCTION
   PULL_PRESENTACIONES
   SUBMIT_PRESENTACION
+  PULL_EMPLOYERS
+  PUSH_EMPLOYERS
 }
 
 enum JobStatus {
@@ -284,6 +289,26 @@ model FamilyDependent {
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   invoices       Invoice[]
   automationJobs AutomationJob[] @relation("AutomationJobFamilyDependent")
+
+  @@index([userId, fiscalYear])
+}
+
+// ─── Employers ──────────────────────────────────────────────
+
+model Employer {
+  id               String   @id @default(cuid())
+  userId           String
+  fiscalYear       Int
+  cuit             String   // 11-digit employer CUIT
+  razonSocial      String
+  fechaInicio      String   // dd/mm/yyyy
+  fechaFin         String?  // dd/mm/yyyy — null if still employed
+  agenteRetencion  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  automationJobs AutomationJob[] @relation("AutomationJobEmployer")
 
   @@index([userId, fiscalYear])
 }

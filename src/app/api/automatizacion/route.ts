@@ -13,7 +13,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { invoiceId, jobType = "SUBMIT_INVOICE", fiscalYear, familyDependentId } = body;
+    const {
+      invoiceId,
+      jobType = "SUBMIT_INVOICE",
+      fiscalYear,
+      familyDependentId,
+      employerId,
+    } = body;
 
     // PULL_COMPROBANTES: import invoices from ARCA's "Mis Comprobantes"
     if (jobType === "PULL_COMPROBANTES") {
@@ -121,6 +127,84 @@ export async function POST(req: NextRequest) {
           jobType,
           fiscalYear,
           familyDependentId,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
+
+    // PULL_EMPLOYERS: import employers from SiRADIG
+    if (jobType === "PULL_EMPLOYERS") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType,
+          fiscalYear,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
+
+    // PUSH_EMPLOYERS: export individual employer to SiRADIG
+    if (jobType === "PUSH_EMPLOYERS") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+      if (!employerId) {
+        return NextResponse.json({ error: "Falta el ID del empleador" }, { status: 400 });
+      }
+
+      const employer = await prisma.employer.findFirst({
+        where: { id: employerId, userId: session.user.id, fiscalYear },
+      });
+      if (!employer) {
+        return NextResponse.json({ error: "Empleador no encontrado" }, { status: 404 });
+      }
+
+      const activeJob = await prisma.automationJob.findFirst({
+        where: {
+          userId: session.user.id,
+          jobType: "PUSH_EMPLOYERS",
+          employerId,
+          status: { in: ["PENDING", "RUNNING"] },
+        },
+      });
+      if (activeJob) {
+        return NextResponse.json(
+          { error: "Ya hay una exportación en curso para este empleador" },
+          { status: 409 },
+        );
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType,
+          fiscalYear,
+          employerId,
           status: "PENDING",
         },
       });

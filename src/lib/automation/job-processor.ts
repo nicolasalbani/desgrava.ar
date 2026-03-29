@@ -37,6 +37,7 @@ import {
 } from "./presentacion-navigator";
 import { extractReceiptFields } from "@/lib/ocr/receipt-extractor";
 import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } from "./csv-parser";
+import { ARCA_SELECTORS } from "./selectors";
 import { resolveCategory } from "@/lib/catalog/provider-catalog";
 import {
   saveScreenshot,
@@ -425,6 +426,345 @@ async function processPushFamilyDependents(
 }
 
 /**
+ * Process a PULL_EMPLOYERS job:
+ * navigate to SiRADIG Empleadores section, extract all employer rows, upsert into DB.
+ */
+async function processPullEmployers(
+  siradigPage: Page,
+  job: { userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  // Navigate through SiRADIG person/year selection to reach the main menu
+  const navResult = await navigateToSiradigMainMenu(
+    siradigPage,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!navResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Navigate to Empleadores tab
+  await appendStep(jobId, "extract", onLog);
+  await appendLogFn(jobId, "Navegando a la seccion de Empleadores...", onLog);
+
+  const sel = ARCA_SELECTORS.siradig.empleadores;
+  const empTab = siradigPage.locator(sel.menuButton);
+  await empTab.waitFor({ state: "visible", timeout: 15000 });
+  await empTab.click();
+  await siradigPage.waitForLoadState("networkidle");
+  await siradigPage.waitForTimeout(2000);
+
+  await onScreenshot(
+    await siradigPage.screenshot({ fullPage: true }),
+    "employers-section",
+    "Seccion de empleadores",
+  );
+
+  // Extract employer rows
+  const rows = siradigPage.locator(sel.tableRows);
+  const rowCount = await rows.count();
+  await appendLogFn(jobId, `${rowCount} empleadores encontrados`, onLog);
+
+  interface ExtractedEmployer {
+    cuit: string;
+    razonSocial: string;
+    fechaInicio: string;
+    fechaFin: string;
+    agenteRetencion: boolean;
+  }
+
+  const employers: ExtractedEmployer[] = [];
+
+  for (let i = 0; i < rowCount; i++) {
+    const row = rows.nth(i);
+    const editBtn = row.locator(sel.editButton);
+    if ((await editBtn.count()) === 0) continue;
+
+    await editBtn.click();
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(1500);
+
+    const cuit = await siradigPage
+      .$eval(sel.formCuit, (el) => (el as HTMLInputElement).value)
+      .catch(() => "");
+    const razonSocial = await siradigPage
+      .$eval(sel.formRazonSocial, (el) => (el as HTMLInputElement).value)
+      .catch(() => "");
+    const fechaInicio = await siradigPage
+      .$eval(sel.formFechaInicio, (el) => (el as HTMLInputElement).value)
+      .catch(() => "");
+    const fechaFin = await siradigPage
+      .$eval(sel.formFechaFin, (el) => (el as HTMLInputElement).value)
+      .catch(() => "");
+    const agenteVal = await siradigPage
+      .$eval(sel.formAgenteRetencion, (el) => (el as HTMLSelectElement).value)
+      .catch(() => "N");
+
+    if (cuit) {
+      employers.push({
+        cuit: cuit.replace(/-/g, ""),
+        razonSocial,
+        fechaInicio,
+        fechaFin,
+        agenteRetencion: agenteVal === "S",
+      });
+      await appendLogFn(jobId, `Empleador ${i + 1}: ${razonSocial} (${cuit})`, onLog);
+    }
+
+    await onScreenshot(
+      await siradigPage.screenshot({ fullPage: true }),
+      `employer-${i}`,
+      `Empleador: ${razonSocial}`,
+    );
+
+    // Go back to list
+    const volverBtn = siradigPage.locator(sel.formVolverBtn).first();
+    await volverBtn.click();
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(1500);
+  }
+
+  // Upsert into database
+  await appendLogFn(jobId, "Sincronizando empleadores con la base de datos...", onLog);
+  let created = 0;
+  let updated = 0;
+
+  for (const emp of employers) {
+    const existing = await prisma.employer.findFirst({
+      where: { userId: job.userId, fiscalYear, cuit: emp.cuit },
+    });
+
+    const data = {
+      razonSocial: emp.razonSocial,
+      fechaInicio: emp.fechaInicio,
+      fechaFin: emp.fechaFin || null,
+      agenteRetencion: emp.agenteRetencion,
+    };
+
+    if (existing) {
+      await prisma.employer.update({ where: { id: existing.id }, data });
+      updated++;
+    } else {
+      await prisma.employer.create({
+        data: { ...data, userId: job.userId, fiscalYear, cuit: emp.cuit },
+      });
+      created++;
+    }
+  }
+
+  const summary = `Importacion completada: ${created} creados, ${updated} actualizados`;
+  await appendLogFn(jobId, summary, onLog);
+
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData: JSON.parse(JSON.stringify({ created, updated, total: employers.length })),
+    },
+  });
+}
+
+/**
+ * Process a PUSH_EMPLOYERS job:
+ * load local employer, navigate to SiRADIG Empleadores section, create or update.
+ */
+async function processPushEmployers(
+  siradigPage: Page,
+  job: { userId: string; fiscalYear?: number | null; employerId?: string | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  if (!job.employerId) {
+    await appendLogFn(jobId, "Falta el ID del empleador", onLog);
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "FAILED",
+        errorMessage: "Falta el ID del empleador",
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
+  const employer = await prisma.employer.findUnique({ where: { id: job.employerId } });
+  if (!employer) {
+    await appendLogFn(jobId, "Empleador no encontrado", onLog);
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "FAILED",
+        errorMessage: "Empleador no encontrado",
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
+  await appendLogFn(jobId, `Exportando: ${employer.razonSocial} (${employer.cuit})`, onLog);
+
+  // Navigate through SiRADIG person/year selection
+  const navResult = await navigateToSiradigMainMenu(
+    siradigPage,
+    employer.fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!navResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  // Navigate to Empleadores tab
+  await appendStep(jobId, "upload", onLog);
+  await appendLogFn(jobId, "Navegando a la seccion de Empleadores...", onLog);
+
+  const sel = ARCA_SELECTORS.siradig.empleadores;
+  const empTab = siradigPage.locator(sel.menuButton);
+  await empTab.waitFor({ state: "visible", timeout: 15000 });
+  await empTab.click();
+  await siradigPage.waitForLoadState("networkidle");
+  await siradigPage.waitForTimeout(2000);
+
+  // Check if employer already exists by CUIT
+  const rows = siradigPage.locator(sel.tableRows);
+  const rowCount = await rows.count();
+  let existingRowIndex = -1;
+  const cuitDigits = employer.cuit.replace(/-/g, "");
+
+  for (let i = 0; i < rowCount; i++) {
+    const rowText = (await rows.nth(i).textContent()) ?? "";
+    if (rowText.includes(cuitDigits)) {
+      existingRowIndex = i;
+      break;
+    }
+  }
+
+  if (existingRowIndex >= 0) {
+    // Edit existing employer
+    await appendLogFn(jobId, "Empleador existente encontrado, editando...", onLog);
+    const editBtn = rows.nth(existingRowIndex).locator(sel.editButton);
+    await editBtn.click();
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(1500);
+  } else {
+    // Create new employer
+    await appendLogFn(jobId, "Creando nuevo empleador...", onLog);
+    const nuevoBtn = siradigPage.locator(sel.nuevoEmpleadorBtn);
+    await nuevoBtn.click();
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(1500);
+
+    // Select "Otro (ingresar)" from the dropdown
+    await siradigPage.selectOption(sel.formEmpleadorSelect, "99");
+    await siradigPage.waitForTimeout(1000);
+
+    // Fill CUIT
+    await siradigPage.fill(sel.formCuit, cuitDigits);
+    // Trigger AJAX lookup for razonSocial
+    await siradigPage.locator(sel.formCuit).dispatchEvent("change");
+    await siradigPage.waitForTimeout(2000);
+  }
+
+  // Fill form fields
+  await siradigPage.fill(sel.formFechaInicio, employer.fechaInicio);
+  // Dismiss datepicker if it appears
+  await siradigPage.evaluate(() => {
+    const dp = document.getElementById("ui-datepicker-div");
+    if (dp) dp.style.display = "none";
+  });
+
+  if (employer.fechaFin) {
+    await siradigPage.fill(sel.formFechaFin, employer.fechaFin);
+    await siradigPage.evaluate(() => {
+      const dp = document.getElementById("ui-datepicker-div");
+      if (dp) dp.style.display = "none";
+    });
+  }
+
+  await siradigPage.selectOption(sel.formAgenteRetencion, employer.agenteRetencion ? "S" : "N");
+
+  await onScreenshot(
+    await siradigPage.screenshot({ fullPage: true }),
+    "employer-form-filled",
+    "Formulario completado",
+  );
+
+  // Save
+  await appendLogFn(jobId, "Guardando empleador...", onLog);
+  const guardarBtn = siradigPage.locator(sel.formGuardarBtn).first();
+  await guardarBtn.click();
+  await siradigPage.waitForLoadState("networkidle");
+  await siradigPage.waitForTimeout(2000);
+
+  // Check for errors
+  const errorEl = await siradigPage.$(".formErrorContent, .ui-state-error-text, #mensajeError");
+  if (errorEl) {
+    const errorText = (await errorEl.textContent())?.trim() ?? "Error desconocido";
+    await appendLogFn(jobId, `Error al guardar: ${errorText}`, onLog);
+    await onScreenshot(
+      await siradigPage.screenshot({ fullPage: true }),
+      "employer-save-error",
+      "Error al guardar",
+    );
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: errorText, completedAt: new Date() },
+    });
+    return;
+  }
+
+  await onScreenshot(
+    await siradigPage.screenshot({ fullPage: true }),
+    "employer-saved",
+    "Empleador guardado",
+  );
+
+  const action = existingRowIndex >= 0 ? "actualizado" : "creado";
+  await appendLogFn(jobId, `Empleador ${action} exitosamente`, onLog);
+
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData: JSON.parse(
+        JSON.stringify({
+          created: existingRowIndex < 0 ? 1 : 0,
+          updated: existingRowIndex >= 0 ? 1 : 0,
+        }),
+      ),
+    },
+  });
+}
+
+/**
  * Process a PULL_DOMESTIC_WORKERS job:
  * navigate to "Personal de Casas Particulares", pull worker info only (no receipts), upsert into DB.
  * Used by "Importar desde ARCA" on the Perfil Impositivo page.
@@ -804,7 +1144,7 @@ async function processPullComprobantes(
   );
 
   // ── Phase 1: Parallel category resolution ─────────────────
-  await appendStepFn(jobId, "classify", onLog);
+  await appendStep(jobId, "classify", onLog);
   const categoryCache = new Map<string, string>();
 
   // Collect unique CUITs that need resolution, with representative invoice data
@@ -856,7 +1196,7 @@ async function processPullComprobantes(
   }
 
   // ── Phase 2: Batch database inserts ───────────────────────
-  await appendStepFn(jobId, "save", onLog);
+  await appendStep(jobId, "save", onLog);
   const INSERT_BATCH_SIZE = 50;
   const invoicesToInsert: Prisma.InvoiceCreateManyInput[] = [];
 
@@ -2249,6 +2589,18 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             onScreenshot,
             appendLog,
           );
+          return;
+        }
+
+        // ── PULL_EMPLOYERS flow ──
+        if (job.jobType === "PULL_EMPLOYERS") {
+          await processPullEmployers(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
+          return;
+        }
+
+        // ── PUSH_EMPLOYERS flow ──
+        if (job.jobType === "PUSH_EMPLOYERS") {
+          await processPushEmployers(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
 
