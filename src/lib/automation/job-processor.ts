@@ -941,15 +941,16 @@ async function processPullComprobantes(
     );
   }
 
-  // Count deducible vs non-deducible among successfully prepared invoices
-  const deducible = invoicesToInsert.filter(
-    (inv) => inv.deductionCategory !== "NO_DEDUCIBLE",
-  ).length;
-  const nonDeducible = invoicesToInsert.filter(
-    (inv) => inv.deductionCategory === "NO_DEDUCIBLE",
-  ).length;
+  // Count ALL deducible invoices for this user+year (both new and previously existing)
+  const totalDeducible = await prisma.invoice.count({
+    where: {
+      userId: job.userId,
+      fiscalYear,
+      deductionCategory: { not: "NO_DEDUCIBLE" },
+    },
+  });
 
-  const summary = `Importacion completada: ${imported} importadas (${deducible} deducibles, ${nonDeducible} no deducibles), ${skipped} duplicadas, ${errors} errores de ${comprobantes.length} total`;
+  const summary = `Importacion completada: ${imported} importadas, ${skipped} duplicadas, ${errors} errores de ${comprobantes.length} total. ${totalDeducible} deducibles en total.`;
   await appendLogFn(jobId, summary, onLog);
 
   setJobStatus(jobId, "COMPLETED");
@@ -964,8 +965,7 @@ async function processPullComprobantes(
           imported,
           skipped,
           errors,
-          deducible,
-          nonDeducible,
+          deducible: totalDeducible,
         }),
       ),
     },
