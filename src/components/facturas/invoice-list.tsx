@@ -1134,6 +1134,11 @@ export function InvoiceList({
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
+                              {inv.source === "MANUAL" && (
+                                <span title="Cargada manualmente">
+                                  <Pencil className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+                                </span>
+                              )}
                               {inv.source === "EMAIL" && (
                                 <span title="Cargada por email">
                                   <Mail className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
