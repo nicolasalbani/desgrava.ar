@@ -17,16 +17,16 @@ type View = "login" | "register";
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const [view, setView] = useState<View>("login");
+  const initialError = searchParams.get("error");
+  const [view, setView] = useState<View>(initialError === "invite_required" ? "register" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState(() => {
-    const err = searchParams.get("error");
-    if (err === "invite_required")
-      return "Necesitas un código de invitación para crear una cuenta.";
-    if (err === "invalid_token") return "El enlace de verificación es inválido.";
-    if (err === "token_expired") return "El enlace de verificación expiró.";
+    if (initialError === "invite_required")
+      return "No tenes cuenta. Ingresa un código de invitación para registrarte.";
+    if (initialError === "invalid_token") return "El enlace de verificación es inválido.";
+    if (initialError === "token_expired") return "El enlace de verificación expiró.";
     return "";
   });
   const [success, setSuccess] = useState(() => {
