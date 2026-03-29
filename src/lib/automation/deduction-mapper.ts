@@ -93,6 +93,23 @@ export function getAlquilerLinkId(ownsProperty: boolean): string {
     : "link_agregar_alquiler_inmuebles_inq_o";
 }
 
+/**
+ * Categories that use the "Detalle Mensual" form (SiRADIG v1.99+).
+ * These forms have #mesDesde as a hidden input instead of a visible select.
+ * Period is set via "Agregar Mes Individual" (#btn_alta_mes) dialog,
+ * and comprobantes are added via "Agregar Comprobante" link (not #btn_alta_comprobante).
+ */
+const DETALLE_MENSUAL_CATEGORIES = new Set([
+  "CUOTAS_MEDICO_ASISTENCIALES",
+  "PRIMAS_SEGURO_MUERTE",
+  "PRIMAS_AHORRO_SEGUROS_MIXTOS",
+  "APORTES_RETIRO_PRIVADO",
+]);
+
+export function isDetalleMensualCategory(category: string): boolean {
+  return DETALLE_MENSUAL_CATEGORIES.has(category);
+}
+
 export function isEducationCategory(category: string): boolean {
   return category === "GASTOS_EDUCATIVOS";
 }

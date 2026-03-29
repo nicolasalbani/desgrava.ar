@@ -5,6 +5,7 @@ import {
   getSiradigCategoryLinkId,
   getAlquilerLinkId,
   isAlquilerCategory,
+  isDetalleMensualCategory,
   isEducationCategory,
   isIndumentariaTrabajoCategory,
   isSchoolProvider,
@@ -78,6 +79,29 @@ describe("isAlquilerCategory", () => {
     expect(isAlquilerCategory("link_agregar_donaciones")).toBe(false);
     expect(isAlquilerCategory("link_agregar_gastos_medicos")).toBe(false);
     expect(isAlquilerCategory("")).toBe(false);
+  });
+});
+
+describe("isDetalleMensualCategory", () => {
+  it.each([
+    "CUOTAS_MEDICO_ASISTENCIALES",
+    "PRIMAS_SEGURO_MUERTE",
+    "PRIMAS_AHORRO_SEGUROS_MIXTOS",
+    "APORTES_RETIRO_PRIVADO",
+  ])("returns true for %s", (category) => {
+    expect(isDetalleMensualCategory(category)).toBe(true);
+  });
+
+  it.each([
+    "GASTOS_MEDICOS",
+    "GASTOS_INDUMENTARIA_TRABAJO",
+    "GASTOS_EDUCATIVOS",
+    "DONACIONES",
+    "ALQUILER_VIVIENDA",
+    "SERVICIO_DOMESTICO",
+    "",
+  ])("returns false for %s", (category) => {
+    expect(isDetalleMensualCategory(category)).toBe(false);
   });
 });
 

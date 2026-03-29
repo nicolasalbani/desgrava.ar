@@ -5,6 +5,7 @@ import {
   getSiradigCategoryLinkId,
   getAlquilerLinkId,
   isAlquilerCategory,
+  isDetalleMensualCategory,
   isEducationCategory,
   isIndumentariaTrabajoCategory,
   isSchoolProvider,
@@ -497,9 +498,10 @@ async function fillAlquilerLocatarioForm(
  * 7. Click "Agregar Deducciones y Desgravaciones" toggle
  * 8. Select the specific category link from the expanded dropdown
  * 9. Fill CUIT and wait for Denominación (AJAX lookup)
- * 10. Select Período (month)
- * 11. Click "Alta de Comprobante" to open dialog
- * 12. Fill comprobante fields (fecha, tipo, número, monto, monto reintegrado)
+ * 10. Select Período (month) — via #mesDesde select for standard categories,
+ *     or via "Agregar Mes Individual" (#btn_alta_mes) dialog for Detalle Mensual categories
+ * 11. Click comprobante button (or "Agregar Comprobante" link) to open dialog
+ * 12. Fill comprobante fields (fecha, tipo, número, monto, monto reintegrado if present)
  * 13. Click "Agregar" in dialog to add the comprobante
  */
 export async function fillDeductionForm(
@@ -677,10 +679,34 @@ export async function fillDeductionForm(
         await page.selectOption("#idTipoGasto", tipoGasto);
       }
 
-      // Step 10: Select Período (month) from #mesDesde
-      // Skip for ALQUILER_VIVIENDA — that form uses #btn_alta_mes instead
+      // Step 10: Select Período (month)
+      // - ALQUILER_VIVIENDA: handled separately via fillAlquilerLocatarioForm
+      // - Detalle Mensual categories (CUOTAS_MEDICO, PRIMAS, APORTES): use #btn_alta_mes dialog
+      // - All other categories: use #mesDesde select dropdown
       const monthValue = String(invoice.fiscalMonth);
-      if (invoice.deductionCategory !== "ALQUILER_VIVIENDA") {
+      if (isDetalleMensualCategory(invoice.deductionCategory)) {
+        log(`Agregando detalle mensual: ${monthName || monthValue}`);
+        const altaMesBtn = page.locator("#btn_alta_mes");
+        await altaMesBtn.waitFor({ state: "visible", timeout: 15000 });
+        await altaMesBtn.click();
+        await page.waitForTimeout(1000);
+
+        await page.selectOption("#detalleIndividualMes", monthValue);
+        await page.fill("#detalleIndividualMontoMensual", invoice.amount);
+
+        // Scope to the visible dialog containing #detalleIndividualMes to avoid
+        // strict mode violations (multiple dialogs have "Agregar" buttons)
+        const mesDialog = page.locator(".ui-dialog:visible:has(#detalleIndividualMes)");
+        await mesDialog.locator(".ui-dialog-buttonset").getByText("Agregar").click();
+        await page.waitForTimeout(1500);
+        await dismissDialogOverlay(page);
+
+        await capture(
+          await page.screenshot({ fullPage: true }),
+          "month-detail-added",
+          `Detalle mensual agregado: ${monthName}`,
+        );
+      } else if (invoice.deductionCategory !== "ALQUILER_VIVIENDA") {
         log(`Seleccionando periodo: ${monthName || monthValue}`);
         await page.selectOption("#mesDesde", monthValue);
       }
@@ -763,9 +789,13 @@ export async function fillDeductionForm(
       return { success: true, screenshotBuffer };
     }
 
-    // Step 11: Click "Alta de Comprobante" to open the dialog
+    // Step 11: Click comprobante button to open the dialog
+    // Detalle Mensual categories use "Agregar Comprobante" link (#btn_alta_comprobante_detalle or text)
+    // Other categories use #btn_alta_comprobante button
     log("Abriendo formulario de alta de comprobante...");
-    const altaBtn = page.locator("#btn_alta_comprobante");
+    const altaBtn = isDetalleMensualCategory(invoice.deductionCategory)
+      ? page.getByText("Agregar Comprobante", { exact: false }).first()
+      : page.locator("#btn_alta_comprobante");
     await altaBtn.waitFor({ state: "visible", timeout: 15000 });
     await altaBtn.click();
     await page.waitForTimeout(1000); // Wait for dialog animation
@@ -783,6 +813,12 @@ export async function fillDeductionForm(
       const dateStr = formatDateDDMMYYYY(invoice.invoiceDate);
       log(`Ingresando fecha: ${dateStr}`);
       await page.fill("#cmpFechaEmision", dateStr);
+      // Dismiss jQuery UI datepicker that opens on focus/fill — it overlays the dialog
+      // and intercepts pointer events on the "Agregar" button
+      await page.evaluate(() => {
+        const dp = document.getElementById("ui-datepicker-div");
+        if (dp) dp.style.display = "none";
+      });
     }
 
     // Tipo (select by label from #cmpTipo)
@@ -824,9 +860,11 @@ export async function fillDeductionForm(
       "Comprobante completado",
     );
 
-    // Step 13: Click "Agregar" button in the dialog to add the comprobante
+    // Step 13: Click "Agregar" button in the comprobante dialog
+    // Scope to the dialog containing #cmpMontoFacturado to avoid strict mode violations
     log("Agregando comprobante...");
-    const agregarBtn = page.locator(".ui-dialog-buttonset").getByText("Agregar");
+    const comprobanteDialog = page.locator(".ui-dialog:visible:has(#cmpMontoFacturado)");
+    const agregarBtn = comprobanteDialog.locator(".ui-dialog-buttonset").getByText("Agregar");
     await agregarBtn.click();
     await page.waitForTimeout(1500); // Wait for dialog to close and table update
     await dismissDialogOverlay(page);

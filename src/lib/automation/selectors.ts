@@ -145,7 +145,7 @@ export const ARCA_SELECTORS = {
     // Edit form fields (Gastos Médicos y Paramédicos)
     editCuit: "#numeroDoc", // read-only in edit mode
     editDenominacion: "#razonSocial", // read-only in edit mode
-    editPeriodo: "#mesDesde", // select dropdown
+    editPeriodo: "#mesDesde", // select dropdown (standard) or hidden input (detalle mensual)
     editMontoTotal: "#montoTotal", // read-only, computed from comprobantes
 
     // Comprobantes sub-table inside edit form
