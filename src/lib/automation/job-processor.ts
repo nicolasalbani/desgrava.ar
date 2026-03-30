@@ -2490,17 +2490,33 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
         // ── PULL_COMPROBANTES flow (SiRADIG extraction first, then ARCA import) ──
         if (job.jobType === "PULL_COMPROBANTES") {
-          // Phase 1: Extract already-deducted entries from SiRADIG (fails job on error)
-          await runSiradigExtractionPhase(
-            page,
-            job,
-            jobId,
-            onLog,
-            onScreenshot,
-            appendLog,
-            appendStep,
-            "invoices",
-          );
+          // Phase 1: Extract already-deducted entries from SiRADIG (best-effort).
+          // This may fail if the user has no employers or hasn't completed SiRADIG setup,
+          // but the import should still proceed.
+          try {
+            await runSiradigExtractionPhase(
+              page,
+              job,
+              jobId,
+              onLog,
+              onScreenshot,
+              appendLog,
+              appendStep,
+              "invoices",
+            );
+          } catch {
+            await appendLog(
+              jobId,
+              "No se pudieron leer deducciones de SiRADIG, continuando con la importacion...",
+              onLog,
+            );
+            // Reset job status — runSiradigExtractionPhase marks it FAILED before throwing
+            await prisma.automationJob.update({
+              where: { id: jobId },
+              data: { status: "RUNNING", errorMessage: null, completedAt: null },
+            });
+            setJobStatus(jobId, "RUNNING");
+          }
 
           // Phase 2: Import from Mis Comprobantes CSV
           await appendStep(jobId, "download", onLog);
@@ -2525,17 +2541,30 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
         // ── PULL_DOMESTIC_RECEIPTS flow (SiRADIG extraction first, then ARCA import) ──
         if (job.jobType === "PULL_DOMESTIC_RECEIPTS") {
-          // Phase 1: Extract already-deducted domestic entries from SiRADIG (fails job on error)
-          await runSiradigExtractionPhase(
-            page,
-            job,
-            jobId,
-            onLog,
-            onScreenshot,
-            appendLog,
-            appendStep,
-            "domestic",
-          );
+          // Phase 1: Extract already-deducted domestic entries from SiRADIG (best-effort)
+          try {
+            await runSiradigExtractionPhase(
+              page,
+              job,
+              jobId,
+              onLog,
+              onScreenshot,
+              appendLog,
+              appendStep,
+              "domestic",
+            );
+          } catch {
+            await appendLog(
+              jobId,
+              "No se pudieron leer deducciones de SiRADIG, continuando con la importacion...",
+              onLog,
+            );
+            await prisma.automationJob.update({
+              where: { id: jobId },
+              data: { status: "RUNNING", errorMessage: null, completedAt: null },
+            });
+            setJobStatus(jobId, "RUNNING");
+          }
 
           // Phase 2: Import receipts from ARCA
           await appendStep(jobId, "download", onLog);
