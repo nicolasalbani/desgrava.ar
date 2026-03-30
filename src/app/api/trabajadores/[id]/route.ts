@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateDomesticWorkerSchema } from "@/lib/validators/domestic";
 import { Prisma } from "@/generated/prisma/client";
+import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -30,6 +31,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const denied = await requireWriteAccess(session.user.id);
+  if (denied) return denied;
 
   const { id } = await params;
 
@@ -76,6 +80,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const denied = await requireWriteAccess(session.user.id);
+  if (denied) return denied;
 
   const { id } = await params;
 

@@ -4,12 +4,16 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encrypt } from "@/lib/crypto/encryption";
 import { saveCredentialsSchema } from "@/lib/validators/credentials";
+import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const denied = await requireWriteAccess(session.user.id);
+  if (denied) return denied;
 
   try {
     const body = await req.json();
@@ -80,6 +84,9 @@ export async function DELETE() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const denied = await requireWriteAccess(session.user.id);
+  if (denied) return denied;
 
   await prisma.arcaCredential.deleteMany({
     where: { userId: session.user.id },

@@ -5,6 +5,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { validateInviteToken } from "@/lib/invite-codes";
+import { createTrialSubscription } from "@/lib/subscription/create";
 
 export function getAuthOptions(inviteToken?: string): NextAuthOptions {
   return {
@@ -94,9 +95,13 @@ export function getAuthOptions(inviteToken?: string): NextAuthOptions {
         }
         return session;
       },
-      async jwt({ token, user }) {
+      async jwt({ token, user, trigger }) {
         if (user) {
           token.sub = user.id;
+        }
+        // Create trial subscription for newly signed-up users
+        if (trigger === "signUp" && token.sub) {
+          await createTrialSubscription(token.sub);
         }
         return token;
       },

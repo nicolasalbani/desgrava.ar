@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { EmailIngestCard } from "@/components/configuracion/email-ingest-card";
 import { AutoSubmitCard } from "@/components/configuracion/auto-submit-card";
+import { SubscriptionCard } from "@/components/subscription/subscription-card";
 
 export default function ConfiguracionPage() {
   const [notifications, setNotifications] = useState(true);
@@ -58,6 +59,15 @@ export default function ConfiguracionPage() {
         className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
         style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
       >
+        <div className="space-y-2">
+          <Label>Suscripción</Label>
+          <p className="text-muted-foreground/60 text-xs">Administrá tu plan y método de pago</p>
+        </div>
+
+        <SubscriptionCard />
+
+        <div className="border-border border-t" />
+
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label htmlFor="notifications">Notificaciones</Label>

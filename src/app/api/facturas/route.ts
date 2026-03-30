@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createInvoiceSchema } from "@/lib/validators/invoice";
 import { Prisma } from "@/generated/prisma/client";
 import { matchDependent, buildInvoiceText } from "@/lib/matching/dependent-matcher";
+import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -208,6 +209,9 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const denied = await requireWriteAccess(session.user.id);
+  if (denied) return denied;
 
   try {
     const body = await req.json();

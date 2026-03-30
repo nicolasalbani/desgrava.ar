@@ -38,6 +38,39 @@ export async function sendVerificationEmail(email: string, token: string): Promi
   });
 }
 
+export async function sendTrialReminderEmail(email: string, daysRemaining: number): Promise<void> {
+  const subscribeUrl = `${getBaseUrl()}/configuracion`;
+  const isUrgent = daysRemaining <= 1;
+
+  await getResend().emails.send({
+    from: FROM_EMAIL,
+    to: email,
+    subject: isUrgent
+      ? "Tu prueba gratis vence mañana — desgrava.ar"
+      : `Te quedan ${daysRemaining} días de prueba gratis — desgrava.ar`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
+        <h2 style="margin-bottom: 16px;">
+          ${isUrgent ? "Tu prueba gratis vence mañana" : `Te quedan ${daysRemaining} días de prueba gratis`}
+        </h2>
+        <p style="color: #555; line-height: 1.6;">
+          ${
+            isUrgent
+              ? "Mañana se vence tu período de prueba en desgrava.ar. Para seguir usando todas las funcionalidades, suscribite al Plan Personal."
+              : `Tu período de prueba en desgrava.ar vence en ${daysRemaining} días. Para seguir usando todas las funcionalidades sin interrupción, suscribite al Plan Personal.`
+          }
+        </p>
+        <a href="${subscribeUrl}" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #000; color: #fff; text-decoration: none; border-radius: 8px;">
+          Suscribirse ahora
+        </a>
+        <p style="color: #999; font-size: 12px; margin-top: 24px;">
+          Si no querés continuar, no necesitás hacer nada. Tu cuenta pasará a modo lectura cuando termine el período de prueba.
+        </p>
+      </div>
+    `,
+  });
+}
+
 export async function sendPasswordResetEmail(email: string, token: string): Promise<void> {
   const url = `${getBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;
 

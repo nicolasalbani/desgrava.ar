@@ -4,43 +4,34 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
+import {
+  SUBSCRIPTION_PLANS,
+  formatPriceARS,
+  getAnnualTotal,
+  TRIAL_DURATION_DAYS,
+} from "@/lib/subscription/plans";
 
 interface PricingTier {
   name: string;
   tagline: string;
-  monthlyPrice: number; // 0 = free
-  annualMonthlyPrice?: number; // per-month price when billed annually
-  features: string[];
+  monthlyPrice: number;
+  annualMonthlyPrice?: number;
+  features: readonly string[];
   cta: string;
   href: string;
   highlighted: boolean;
-  freePeriod?: string; // e.g. "por 30 dias"
 }
+
+const personal = SUBSCRIPTION_PLANS.PERSONAL;
 
 const tiers: PricingTier[] = [
   {
-    name: "Gratis",
-    tagline: "Proba la plataforma",
-    monthlyPrice: 0,
-    freePeriod: "por 30 dias",
-    features: ["Carga de gastos", "Carga de personal doméstico", "Presentación a ARCA"],
-    cta: "Empeza gratis",
-    href: "/login",
-    highlighted: false,
-  },
-  {
     name: "Personal",
-    tagline: "Para empleados en relacion de dependencia",
-    monthlyPrice: 5999,
-    annualMonthlyPrice: 4999,
-    features: [
-      "Todo lo de Gratis",
-      "Facturas ilimitadas",
-      "Importacion desde ARCA",
-      "Envio automatico a ARCA",
-      "Soporte por WhatsApp",
-    ],
-    cta: "Proba 30 dias gratis",
+    tagline: personal.tagline,
+    monthlyPrice: personal.monthlyPrice,
+    annualMonthlyPrice: personal.annualMonthlyPrice,
+    features: personal.features,
+    cta: `Probá ${TRIAL_DURATION_DAYS} días gratis`,
     href: "/login",
     highlighted: true,
   },
@@ -60,15 +51,6 @@ const tiers: PricingTier[] = [
     highlighted: false,
   },
 ];
-
-function formatPrice(value: number): string {
-  return value.toLocaleString("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-}
 
 export function PricingSection() {
   const [isAnnual, setIsAnnual] = useState(false);
@@ -110,27 +92,17 @@ export function PricingSection() {
           >
             Anual
           </span>
-          {isAnnual && (
-            <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
-              Ahorra
-            </span>
-          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="mx-auto grid max-w-3xl grid-cols-1 gap-6 md:grid-cols-2">
         {tiers.map((tier) => {
-          const isFree = tier.monthlyPrice === 0;
-          const effectiveMonthly = isFree
-            ? 0
-            : isAnnual
-              ? (tier.annualMonthlyPrice ?? tier.monthlyPrice)
-              : tier.monthlyPrice;
-          const annualTotal = effectiveMonthly * 12;
-          const discountPct =
-            !isFree && tier.annualMonthlyPrice
-              ? Math.round((1 - tier.annualMonthlyPrice / tier.monthlyPrice) * 100)
-              : 0;
+          const effectiveMonthly = isAnnual
+            ? (tier.annualMonthlyPrice ?? tier.monthlyPrice)
+            : tier.monthlyPrice;
+          const discountPct = tier.annualMonthlyPrice
+            ? Math.round((1 - tier.annualMonthlyPrice / tier.monthlyPrice) * 100)
+            : 0;
 
           return (
             <div
@@ -153,33 +125,27 @@ export function PricingSection() {
               </div>
 
               <div className="mb-6">
-                {isFree ? (
-                  <>
-                    <span className="text-foreground text-3xl font-bold">$0</span>
-                    <span className="text-muted-foreground ml-1 text-sm">{tier.freePeriod}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-foreground text-3xl font-bold">
-                      {formatPrice(effectiveMonthly)}
+                <span className="text-foreground text-3xl font-bold">
+                  {formatPriceARS(effectiveMonthly)}
+                </span>
+                <span className="text-muted-foreground ml-1 text-sm">/mes</span>
+                {isAnnual && tier.annualMonthlyPrice && (
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-muted-foreground text-sm line-through">
+                      {formatPriceARS(tier.monthlyPrice)}/mes
                     </span>
-                    <span className="text-muted-foreground ml-1 text-sm">/mes</span>
-                    {isAnnual && tier.annualMonthlyPrice && (
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="text-muted-foreground text-sm line-through">
-                          {formatPrice(tier.monthlyPrice)}/mes
-                        </span>
-                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                          -{discountPct}%
-                        </span>
-                      </div>
-                    )}
-                    {isAnnual && tier.annualMonthlyPrice && (
-                      <p className="text-muted-foreground mt-0.5 text-xs">
-                        {formatPrice(annualTotal)}/año facturado anualmente
-                      </p>
-                    )}
-                  </>
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                      -{discountPct}%
+                    </span>
+                  </div>
+                )}
+                {isAnnual && tier.annualMonthlyPrice && (
+                  <p className="text-muted-foreground mt-0.5 text-xs">
+                    {tier.name === "Personal"
+                      ? formatPriceARS(getAnnualTotal())
+                      : formatPriceARS(tier.annualMonthlyPrice * 12)}
+                    /año facturado anualmente
+                  </p>
                 )}
               </div>
 

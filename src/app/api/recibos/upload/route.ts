@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { processDocument } from "@/lib/ocr/pipeline";
 import { extractReceiptFields } from "@/lib/ocr/receipt-extractor";
+import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
@@ -12,6 +13,9 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const denied = await requireWriteAccess(session.user.id);
+  if (denied) return denied;
 
   try {
     const formData = await req.formData();

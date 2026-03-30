@@ -5,6 +5,7 @@ import { AttentionCountsProvider } from "@/contexts/attention-counts";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardHeader } from "./dashboard-header";
 import { DeadlineBanner } from "./deadline-banner";
+import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <DashboardSidebar />
           <div className="flex flex-1 flex-col overflow-hidden">
             <DashboardHeader />
+            <SubscriptionBanner />
             <DeadlineBanner />
             <main className="bg-muted/30 flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
           </div>

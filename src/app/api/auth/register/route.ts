@@ -6,6 +6,7 @@ import { registerSchema } from "@/lib/validators/password";
 import { INVITE_CODES } from "@/lib/invite-codes";
 import { sendVerificationEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
+import { createTrialSubscription } from "@/lib/subscription/create";
 
 async function createAndSendVerificationToken(email: string): Promise<void> {
   const token = crypto.randomBytes(32).toString("hex");
@@ -81,13 +82,14 @@ export async function POST(req: NextRequest) {
 
     // Create new user
     const passwordHash = await bcrypt.hash(password, 12);
-    await prisma.user.create({
+    const newUser = await prisma.user.create({
       data: {
         email,
         passwordHash,
       },
     });
 
+    await createTrialSubscription(newUser.id);
     await createAndSendVerificationToken(email);
 
     return NextResponse.json({

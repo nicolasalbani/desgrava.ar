@@ -3,12 +3,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DEDUCTION_CATEGORIES } from "@/lib/validators/invoice";
+import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const denied = await requireWriteAccess(session.user.id);
+  if (denied) return denied;
 
   try {
     const { invoiceIds, deductionCategory } = await req.json();

@@ -39,7 +39,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `(auth)/` — login flow (Google OAuth + email/password), email verification, password reset
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
-**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/cron/presentaciones`. All protected routes validate `session?.user?.id`.
+**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/cron/presentaciones`, `/subscription`, `/webhooks/mercadopago`, `/cron/subscription-reminders`. All protected routes validate `session?.user?.id`. Write routes (POST/PUT/DELETE) also check subscription access via `requireWriteAccess()` — returns 403 if subscription is expired.
 
 **Business logic** lives in `src/lib/`, organized by domain:
 
@@ -52,8 +52,10 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `catalog/` — Global provider catalog: CUIT → deduction category lookup with sistemas360.ar enrichment
 - `validators/` — Zod schemas for invoices, credentials, CUIT format, domestic workers/receipts
 - `domestic/` — Domestic workers domain logic (schemas, validators)
+- `subscription/` — Subscription management: plans/pricing constants, access control (`resolveCanWrite`), trial creation
+- `mercadopago/` — MercadoPago SDK integration: client init, preapproval (subscription) creation/cancellation, webhook processing
 
-**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`, `auth/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
+**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`, `auth/`, `subscription/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
 
 **Hooks** (`src/hooks/`) contain shared React hooks:
 
@@ -73,10 +75,11 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - **Path alias**: `@/*` maps to `./src/*`.
 - **Naming**: Spanish names in ARCA/SiRADIG-specific automation code, English elsewhere.
 - **Design**: Jony Ive-inspired — clean whites, `border-gray-200` borders, `bg-gray-50` content areas, generous whitespace, translucent navbar with backdrop blur. Consistent palette across landing page and dashboard.
+- **Subscriptions** use MercadoPago's Preapproval (Suscripciones) API for recurring billing. New users get a 30-day trial (TRIALING), existing pre-launch users are FOUNDERS (permanent access). Access control: FOUNDERS always have write access; TRIALING/ACTIVE/CANCELLED (within period) can write; EXPIRED/PAST_DUE are read-only. Pricing lives in `src/lib/subscription/plans.ts` — single source of truth for landing page and checkout. Webhook at `/api/webhooks/mercadopago` syncs subscription state. Daily cron at `/api/cron/subscription-reminders` sends trial expiry emails and expires stale subscriptions.
 
 ## Testing
 
-**Framework**: Vitest with 656+ tests across 28 test files.
+**Framework**: Vitest with 728+ tests across 30 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -94,6 +97,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `hooks/` — usePaginatedFetch buildParams helper (16 tests)
 - `validators/` — password complexity rules, schemas (24 tests)
 - `rate-limit` — in-memory rate limiter (5 tests)
+- `subscription/` — plans constants, access control logic (22 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
 
@@ -123,4 +127,4 @@ Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_te
 
 ## Environment Variables
 
-`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for Railway cron endpoint auth).
+`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for Railway cron endpoint auth), `MERCADOPAGO_ACCESS_TOKEN` (MercadoPago API key for subscriptions), `MERCADOPAGO_WEBHOOK_SECRET` (webhook signature validation).

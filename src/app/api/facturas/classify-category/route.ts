@@ -3,12 +3,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { resolveCategory, getCatalogEntry } from "@/lib/catalog/provider-catalog";
 import { classifyCategory, classifyCategoryByKeywords } from "@/lib/ocr/category-classifier";
+import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const denied = await requireWriteAccess(session.user.id);
+  if (denied) return denied;
 
   try {
     const { text, cuit } = await req.json();

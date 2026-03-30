@@ -34,6 +34,7 @@ model User {
   domesticWorkers  DomesticWorker[]
   domesticReceipts DomesticReceipt[]
   presentaciones   Presentacion[]
+  subscription     Subscription?
 }
 
 model Account {
@@ -458,4 +459,44 @@ model Presentacion {
 enum PresentacionSource {
   ARCA_IMPORT
   AUTOMATION
+}
+
+// ─── Subscriptions ─────────────────────────────────────────
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String             @unique
+  plan                   SubscriptionPlan
+  status                 SubscriptionStatus
+  billingFrequency       BillingFrequency?
+  trialStartDate         DateTime?
+  trialEndDate           DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  mercadoPagoPreapprovalId String?          @unique
+  trialReminder7DaySentAt  DateTime?
+  trialReminder1DaySentAt  DateTime?
+  cancelledAt            DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum SubscriptionPlan {
+  PERSONAL
+  FOUNDERS
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  EXPIRED
+}
+
+enum BillingFrequency {
+  MONTHLY
+  ANNUAL
 }

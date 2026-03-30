@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getJobScreenshots, getJobVideoFilenames } from "@/lib/automation/job-processor";
 import { listScreenshotsFromDisk, listVideosFromDisk } from "@/lib/automation/artifact-manager";
+import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
   const session = await getServerSession(authOptions);
@@ -61,6 +62,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ jobI
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+
+  const denied = await requireWriteAccess(session.user.id);
+  if (denied) return denied;
 
   const { jobId } = await params;
 
