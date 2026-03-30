@@ -70,6 +70,13 @@ export const ARCA_SELECTORS = {
       formVolverBtn: "#btn_volver, button:has-text('Volver')",
     },
 
+    // Datos Personales section (first-time user must confirm before other buttons enable)
+    datosPersonales: {
+      menuButton: "#btn_datos_personales",
+      guardarBtn: "#btn_guardar",
+      volverBtn: "#btn_volver",
+    },
+
     // Empleadores section (verified 2026-03-29)
     empleadores: {
       menuButton: "#btn_empleadores",

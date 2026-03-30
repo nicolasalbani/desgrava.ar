@@ -15,6 +15,64 @@ import {
 import { ARCA_SELECTORS } from "./selectors";
 import type { ScreenshotCallback } from "./arca-navigator";
 
+/**
+ * First-time SiRADIG users must confirm their personal data before
+ * "Empleadores" and "Carga de Formulario" buttons become enabled.
+ * This detects the disabled state and confirms the data automatically.
+ */
+async function confirmDatosPersonalesIfNeeded(
+  page: Page,
+  onLog?: (msg: string) => void,
+  onScreenshot?: ScreenshotCallback,
+): Promise<void> {
+  const log = onLog ?? (() => {});
+  const capture = onScreenshot ?? (async () => {});
+  const sel = ARCA_SELECTORS.siradig;
+
+  const cargaBtn = page.locator(ARCA_SELECTORS.siradigPresentaciones.cargaFormularioBtn);
+  const isDisabled = await cargaBtn.evaluate(
+    (el) =>
+      el.classList.contains("ui-state-disabled") || el.getAttribute("aria-disabled") === "true",
+  );
+
+  if (!isDisabled) return;
+
+  log("Botones deshabilitados — confirmando Datos Personales (usuario nuevo en SiRADIG)...");
+
+  // Navigate to Datos Personales
+  const datosBtn = page.locator(sel.datosPersonales.menuButton);
+  await datosBtn.click();
+  await page.waitForLoadState("networkidle");
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "datos-personales",
+    "Datos Personales (confirmacion)",
+  );
+
+  // Click Guardar to confirm personal data
+  log("Guardando Datos Personales...");
+  const guardarBtn = page.locator(sel.datosPersonales.guardarBtn);
+  await guardarBtn.waitFor({ state: "visible", timeout: 10_000 });
+  await guardarBtn.click();
+  await page.waitForLoadState("networkidle");
+
+  await capture(
+    await page.screenshot({ fullPage: true }),
+    "datos-personales-saved",
+    "Datos Personales guardados",
+  );
+
+  // Return to main menu
+  log("Volviendo al menu principal...");
+  const volverBtn = page.locator(sel.datosPersonales.volverBtn);
+  await volverBtn.waitFor({ state: "visible", timeout: 10_000 });
+  await volverBtn.click();
+  await page.waitForLoadState("networkidle");
+
+  log("Datos Personales confirmados, botones habilitados");
+}
+
 export interface InvoiceData {
   deductionCategory: string;
   providerCuit: string;
@@ -125,6 +183,10 @@ export async function navigateToSiradigMainMenu(
     }
 
     await capture(await page.screenshot({ fullPage: true }), "draft-menu", "Menu del borrador");
+
+    // First-time users must confirm Datos Personales before other buttons enable
+    await confirmDatosPersonalesIfNeeded(page, onLog, onScreenshot);
+
     log("Navegacion al menu principal de SiRADIG completada");
     return { success: true };
   } catch (error) {
@@ -225,6 +287,9 @@ export async function navigateToDeductionSection(
     }
 
     await capture(await page.screenshot({ fullPage: true }), "draft-menu", "Menu del borrador");
+
+    // First-time users must confirm Datos Personales before other buttons enable
+    await confirmDatosPersonalesIfNeeded(page, onLog, onScreenshot);
 
     // Step 5: Click "Carga de Formulario" (#btn_carga)
     // This button uses a jQuery click handler that navigates via

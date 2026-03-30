@@ -113,6 +113,24 @@ describe("ARCA_SELECTORS", () => {
     });
   });
 
+  describe("siradig datosPersonales selectors", () => {
+    it("contains all required datos personales selectors", () => {
+      const sel = ARCA_SELECTORS.siradig.datosPersonales;
+      expect(sel.menuButton).toBe("#btn_datos_personales");
+      expect(sel.guardarBtn).toBe("#btn_guardar");
+      expect(sel.volverBtn).toBe("#btn_volver");
+    });
+
+    it("all datos personales selectors are non-empty strings", () => {
+      for (const [key, value] of Object.entries(ARCA_SELECTORS.siradig.datosPersonales)) {
+        expect(typeof value, `siradig.datosPersonales.${key} should be a string`).toBe("string");
+        expect(value.length, `siradig.datosPersonales.${key} should be non-empty`).toBeGreaterThan(
+          0,
+        );
+      }
+    });
+  });
+
   describe("no null or undefined values in any selector group", () => {
     it("login has no null/undefined values", () => {
       for (const [key, value] of Object.entries(ARCA_SELECTORS.login)) {
