@@ -556,6 +556,26 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={openAdd}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Agregar trabajador
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setImportDialogOpen(true)}
+          disabled={importing}
+        >
+          {importing ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          Importar desde ARCA
+        </Button>
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-6">
           <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
@@ -642,26 +662,6 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
           />
         </div>
       )}
-
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={openAdd}>
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
-          Agregar trabajador
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setImportDialogOpen(true)}
-          disabled={importing}
-        >
-          {importing ? (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-          )}
-          Importar desde ARCA
-        </Button>
-      </div>
 
       <ImportWorkersArcaDialog
         open={importDialogOpen}
