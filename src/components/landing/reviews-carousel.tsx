@@ -38,7 +38,7 @@ const reviews = [
 ];
 
 export function ReviewsCarousel() {
-  const autoplayRef = useRef(Autoplay({ delay: 4000, stopOnInteraction: false }));
+  const autoplayRef = useRef(Autoplay({ delay: 6000, stopOnInteraction: false }));
 
   useEffect(() => {
     return () => {
