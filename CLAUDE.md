@@ -39,7 +39,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `(auth)/` — login flow (Google OAuth + email/password), email verification, password reset
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
-**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/cron/presentaciones`, `/subscription`, `/webhooks/mercadopago`, `/cron/subscription-reminders`. All protected routes validate `session?.user?.id`. Write routes (POST/PUT/DELETE) also check subscription access via `requireWriteAccess()` — returns 403 if subscription is expired.
+**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/datos-personales`, `/cron/presentaciones`, `/subscription`, `/webhooks/mercadopago`, `/cron/subscription-reminders`. All protected routes validate `session?.user?.id`. Write routes (POST/PUT/DELETE) also check subscription access via `requireWriteAccess()` — returns 403 if subscription is expired.
 
 **Business logic** lives in `src/lib/`, organized by domain:
 
@@ -88,7 +88,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `simulador/` — calculator, deduction-rules, tax-tables, schemas (125 tests)
 - `validators/` — cuit, invoice, credentials (55 tests)
 - `crypto/` — encryption round-trip and tamper detection (17 tests)
-- `automation/` — deduction-mapper, selectors, presentacion selectors, job-steps, siradig-extractor (149 tests)
+- `automation/` — deduction-mapper, selectors, presentacion selectors, job-steps, siradig-extractor (150 tests)
 - `ocr/` — field-extractor, pipeline (22 tests)
 - `catalog/` — provider-catalog HTML parser (8 tests)
 - `ocr/` — receipt-extractor for domestic worker salary receipts (26 tests)

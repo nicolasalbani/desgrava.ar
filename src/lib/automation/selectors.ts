@@ -70,11 +70,21 @@ export const ARCA_SELECTORS = {
       formVolverBtn: "#btn_volver, button:has-text('Volver')",
     },
 
-    // Datos Personales section (first-time user must confirm before other buttons enable)
+    // Datos Personales section
     datosPersonales: {
       menuButton: "#btn_datos_personales",
       guardarBtn: "#btn_guardar",
       volverBtn: "#btn_volver",
+      // Form fields (all readonly — used for extraction only)
+      formApellido: "#apellido",
+      formNombre: "#nombre",
+      formDirCalle: "#dirCalle",
+      formDirNro: "#dirNro",
+      formDirPiso: "#dirPiso",
+      formDirDpto: "#dirDpto",
+      formDescProvincia: "#descProvincia",
+      formLocalidad: "#localidad",
+      formCodPostal: "#codPostal",
     },
 
     // Empleadores section (verified 2026-03-29)

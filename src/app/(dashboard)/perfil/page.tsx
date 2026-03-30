@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { FamilyDependentsSection } from "@/components/perfil/family-dependents";
 import { EmployersSection } from "@/components/perfil/employers-section";
+import { PersonalDataSection } from "@/components/perfil/personal-data-section";
 import { DomesticWorkersSection } from "@/components/trabajadores/domestic-workers-section";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 
@@ -91,10 +92,29 @@ export default function PerfilPage() {
         style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
       />
 
-      {/* Empleadores */}
+      {/* Datos Personales */}
       <div
         className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
         style={{ animationDelay: "160ms", animationFillMode: "backwards" }}
+      >
+        <div>
+          <h2 className="text-base font-semibold">Datos Personales</h2>
+          <p className="text-muted-foreground/70 mt-0.5 text-sm">
+            Tu información personal registrada en ARCA/SiRADIG
+          </p>
+        </div>
+        <PersonalDataSection fiscalYear={year} />
+      </div>
+
+      <div
+        className="border-border animate-in fade-in border-t duration-500"
+        style={{ animationDelay: "200ms", animationFillMode: "backwards" }}
+      />
+
+      {/* Empleadores */}
+      <div
+        className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
+        style={{ animationDelay: "200ms", animationFillMode: "backwards" }}
       >
         <div>
           <h2 className="text-base font-semibold">Empleadores</h2>
@@ -107,13 +127,13 @@ export default function PerfilPage() {
 
       <div
         className="border-border animate-in fade-in border-t duration-500"
-        style={{ animationDelay: "240ms", animationFillMode: "backwards" }}
+        style={{ animationDelay: "280ms", animationFillMode: "backwards" }}
       />
 
       {/* Cargas de Familia */}
       <div
         className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
-        style={{ animationDelay: "240ms", animationFillMode: "backwards" }}
+        style={{ animationDelay: "280ms", animationFillMode: "backwards" }}
       >
         <div>
           <h2 className="text-base font-semibold">Cargas de Familia</h2>
@@ -126,13 +146,13 @@ export default function PerfilPage() {
 
       <div
         className="border-border animate-in fade-in border-t duration-500"
-        style={{ animationDelay: "320ms", animationFillMode: "backwards" }}
+        style={{ animationDelay: "360ms", animationFillMode: "backwards" }}
       />
 
       {/* Trabajadores a cargo */}
       <div
         className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
-        style={{ animationDelay: "320ms", animationFillMode: "backwards" }}
+        style={{ animationDelay: "360ms", animationFillMode: "backwards" }}
       >
         <div>
           <h2 className="text-base font-semibold">Trabajadores a cargo</h2>

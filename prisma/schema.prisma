@@ -31,6 +31,7 @@ model User {
   emailIngestLogs  EmailIngestLog[]
   familyDependents FamilyDependent[]
   employers        Employer[]
+  personalData     PersonalData[]
   domesticWorkers  DomesticWorker[]
   domesticReceipts DomesticReceipt[]
   presentaciones   Presentacion[]
@@ -252,6 +253,7 @@ enum JobType {
   SUBMIT_PRESENTACION
   PULL_EMPLOYERS
   PUSH_EMPLOYERS
+  PULL_PERSONAL_DATA
 }
 
 enum JobStatus {
@@ -312,6 +314,29 @@ model Employer {
   automationJobs AutomationJob[] @relation("AutomationJobEmployer")
 
   @@index([userId, fiscalYear])
+}
+
+// ─── Personal Data ──────────────────────────────────────────
+
+model PersonalData {
+  id             String   @id @default(cuid())
+  userId         String
+  fiscalYear     Int
+  apellido       String
+  nombre         String
+  dirCalle       String
+  dirNro         String
+  dirPiso        String?
+  dirDpto        String?
+  descProvincia  String
+  localidad      String
+  codPostal      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fiscalYear])
 }
 
 // ─── Email Ingest ────────────────────────────────────────────

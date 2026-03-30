@@ -146,6 +146,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ job }, { status: 201 });
     }
 
+    // PULL_PERSONAL_DATA: import personal data from SiRADIG
+    if (jobType === "PULL_PERSONAL_DATA") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType,
+          fiscalYear,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
+
     // PULL_EMPLOYERS: import employers from SiRADIG
     if (jobType === "PULL_EMPLOYERS") {
       if (!fiscalYear) {

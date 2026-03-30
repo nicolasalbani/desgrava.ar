@@ -426,6 +426,112 @@ async function processPushFamilyDependents(
 }
 
 /**
+ * Process a PULL_PERSONAL_DATA job:
+ * navigate to SiRADIG Datos Personales, extract fields, upsert into DB.
+ */
+async function processPullPersonalData(
+  siradigPage: Page,
+  job: { userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+
+  const navResult = await navigateToSiradigMainMenu(
+    siradigPage,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!navResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
+    });
+    return;
+  }
+
+  await appendStep(jobId, "extract", onLog);
+  await appendLogFn(jobId, "Navegando a Datos Personales...", onLog);
+
+  const sel = ARCA_SELECTORS.siradig.datosPersonales;
+  const datosBtn = siradigPage.locator(sel.menuButton);
+  await datosBtn.waitFor({ state: "visible", timeout: 15000 });
+  await datosBtn.click();
+  await siradigPage.waitForLoadState("networkidle");
+  await siradigPage.waitForTimeout(1500);
+
+  await onScreenshot(
+    await siradigPage.screenshot({ fullPage: true }),
+    "datos-personales",
+    "Datos Personales",
+  );
+
+  // Extract all fields
+  const readField = (selector: string) =>
+    siradigPage.$eval(selector, (el) => (el as HTMLInputElement).value).catch(() => "");
+
+  const apellido = await readField(sel.formApellido);
+  const nombre = await readField(sel.formNombre);
+  const dirCalle = await readField(sel.formDirCalle);
+  const dirNro = await readField(sel.formDirNro);
+  const dirPiso = await readField(sel.formDirPiso);
+  const dirDpto = await readField(sel.formDirDpto);
+  const descProvincia = await readField(sel.formDescProvincia);
+  const localidad = await readField(sel.formLocalidad);
+  const codPostal = await readField(sel.formCodPostal);
+
+  await appendLogFn(jobId, `Datos extraidos: ${apellido} ${nombre}, ${dirCalle} ${dirNro}`, onLog);
+
+  // Upsert into database
+  await prisma.personalData.upsert({
+    where: { userId_fiscalYear: { userId: job.userId, fiscalYear } },
+    create: {
+      userId: job.userId,
+      fiscalYear,
+      apellido,
+      nombre,
+      dirCalle,
+      dirNro,
+      dirPiso: dirPiso || null,
+      dirDpto: dirDpto || null,
+      descProvincia,
+      localidad,
+      codPostal,
+    },
+    update: {
+      apellido,
+      nombre,
+      dirCalle,
+      dirNro,
+      dirPiso: dirPiso || null,
+      dirDpto: dirDpto || null,
+      descProvincia,
+      localidad,
+      codPostal,
+    },
+  });
+
+  await appendLogFn(jobId, "Datos personales guardados", onLog);
+
+  // Mark job complete
+  await appendStep(jobId, "done", onLog);
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData: JSON.parse(JSON.stringify({ apellido, nombre, dirCalle, dirNro })),
+    },
+  });
+}
+
+/**
  * Process a PULL_EMPLOYERS job:
  * navigate to SiRADIG Empleadores section, extract all employer rows, upsert into DB.
  */
@@ -2618,6 +2724,12 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             onScreenshot,
             appendLog,
           );
+          return;
+        }
+
+        // ── PULL_PERSONAL_DATA flow ──
+        if (job.jobType === "PULL_PERSONAL_DATA") {
+          await processPullPersonalData(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
 

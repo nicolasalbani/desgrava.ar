@@ -121,6 +121,19 @@ describe("ARCA_SELECTORS", () => {
       expect(sel.volverBtn).toBe("#btn_volver");
     });
 
+    it("contains all form field selectors for extraction", () => {
+      const sel = ARCA_SELECTORS.siradig.datosPersonales;
+      expect(sel.formApellido).toBe("#apellido");
+      expect(sel.formNombre).toBe("#nombre");
+      expect(sel.formDirCalle).toBe("#dirCalle");
+      expect(sel.formDirNro).toBe("#dirNro");
+      expect(sel.formDirPiso).toBe("#dirPiso");
+      expect(sel.formDirDpto).toBe("#dirDpto");
+      expect(sel.formDescProvincia).toBe("#descProvincia");
+      expect(sel.formLocalidad).toBe("#localidad");
+      expect(sel.formCodPostal).toBe("#codPostal");
+    });
+
     it("all datos personales selectors are non-empty strings", () => {
       for (const [key, value] of Object.entries(ARCA_SELECTORS.siradig.datosPersonales)) {
         expect(typeof value, `siradig.datosPersonales.${key} should be a string`).toBe("string");
