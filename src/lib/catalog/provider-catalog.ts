@@ -60,6 +60,9 @@ const NON_DEDUCTIBLE_KEYWORDS = [
   "pedidosya",
   "mercadolibre",
   "mercado libre",
+  "fiestas",
+  "convenciones",
+  "eventos",
 ];
 
 export function isObviouslyNonDeductible(providerName: string): boolean {
