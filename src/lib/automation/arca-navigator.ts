@@ -105,6 +105,65 @@ export async function loginToArca(
   }
 }
 
+/**
+ * Search for a service in the ARCA portal's navbar search bar and open it in a new tab.
+ *
+ * The portal's react-bootstrap-typeahead search bar (#buscadorInput) is present in the
+ * top navbar on every portal page. We search directly from the current page instead of
+ * navigating to "/mis-servicios" first, saving one full page load per service access.
+ *
+ * If the search bar is not visible (e.g., unexpected redirect), falls back to navigating
+ * to "/mis-servicios" where the same search bar is guaranteed to be available.
+ */
+export async function searchAndOpenService(
+  page: Page,
+  searchText: string,
+  optionText: string,
+  onLog: (msg: string) => void,
+): Promise<Page> {
+  const searchInput = page.locator(ARCA_SELECTORS.portal.searchService);
+
+  // Try the search bar on the current page first (fast path)
+  const searchBarVisible = await searchInput
+    .waitFor({ state: "visible", timeout: 3_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!searchBarVisible) {
+    // Fallback: navigate to "/mis-servicios" where the search bar is guaranteed
+    const allServicesUrl = "https://portalcf.cloud.afip.gob.ar/portal/app/mis-servicios";
+    onLog("Buscador no visible, navegando a lista de servicios...");
+    await page.goto(allServicesUrl, {
+      waitUntil: "networkidle",
+      timeout: 30_000,
+    });
+    await searchInput.waitFor({ state: "visible", timeout: 10_000 });
+  }
+
+  // Clear any previous search text and type the service name
+  onLog(`Buscando servicio "${optionText}"...`);
+  await searchInput.clear();
+  await searchInput.fill(searchText);
+
+  // Wait for the typeahead dropdown to appear with matching results
+  const dropdown = page.locator(ARCA_SELECTORS.portal.searchResultsList);
+  await dropdown.waitFor({ state: "visible", timeout: 10_000 });
+
+  const option = dropdown
+    .locator(ARCA_SELECTORS.portal.searchResultOption)
+    .filter({ hasText: optionText });
+  await option.waitFor({ state: "visible", timeout: 5_000 });
+
+  // Clicking the dropdown option opens the service in a new tab via SSO
+  onLog(`Abriendo servicio "${optionText}"...`);
+  const [newTab] = await Promise.all([
+    page.context().waitForEvent("page", { timeout: 15_000 }),
+    option.click(),
+  ]);
+
+  return newTab;
+}
+
 export async function navigateToSiradig(
   page: Page,
   onLog?: (msg: string) => void,
@@ -114,45 +173,7 @@ export async function navigateToSiradig(
   const capture = onScreenshot ?? (async () => {});
 
   try {
-    // Navigate to "Ver todos" (full services list) — don't rely on the service
-    // appearing in the "Más utilizados" tiles on the portal home page.
-    const allServicesUrl = "https://portalcf.cloud.afip.gob.ar/portal/app/mis-servicios";
-    log('Navegando a "Ver todos" (lista completa de servicios)...');
-    await page.goto(allServicesUrl, {
-      waitUntil: "networkidle",
-      timeout: 30_000,
-    });
-    log(`Pagina de servicios cargada: ${page.url()}`);
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "portal-all-services",
-      "Lista completa de servicios ARCA",
-    );
-
-    // Use the search combobox (react-bootstrap-typeahead) to find the service.
-    // Filling the input opens a dropdown (#resBusqueda) with matching options;
-    // clicking the option triggers SSO navigation and opens the service in a new tab.
-    log('Buscando servicio "SiRADIG - Trabajador"...');
-    const searchInput = page.locator(ARCA_SELECTORS.portal.searchService);
-    await searchInput.waitFor({ state: "visible", timeout: 10_000 });
-    await searchInput.fill("SiRADIG");
-
-    // Wait for the typeahead dropdown to appear with matching results
-    const dropdown = page.locator(ARCA_SELECTORS.portal.searchResultsList);
-    await dropdown.waitFor({ state: "visible", timeout: 10_000 });
-
-    const siradigOption = dropdown
-      .locator(ARCA_SELECTORS.portal.searchResultOption)
-      .filter({ hasText: "SiRADIG - Trabajador" });
-    await siradigOption.waitFor({ state: "visible", timeout: 5_000 });
-
-    // Clicking the dropdown option opens the service in a new tab via SSO
-    log("Accediendo a SiRADIG - Trabajador...");
-    const [siradigPage] = await Promise.all([
-      page.context().waitForEvent("page", { timeout: 15_000 }),
-      siradigOption.click(),
-    ]);
+    const siradigPage = await searchAndOpenService(page, "SiRADIG", "SiRADIG - Trabajador", log);
     await siradigPage.waitForLoadState("domcontentloaded");
     log(`SiRADIG URL: ${siradigPage.url()}`);
 

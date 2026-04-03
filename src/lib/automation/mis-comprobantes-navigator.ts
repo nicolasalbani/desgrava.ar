@@ -2,7 +2,7 @@ import type { Page } from "playwright";
 import { inflateRawSync } from "zlib";
 import { readFileSync } from "fs";
 import { ARCA_SELECTORS } from "./selectors";
-import type { ScreenshotCallback } from "./arca-navigator";
+import { searchAndOpenService, type ScreenshotCallback } from "./arca-navigator";
 
 export interface MisComprobantesResult {
   success: boolean;
@@ -42,37 +42,14 @@ export async function navigateToMisComprobantes(
   const sel = ARCA_SELECTORS.misComprobantes;
 
   try {
-    // Step 1: Navigate to "Ver todos" (full services list) — don't rely on the
-    // service appearing in "Más utilizados" tiles on the portal home page.
-    const allServicesUrl = "https://portalcf.cloud.afip.gob.ar/portal/app/mis-servicios";
-    log('Navegando a "Ver todos" (lista completa de servicios)...');
-    await page.goto(allServicesUrl, {
-      waitUntil: "networkidle",
-      timeout: 30_000,
-    });
-    log(`Pagina de servicios cargada: ${page.url()}`);
-
-    // Step 2: Use the search combobox (react-bootstrap-typeahead) to find the
-    // service. Filling the input opens a dropdown with matching options; clicking
-    // the option triggers SSO navigation and opens the service in a new tab.
-    log('Buscando servicio "Mis Comprobantes"...');
-    const searchInput = page.locator(ARCA_SELECTORS.portal.searchService);
-    await searchInput.waitFor({ state: "visible", timeout: 10_000 });
-    await searchInput.fill("Mis Comprobantes");
-
-    const dropdown = page.locator(ARCA_SELECTORS.portal.searchResultsList);
-    await dropdown.waitFor({ state: "visible", timeout: 10_000 });
-
-    const misCompOption = dropdown
-      .locator(ARCA_SELECTORS.portal.searchResultOption)
-      .filter({ hasText: "Mis Comprobantes" });
-    await misCompOption.waitFor({ state: "visible", timeout: 5_000 });
-
-    log('Abriendo servicio "Mis Comprobantes"...');
-    const [misCompPage] = await Promise.all([
-      page.context().waitForEvent("page", { timeout: 15_000 }),
-      misCompOption.click(),
-    ]);
+    // Search for the service directly from the current portal page (no need to
+    // navigate to "/mis-servicios" — the search bar is in the portal navbar).
+    const misCompPage = await searchAndOpenService(
+      page,
+      "Mis Comprobantes",
+      "Mis Comprobantes",
+      log,
+    );
 
     // Wait for the new tab to load
     await misCompPage.waitForLoadState("networkidle", { timeout: 30_000 });

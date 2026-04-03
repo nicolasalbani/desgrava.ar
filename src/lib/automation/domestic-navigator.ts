@@ -1,6 +1,5 @@
 import type { Page } from "playwright";
-import type { ScreenshotCallback } from "./arca-navigator";
-import { ARCA_SELECTORS } from "./selectors";
+import { searchAndOpenService, type ScreenshotCallback } from "./arca-navigator";
 
 export interface DomesticWorkerData {
   cuil: string;
@@ -85,48 +84,18 @@ async function isSessionExpiredPage(page: Page): Promise<boolean> {
 }
 
 /**
- * Open "Personal de Casas Particulares" by navigating to the ARCA portal's
- * "Ver todos" page (all services list) and clicking the service button there.
- *
- * We do NOT rely on the service appearing in the "Más utilizados" shortcut tiles
- * on the portal home page — that list varies per user and session.
+ * Open "Personal de Casas Particulares" via the ARCA portal's navbar search bar.
  *
  * Direct goto() to the service URL does NOT work because the session is established
  * through a redirect chain initiated by the portal click (SSO token exchange).
  */
 async function openServiceViaPortal(portalPage: Page, onLog: (msg: string) => void): Promise<Page> {
-  // Navigate to "Ver todos" (full services list) — not the portal home
-  const allServicesUrl = "https://portalcf.cloud.afip.gob.ar/portal/app/mis-servicios";
-  onLog('Navegando a "Ver todos" (lista completa de servicios)...');
-  await portalPage.goto(allServicesUrl, {
-    waitUntil: "networkidle",
-    timeout: 30_000,
-  });
-  onLog(`Pagina de servicios cargada: ${portalPage.url()}`);
-
-  // Use the search combobox (react-bootstrap-typeahead) to find the service.
-  // Filling the input opens a dropdown with matching options; clicking the
-  // option triggers SSO navigation and opens the service in a new tab.
-  onLog('Buscando servicio "Personal de Casas Particulares"...');
-  const searchInput = portalPage.locator(ARCA_SELECTORS.portal.searchService);
-  await searchInput.waitFor({ state: "visible", timeout: 10_000 });
-  await searchInput.fill("Casas Particulares");
-
-  const dropdown = portalPage.locator(ARCA_SELECTORS.portal.searchResultsList);
-  await dropdown.waitFor({ state: "visible", timeout: 10_000 });
-
-  const domesticOption = dropdown
-    .locator(ARCA_SELECTORS.portal.searchResultOption)
-    .filter({ hasText: "Personal de Casas Particulares" });
-  await domesticOption.waitFor({ state: "visible", timeout: 5_000 });
-
-  onLog('Abriendo servicio "Personal de Casas Particulares"...');
-
-  // Clicking the dropdown option opens the service in a new tab via SSO
-  const [newTab] = await Promise.all([
-    portalPage.context().waitForEvent("page", { timeout: 15_000 }),
-    domesticOption.click(),
-  ]);
+  const newTab = await searchAndOpenService(
+    portalPage,
+    "Casas Particulares",
+    "Personal de Casas Particulares",
+    onLog,
+  );
 
   await newTab.waitForLoadState("networkidle", { timeout: 30_000 });
   onLog(`URL del servicio: ${newTab.url()}`);
