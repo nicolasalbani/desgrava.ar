@@ -233,7 +233,13 @@ function EmployerFormDialog({
 
 // ─── Main Section ────────────────────────────────────────────
 
-export function EmployersSection({ fiscalYear }: { fiscalYear: number }) {
+export function EmployersSection({
+  fiscalYear,
+  readOnly,
+}: {
+  fiscalYear: number;
+  readOnly?: boolean;
+}) {
   const [employers, setEmployers] = useState<Employer[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -551,7 +557,12 @@ export function EmployersSection({ fiscalYear }: { fiscalYear: number }) {
     <>
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={openAdd} disabled={importing || isExporting}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={openAdd}
+          disabled={importing || isExporting || readOnly}
+        >
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Agregar empleador
         </Button>
@@ -559,7 +570,7 @@ export function EmployersSection({ fiscalYear }: { fiscalYear: number }) {
           variant="outline"
           size="sm"
           onClick={handleImport}
-          disabled={importing || isExporting}
+          disabled={importing || isExporting || readOnly}
         >
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -656,7 +667,7 @@ export function EmployersSection({ fiscalYear }: { fiscalYear: number }) {
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => handleExport(emp.id)}
-                      disabled={importing || isExporting}
+                      disabled={importing || isExporting || readOnly}
                       title="Exportar a SiRADIG"
                     >
                       {isExportingThis ? (
@@ -676,7 +687,7 @@ export function EmployersSection({ fiscalYear }: { fiscalYear: number }) {
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => openEdit(emp)}
-                      disabled={importing || isExporting}
+                      disabled={importing || isExporting || readOnly}
                       title="Editar"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -688,7 +699,7 @@ export function EmployersSection({ fiscalYear }: { fiscalYear: number }) {
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => setDeleteId(emp.id)}
-                      disabled={importing || isExporting}
+                      disabled={importing || isExporting || readOnly}
                       title="Eliminar"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

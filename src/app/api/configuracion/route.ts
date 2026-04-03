@@ -9,9 +9,39 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const preference = await prisma.userPreference.findUnique({
-    where: { userId: session.user.id },
-  });
+  const [preference, invoiceYears, receiptYears, workerYears, presentacionYears] =
+    await Promise.all([
+      prisma.userPreference.findUnique({ where: { userId: session.user.id } }),
+      prisma.invoice.findMany({
+        where: { userId: session.user.id },
+        select: { fiscalYear: true },
+        distinct: ["fiscalYear"],
+      }),
+      prisma.domesticReceipt.findMany({
+        where: { userId: session.user.id },
+        select: { fiscalYear: true },
+        distinct: ["fiscalYear"],
+      }),
+      prisma.domesticWorker.findMany({
+        where: { userId: session.user.id },
+        select: { fiscalYear: true },
+        distinct: ["fiscalYear"],
+      }),
+      prisma.presentacion.findMany({
+        where: { userId: session.user.id },
+        select: { fiscalYear: true },
+        distinct: ["fiscalYear"],
+      }),
+    ]);
+
+  const activeYears = [
+    ...new Set([
+      ...invoiceYears.map((i) => i.fiscalYear),
+      ...receiptYears.map((r) => r.fiscalYear),
+      ...workerYears.map((w) => w.fiscalYear),
+      ...presentacionYears.map((p) => p.fiscalYear),
+    ]),
+  ].sort();
 
   return NextResponse.json({
     preference: preference ?? {
@@ -21,6 +51,7 @@ export async function GET() {
       autoSubmitDay: null,
       skippedArcaDialogs: [],
     },
+    activeYears,
   });
 }
 

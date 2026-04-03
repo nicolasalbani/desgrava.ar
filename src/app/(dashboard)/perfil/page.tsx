@@ -10,12 +10,14 @@ import { EmployersSection } from "@/components/perfil/employers-section";
 import { PersonalDataSection } from "@/components/perfil/personal-data-section";
 import { DomesticWorkersSection } from "@/components/trabajadores/domestic-workers-section";
 import { useFiscalYear } from "@/contexts/fiscal-year";
+import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function PerfilPage() {
   const { fiscalYear } = useFiscalYear();
   const year = fiscalYear ?? CURRENT_YEAR;
+  const readOnly = useFiscalYearReadOnly();
 
   const [ownsProperty, setOwnsProperty] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -82,6 +84,7 @@ export default function PerfilPage() {
               id="ownsProperty"
               checked={ownsProperty}
               onCheckedChange={handleOwnsPropertyToggle}
+              disabled={readOnly}
             />
           </div>
         )}
@@ -103,7 +106,7 @@ export default function PerfilPage() {
             Tu información personal registrada en ARCA/SiRADIG
           </p>
         </div>
-        <PersonalDataSection fiscalYear={year} />
+        <PersonalDataSection fiscalYear={year} readOnly={readOnly} />
       </div>
 
       <div
@@ -122,7 +125,7 @@ export default function PerfilPage() {
             Tus empleadores para el periodo fiscal seleccionado
           </p>
         </div>
-        <EmployersSection fiscalYear={year} />
+        <EmployersSection fiscalYear={year} readOnly={readOnly} />
       </div>
 
       <div
@@ -141,7 +144,7 @@ export default function PerfilPage() {
             Declara tus dependientes familiares para que se descuenten de tu base imponible
           </p>
         </div>
-        <FamilyDependentsSection fiscalYear={year} />
+        <FamilyDependentsSection fiscalYear={year} readOnly={readOnly} />
       </div>
 
       <div
@@ -160,7 +163,7 @@ export default function PerfilPage() {
             Personal de casas particulares para deducir en SiRADIG
           </p>
         </div>
-        <DomesticWorkersSection fiscalYear={year} />
+        <DomesticWorkersSection fiscalYear={year} readOnly={readOnly} />
       </div>
     </div>
   );

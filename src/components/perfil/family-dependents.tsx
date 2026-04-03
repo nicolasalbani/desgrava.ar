@@ -520,7 +520,13 @@ function DependentDialog({
 
 // ── Main section ─────────────────────────────────────────────────
 
-export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) {
+export function FamilyDependentsSection({
+  fiscalYear,
+  readOnly,
+}: {
+  fiscalYear: number;
+  readOnly?: boolean;
+}) {
   const [dependents, setDependents] = useState<FamilyDependent[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -929,7 +935,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={openAdd}>
+        <Button variant="outline" size="sm" onClick={openAdd} disabled={readOnly}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Agregar carga de familia
         </Button>
@@ -937,7 +943,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
           variant="outline"
           size="sm"
           onClick={() => setImportDialogOpen(true)}
-          disabled={importing || isExporting}
+          disabled={importing || isExporting || readOnly}
         >
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1037,7 +1043,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
                             : "text-muted-foreground hover:text-foreground"
                       }`}
                       onClick={() => handleExportDependent(dep.id)}
-                      disabled={isExporting || importing}
+                      disabled={isExporting || importing || readOnly}
                       title="Exportar a SiRADIG"
                     >
                       {isThisExporting ? (
@@ -1055,7 +1061,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
                       size="icon"
                       className="text-muted-foreground hover:text-foreground h-8 w-8"
                       onClick={() => openEdit(dep)}
-                      disabled={isThisExporting}
+                      disabled={isThisExporting || readOnly}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
@@ -1064,7 +1070,7 @@ export function FamilyDependentsSection({ fiscalYear }: { fiscalYear: number }) 
                       size="icon"
                       className="text-muted-foreground hover:text-destructive h-8 w-8"
                       onClick={() => setDeleteId(dep.id)}
-                      disabled={isThisExporting}
+                      disabled={isThisExporting || readOnly}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

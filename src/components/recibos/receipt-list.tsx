@@ -89,9 +89,11 @@ function formatAmount(amount: string | number): string {
 export function ReceiptList({
   onInitialLoad,
   attentionFilter = false,
+  readOnly,
 }: {
   onInitialLoad?: (count: number) => void;
   attentionFilter?: boolean;
+  readOnly?: boolean;
 }) {
   const { fiscalYear } = useFiscalYear();
   const { invalidate: invalidateAttention } = useAttentionCounts();
@@ -442,7 +444,7 @@ export function ReceiptList({
           <span className="text-sm font-medium">
             {selectedIds.size} {selectedIds.size === 1 ? "seleccionado" : "seleccionados"}
           </span>
-          <Button size="sm" onClick={handleSubmitToSiradig} disabled={submitting}>
+          <Button size="sm" onClick={handleSubmitToSiradig} disabled={submitting || readOnly}>
             {submitting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -455,7 +457,7 @@ export function ReceiptList({
             variant="ghost"
             className="text-destructive hover:text-destructive hover:bg-destructive/10"
             onClick={() => setBulkDeleteOpen(true)}
-            disabled={submitting || bulkDeleting}
+            disabled={submitting || bulkDeleting || readOnly}
           >
             {bulkDeleting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -468,7 +470,7 @@ export function ReceiptList({
             size="sm"
             variant="ghost"
             onClick={() => setSelectedIds(new Set())}
-            disabled={submitting || bulkDeleting}
+            disabled={submitting || bulkDeleting || readOnly}
           >
             Cancelar
           </Button>
@@ -506,7 +508,7 @@ export function ReceiptList({
                     <Checkbox
                       checked={selectedIds.has(r.id)}
                       onCheckedChange={() => toggleSelect(r.id)}
-                      disabled={isInFlight}
+                      disabled={isInFlight || readOnly}
                       title={isInFlight ? "Hay un envio en curso" : undefined}
                       aria-label={`Seleccionar recibo ${r.id}`}
                     />
@@ -544,7 +546,7 @@ export function ReceiptList({
                         ))}
                     </button>
                     <div className="flex items-center gap-0.5">
-                      {!isInFlight && (
+                      {!isInFlight && !readOnly && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -583,6 +585,7 @@ export function ReceiptList({
                         size="icon"
                         className="text-muted-foreground hover:text-destructive h-7 w-7"
                         onClick={() => setDeleteId(r.id)}
+                        disabled={readOnly}
                         title="Eliminar"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -617,7 +620,7 @@ export function ReceiptList({
                   checked={allEligibleSelected && eligibleReceipts.length > 0}
                   onCheckedChange={toggleSelectAll}
                   aria-label="Seleccionar todos"
-                  disabled={eligibleReceipts.length === 0}
+                  disabled={eligibleReceipts.length === 0 || readOnly}
                 />
               </TableHead>
               <TableHead>Trabajador</TableHead>
@@ -903,7 +906,7 @@ export function ReceiptList({
                         <Checkbox
                           checked={selectedIds.has(r.id)}
                           onCheckedChange={() => toggleSelect(r.id)}
-                          disabled={isInFlight}
+                          disabled={isInFlight || readOnly}
                           title={isInFlight ? "Hay un envio en curso" : undefined}
                           aria-label={`Seleccionar recibo ${r.id}`}
                         />
@@ -960,7 +963,7 @@ export function ReceiptList({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {!isInFlight && (
+                          {!isInFlight && !readOnly && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -999,6 +1002,7 @@ export function ReceiptList({
                             size="icon"
                             className="text-muted-foreground hover:text-destructive h-8 w-8"
                             onClick={() => setDeleteId(r.id)}
+                            disabled={readOnly}
                             title="Eliminar"
                           >
                             <Trash2 className="h-3.5 w-3.5" />

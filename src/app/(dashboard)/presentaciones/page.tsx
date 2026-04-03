@@ -7,6 +7,7 @@ import { PresentacionesList } from "@/components/presentaciones/presentaciones-l
 import { ImportArcaPresentacionesDialog } from "@/components/presentaciones/import-arca-dialog";
 import { SubmitPresentacionDialog } from "@/components/presentaciones/submit-presentacion-dialog";
 import { cn } from "@/lib/utils";
+import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
 
 function ExpandingButton({
   icon: Icon,
@@ -14,17 +15,20 @@ function ExpandingButton({
   onClick,
   variant = "outline",
   className,
+  disabled,
 }: {
   icon: ElementType<{ className?: string }>;
   label: string;
   onClick: () => void;
   variant?: "outline" | "default";
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <Button
       variant={variant}
       onClick={onClick}
+      disabled={disabled}
       className={cn("group gap-0 overflow-hidden transition-all duration-300", className)}
     >
       <Icon className="h-4 w-4 shrink-0" />
@@ -36,6 +40,7 @@ function ExpandingButton({
 }
 
 function PresentacionesInner() {
+  const readOnly = useFiscalYearReadOnly();
   const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
@@ -72,11 +77,13 @@ function PresentacionesInner() {
             icon={Download}
             label="Importar desde ARCA"
             onClick={() => setImportOpen(true)}
+            disabled={readOnly}
           />
           <ExpandingButton
             icon={Send}
             label="Crear nueva presentacion"
             onClick={() => setSubmitOpen(true)}
+            disabled={readOnly}
             variant="default"
           />
         </div>

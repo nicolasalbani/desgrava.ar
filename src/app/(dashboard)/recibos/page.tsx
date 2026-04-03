@@ -17,6 +17,7 @@ import { ReceiptList } from "@/components/recibos/receipt-list";
 import { ImportArcaReceiptsDialog } from "@/components/recibos/import-arca-dialog";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 import { cn } from "@/lib/utils";
+import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
 
 function ExpandingButton({
   icon: Icon,
@@ -24,17 +25,20 @@ function ExpandingButton({
   onClick,
   variant = "outline",
   className,
+  disabled,
 }: {
   icon: ElementType<{ className?: string }>;
   label: string;
   onClick: () => void;
   variant?: "outline" | "default";
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <Button
       variant={variant}
       onClick={onClick}
+      disabled={disabled}
       className={cn("group gap-0 overflow-hidden transition-all duration-300", className)}
     >
       <Icon className="h-4 w-4 shrink-0" />
@@ -47,6 +51,7 @@ function ExpandingButton({
 
 function RecibosInner() {
   const { fiscalYear } = useFiscalYear();
+  const readOnly = useFiscalYearReadOnly();
   const searchParams = useSearchParams();
   const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -119,16 +124,19 @@ function RecibosInner() {
             icon={Download}
             label="Importar desde ARCA"
             onClick={() => setImportArcaOpen(true)}
+            disabled={readOnly}
           />
           <ExpandingButton
             icon={PenLine}
             label="Carga manual"
             onClick={() => setManualOpen(true)}
+            disabled={readOnly}
           />
           <ExpandingButton
             icon={Upload}
             label="Subir archivo"
             onClick={() => setUploadOpen(true)}
+            disabled={readOnly}
             variant="default"
           />
         </div>
@@ -142,6 +150,7 @@ function RecibosInner() {
           key={refreshKey}
           onInitialLoad={handleInitialLoad}
           attentionFilter={searchParams.get("filter") === "attention"}
+          readOnly={readOnly}
         />
       </div>
 

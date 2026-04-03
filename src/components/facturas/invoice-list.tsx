@@ -113,9 +113,11 @@ function isFutureMonth(inv: Invoice): boolean {
 export function InvoiceList({
   onInitialLoad,
   attentionFilter = false,
+  readOnly = false,
 }: {
   onInitialLoad?: (count: number) => void;
   attentionFilter?: boolean;
+  readOnly?: boolean;
 } = {}) {
   const { fiscalYear } = useFiscalYear();
   const { invalidate: invalidateAttention } = useAttentionCounts();
@@ -622,7 +624,7 @@ export function InvoiceList({
           <span className="text-sm font-medium">
             {selectedIds.size} {selectedIds.size === 1 ? "seleccionada" : "seleccionadas"}
           </span>
-          <Button size="sm" onClick={handleSubmitToSiradig} disabled={submitting}>
+          <Button size="sm" onClick={handleSubmitToSiradig} disabled={submitting || readOnly}>
             {submitting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -632,7 +634,7 @@ export function InvoiceList({
           </Button>
           <Popover open={bulkCategoryOpen} onOpenChange={setBulkCategoryOpen}>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="ghost" disabled={submitting || bulkDeleting}>
+              <Button size="sm" variant="ghost" disabled={submitting || bulkDeleting || readOnly}>
                 <Tags className="mr-2 h-4 w-4" />
                 Cambiar categoría
               </Button>
@@ -654,7 +656,7 @@ export function InvoiceList({
               <Button
                 size="sm"
                 className="w-full"
-                disabled={!bulkCategory || bulkCategoryUpdating}
+                disabled={!bulkCategory || bulkCategoryUpdating || readOnly}
                 onClick={handleBulkCategoryChange}
               >
                 {bulkCategoryUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -667,7 +669,7 @@ export function InvoiceList({
             variant="ghost"
             className="text-destructive hover:text-destructive hover:bg-destructive/10"
             onClick={() => setBulkDeleteOpen(true)}
-            disabled={submitting || bulkDeleting}
+            disabled={submitting || bulkDeleting || readOnly}
           >
             {bulkDeleting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -724,7 +726,7 @@ export function InvoiceList({
                         <Checkbox
                           checked={selectedIds.has(inv.id)}
                           onCheckedChange={() => toggleSelect(inv.id)}
-                          disabled={isFuture || isInFlight}
+                          disabled={isFuture || isInFlight || readOnly}
                           className="mt-0.5"
                         />
                         <div className="min-w-0 flex-1">
@@ -773,7 +775,7 @@ export function InvoiceList({
                             ))}
                         </button>
                         <div className="flex gap-0.5">
-                          {!isFuture && !isInFlight && (
+                          {!isFuture && !isInFlight && !readOnly && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -790,6 +792,7 @@ export function InvoiceList({
                             className="h-7 w-7"
                             onClick={() => setEditTarget(inv)}
                             title="Editar"
+                            disabled={readOnly}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -799,6 +802,7 @@ export function InvoiceList({
                             className="h-7 w-7"
                             onClick={() => setDeleteTarget(inv.id)}
                             title="Eliminar"
+                            disabled={readOnly}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -832,7 +836,7 @@ export function InvoiceList({
                       checked={allEligibleSelected && eligibleInvoices.length > 0}
                       onCheckedChange={toggleSelectAll}
                       aria-label="Seleccionar todas"
-                      disabled={eligibleInvoices.length === 0}
+                      disabled={eligibleInvoices.length === 0 || readOnly}
                     />
                   </TableHead>
                   <TableHead>Proveedor</TableHead>
@@ -1121,7 +1125,7 @@ export function InvoiceList({
                             <Checkbox
                               checked={selectedIds.has(inv.id)}
                               onCheckedChange={() => toggleSelect(inv.id)}
-                              disabled={isFuture || isInFlight}
+                              disabled={isFuture || isInFlight || readOnly}
                               title={
                                 isFuture
                                   ? "No disponible: el periodo fiscal aun no esta habilitado en SiRADIG"
@@ -1230,7 +1234,7 @@ export function InvoiceList({
                           </TableCell>
                           <TableCell>
                             <div className="flex justify-end gap-1">
-                              {!isFuture && !isInFlight && (
+                              {!isFuture && !isInFlight && !readOnly && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1256,6 +1260,7 @@ export function InvoiceList({
                                 size="icon"
                                 onClick={() => setEditTarget(inv)}
                                 title="Editar"
+                                disabled={readOnly}
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -1275,6 +1280,7 @@ export function InvoiceList({
                                 size="icon"
                                 onClick={() => setDeleteTarget(inv.id)}
                                 title="Eliminar"
+                                disabled={readOnly}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>

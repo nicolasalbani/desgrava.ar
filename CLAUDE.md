@@ -81,7 +81,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 ## Testing
 
-**Framework**: Vitest with 747+ tests across 32 test files.
+**Framework**: Vitest with 765+ tests across 33 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -101,6 +101,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `rate-limit` — in-memory rate limiter (5 tests)
 - `subscription/` — plans constants, access control logic (22 tests)
 - `soporte/` — system prompt content, tool definitions, types (16 tests)
+- `fiscal-year` — fiscal year read-only cutoff logic, available years (18 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
 

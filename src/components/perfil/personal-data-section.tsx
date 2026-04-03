@@ -19,7 +19,13 @@ interface PersonalData {
   codPostal: string;
 }
 
-export function PersonalDataSection({ fiscalYear }: { fiscalYear: number }) {
+export function PersonalDataSection({
+  fiscalYear,
+  readOnly,
+}: {
+  fiscalYear: number;
+  readOnly?: boolean;
+}) {
   const [data, setData] = useState<PersonalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -167,7 +173,7 @@ export function PersonalDataSection({ fiscalYear }: { fiscalYear: number }) {
     <>
       {/* Action button */}
       <div>
-        <Button variant="outline" size="sm" onClick={handleImport} disabled={importing}>
+        <Button variant="outline" size="sm" onClick={handleImport} disabled={importing || readOnly}>
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
           ) : (

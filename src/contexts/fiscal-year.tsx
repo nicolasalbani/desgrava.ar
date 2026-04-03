@@ -5,15 +5,18 @@ import { createContext, useContext, useState, useEffect } from "react";
 interface FiscalYearContextType {
   fiscalYear: number | null;
   setFiscalYear: (year: number) => void;
+  activeYears: number[];
 }
 
 const FiscalYearContext = createContext<FiscalYearContextType>({
   fiscalYear: null,
   setFiscalYear: () => {},
+  activeYears: [],
 });
 
 export function FiscalYearProvider({ children }: { children: React.ReactNode }) {
   const [fiscalYear, setFiscalYearState] = useState<number | null>(null);
+  const [activeYears, setActiveYears] = useState<number[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -23,6 +26,9 @@ export function FiscalYearProvider({ children }: { children: React.ReactNode }) 
         const year = data.preference?.defaultFiscalYear;
         if (typeof year === "number") {
           setFiscalYearState(year);
+        }
+        if (Array.isArray(data.activeYears)) {
+          setActiveYears(data.activeYears);
         }
       })
       .finally(() => setLoaded(true));
@@ -40,7 +46,7 @@ export function FiscalYearProvider({ children }: { children: React.ReactNode }) 
   if (!loaded) return null;
 
   return (
-    <FiscalYearContext.Provider value={{ fiscalYear, setFiscalYear }}>
+    <FiscalYearContext.Provider value={{ fiscalYear, setFiscalYear, activeYears }}>
       {children}
     </FiscalYearContext.Provider>
   );

@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { processJob } from "@/lib/automation/job-processor";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
+import { isFiscalYearReadOnly } from "@/lib/fiscal-year";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -24,6 +25,14 @@ export async function POST(req: NextRequest) {
       familyDependentId,
       employerId,
     } = body;
+
+    // Reject jobs for read-only fiscal years (after March 31st cutoff)
+    if (fiscalYear && isFiscalYearReadOnly(fiscalYear)) {
+      return NextResponse.json(
+        { error: `El período fiscal ${fiscalYear} ya no está disponible en SiRADIG` },
+        { status: 400 },
+      );
+    }
 
     // PULL_COMPROBANTES: import invoices from ARCA's "Mis Comprobantes"
     if (jobType === "PULL_COMPROBANTES") {

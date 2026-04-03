@@ -350,7 +350,13 @@ function WorkerDialog({
 
 // ── Main section ────────────────────────────────────────────
 
-export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
+export function DomesticWorkersSection({
+  fiscalYear,
+  readOnly,
+}: {
+  fiscalYear: number;
+  readOnly?: boolean;
+}) {
   const [workers, setWorkers] = useState<DomesticWorker[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -557,7 +563,7 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={openAdd}>
+        <Button variant="outline" size="sm" onClick={openAdd} disabled={readOnly}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Agregar trabajador
         </Button>
@@ -565,7 +571,7 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
           variant="outline"
           size="sm"
           onClick={() => setImportDialogOpen(true)}
-          disabled={importing}
+          disabled={importing || readOnly}
         >
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -634,6 +640,7 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
                     size="icon"
                     className="text-muted-foreground hover:text-foreground h-8 w-8"
                     onClick={() => openEdit(w)}
+                    disabled={readOnly}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
@@ -642,6 +649,7 @@ export function DomesticWorkersSection({ fiscalYear }: { fiscalYear: number }) {
                     size="icon"
                     className="text-muted-foreground hover:text-destructive h-8 w-8"
                     onClick={() => setDeleteId(w.id)}
+                    disabled={readOnly}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

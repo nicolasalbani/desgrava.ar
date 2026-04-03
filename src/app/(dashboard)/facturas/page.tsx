@@ -17,6 +17,7 @@ import { InvoiceList } from "@/components/facturas/invoice-list";
 import { ImportArcaDialog } from "@/components/facturas/import-arca-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
 
 // ── Expanding icon button ────────────────────────────────────────
 
@@ -26,17 +27,20 @@ function ExpandingButton({
   onClick,
   variant = "outline",
   className,
+  disabled,
 }: {
   icon: ElementType<{ className?: string }>;
   label: string;
   onClick: () => void;
   variant?: "outline" | "default";
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <Button
       variant={variant}
       onClick={onClick}
+      disabled={disabled}
       className={cn("group gap-0 overflow-hidden transition-all duration-300", className)}
     >
       <Icon className="h-4 w-4 shrink-0" />
@@ -195,6 +199,7 @@ function IntroBanner({
 function FacturasInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const readOnly = useFiscalYearReadOnly();
   const hadZeroInvoices = useRef(false);
   const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -257,23 +262,27 @@ function FacturasInner() {
             icon={Download}
             label="Importar desde ARCA"
             onClick={() => setImportArcaOpen(true)}
+            disabled={readOnly}
           />
           <ExpandingButton
             icon={PenLine}
             label="Carga manual"
             onClick={openManual}
+            disabled={readOnly}
             className={cn(showIntro && "ring-primary/20 ring-2")}
           />
           <ExpandingButton
             icon={Mail}
             label="Por email"
             onClick={openEmail}
+            disabled={readOnly}
             className={cn(showIntro && "ring-primary/20 ring-2")}
           />
           <ExpandingButton
             icon={Upload}
             label="Subir archivo"
             onClick={openUpload}
+            disabled={readOnly}
             variant="default"
             className={cn(showIntro && "ring-primary/30 ring-2")}
           />
@@ -292,6 +301,7 @@ function FacturasInner() {
           key={refreshKey}
           onInitialLoad={handleInitialLoad}
           attentionFilter={searchParams.get("filter") === "attention"}
+          readOnly={readOnly}
         />
       </div>
 
