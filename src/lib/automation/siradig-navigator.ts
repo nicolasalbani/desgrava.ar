@@ -145,15 +145,30 @@ export async function navigateToSiradigMainMenu(
     );
 
     log(`Seleccionando periodo fiscal ${fiscalYear}...`);
-    const periodSelect = page.locator("select").first();
-    await periodSelect.waitFor({ timeout: 30000 });
-    await periodSelect.selectOption(String(fiscalYear));
 
-    log("Haciendo click en Continuar...");
-    const continueBtn = page.getByText("Continuar").first();
-    await continueBtn.click();
-    await page.waitForLoadState("networkidle");
-    log(`Despues de Continuar. URL: ${page.url()}`);
+    // After March 31st, the previous fiscal year is no longer accessible in SiRADIG,
+    // so only the current year remains. When there's a single fiscal year available,
+    // SiRADIG auto-selects it and skips the period selection page entirely
+    // (URL already contains ?codigo=YYYY). Only select if the <select> appears.
+    const periodSelect = page.locator("select").first();
+    const hasPeriodSelect = await periodSelect
+      .waitFor({ timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (hasPeriodSelect) {
+      await periodSelect.selectOption(String(fiscalYear));
+
+      log("Haciendo click en Continuar...");
+      const continueBtn = page.getByText("Continuar").first();
+      await continueBtn.click();
+      await page.waitForLoadState("networkidle");
+      log(`Despues de Continuar. URL: ${page.url()}`);
+    } else {
+      log(
+        "Periodo fiscal ya seleccionado automaticamente (unico periodo disponible), continuando...",
+      );
+    }
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -238,23 +253,36 @@ export async function navigateToDeductionSection(
     // Step 3: Select fiscal period and click "Continuar"
     log(`Seleccionando periodo fiscal ${fiscalYear}...`);
 
-    // Wait for the period selection page with a <select> dropdown
+    // After March 31st, the previous fiscal year is no longer accessible in SiRADIG,
+    // so only the current year remains. When there's a single fiscal year available,
+    // SiRADIG auto-selects it and skips the period selection page entirely
+    // (URL already contains ?codigo=YYYY). Only select if the <select> appears.
     const periodSelect = page.locator("select").first();
-    await periodSelect.waitFor({ timeout: 30000 });
-    await periodSelect.selectOption(String(fiscalYear));
+    const hasPeriodSelect = await periodSelect
+      .waitFor({ timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "period-selected",
-      `Periodo ${fiscalYear} seleccionado`,
-    );
+    if (hasPeriodSelect) {
+      await periodSelect.selectOption(String(fiscalYear));
 
-    // Click "Continuar"
-    log("Haciendo click en Continuar...");
-    const continueBtn = page.getByText("Continuar").first();
-    await continueBtn.click();
-    await page.waitForLoadState("networkidle");
-    log(`Despues de Continuar. URL: ${page.url()}`);
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "period-selected",
+        `Periodo ${fiscalYear} seleccionado`,
+      );
+
+      // Click "Continuar"
+      log("Haciendo click en Continuar...");
+      const continueBtn = page.getByText("Continuar").first();
+      await continueBtn.click();
+      await page.waitForLoadState("networkidle");
+      log(`Despues de Continuar. URL: ${page.url()}`);
+    } else {
+      log(
+        "Periodo fiscal ya seleccionado automaticamente (unico periodo disponible), continuando...",
+      );
+    }
 
     await capture(
       await page.screenshot({ fullPage: true }),
