@@ -14,12 +14,18 @@ export async function GET(req: NextRequest) {
 
   const searchParams = req.nextUrl.searchParams;
   const fiscalYear = searchParams.get("fiscalYear");
+  const countOnly = searchParams.get("count") === "true";
 
   const where: Prisma.DomesticWorkerWhereInput = {
     userId: session.user.id,
   };
 
   if (fiscalYear) where.fiscalYear = parseInt(fiscalYear);
+
+  if (countOnly) {
+    const count = await prisma.domesticWorker.count({ where });
+    return NextResponse.json({ count });
+  }
 
   const workers = await prisma.domesticWorker.findMany({
     where,

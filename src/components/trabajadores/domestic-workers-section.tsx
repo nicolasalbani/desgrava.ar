@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Plus, Pencil, Trash2, UserRound, Download } from "lucide-react";
 import { toast } from "sonner";
+import { useDomesticWorkerCount } from "@/contexts/domestic-worker-count";
 import { StepProgress } from "@/components/shared/step-progress";
 import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
 import {
@@ -357,6 +358,7 @@ export function DomesticWorkersSection({
   fiscalYear: number;
   readOnly?: boolean;
 }) {
+  const { invalidate: invalidateWorkerCount } = useDomesticWorkerCount();
   const [workers, setWorkers] = useState<DomesticWorker[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -415,6 +417,7 @@ export function DomesticWorkersSection({
                   setWorkers(newWorkers);
                   setHighlightedIds(highlights);
                   setTimeout(() => setHighlightedIds(new Map()), 3000);
+                  invalidateWorkerCount();
                 });
               toast.success("Trabajadores importados desde ARCA");
             } else {
@@ -434,7 +437,7 @@ export function DomesticWorkersSection({
         toast.error("Se perdio la conexion con el servidor");
       };
     },
-    [fiscalYear],
+    [fiscalYear, invalidateWorkerCount],
   );
 
   useEffect(() => {
@@ -513,6 +516,7 @@ export function DomesticWorkersSection({
         next[idx] = w;
         return next;
       }
+      invalidateWorkerCount();
       return [...prev, w];
     });
   }
@@ -523,6 +527,7 @@ export function DomesticWorkersSection({
     try {
       await fetch(`/api/trabajadores/${deleteId}`, { method: "DELETE" });
       setWorkers((prev) => prev.filter((w) => w.id !== deleteId));
+      invalidateWorkerCount();
       toast.success("Trabajador eliminado");
     } catch {
       toast.error("Error al eliminar");

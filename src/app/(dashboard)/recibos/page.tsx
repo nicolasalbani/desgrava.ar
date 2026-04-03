@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback, Suspense, type ElementType } from "react";
 import { useSearchParams } from "next/navigation";
-import { Upload, PenLine, Download } from "lucide-react";
+import Link from "next/link";
+import { Upload, PenLine, Download, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +17,7 @@ import { ReceiptForm } from "@/components/recibos/receipt-form";
 import { ReceiptList } from "@/components/recibos/receipt-list";
 import { ImportArcaReceiptsDialog } from "@/components/recibos/import-arca-dialog";
 import { useFiscalYear } from "@/contexts/fiscal-year";
+import { useDomesticWorkerCount } from "@/contexts/domestic-worker-count";
 import { cn } from "@/lib/utils";
 import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
 
@@ -49,9 +51,31 @@ function ExpandingButton({
   );
 }
 
+function NoWorkersEmptyState() {
+  return (
+    <div
+      className="animate-in fade-in slide-in-from-bottom-2 flex flex-col items-center justify-center py-20 text-center duration-500"
+      style={{ animationFillMode: "backwards" }}
+    >
+      <div className="bg-muted mb-4 flex h-12 w-12 items-center justify-center rounded-full">
+        <UserRound className="text-muted-foreground/50 h-6 w-6" />
+      </div>
+      <h2 className="text-lg font-semibold">No tenés trabajadores registrados</h2>
+      <p className="text-muted-foreground mt-1 max-w-sm text-sm">
+        Para cargar recibos salariales, primero registrá al menos un trabajador a cargo en tu perfil
+        impositivo.
+      </p>
+      <Button asChild variant="outline" className="mt-4">
+        <Link href="/perfil">Ir a Perfil impositivo</Link>
+      </Button>
+    </div>
+  );
+}
+
 function RecibosInner() {
   const { fiscalYear } = useFiscalYear();
   const readOnly = useFiscalYearReadOnly();
+  const { hasWorkers, loading: workersLoading } = useDomesticWorkerCount();
   const searchParams = useSearchParams();
   const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -105,6 +129,10 @@ function RecibosInner() {
   function handleImportComplete() {
     setActiveJobId(null);
     setRefreshKey((k) => k + 1);
+  }
+
+  if (!workersLoading && !hasWorkers) {
+    return <NoWorkersEmptyState />;
   }
 
   return (
