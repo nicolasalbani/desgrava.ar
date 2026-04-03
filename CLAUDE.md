@@ -39,7 +39,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `(auth)/` — login flow (Google OAuth + email/password), email verification, password reset
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
-**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/datos-personales`, `/cron/presentaciones`, `/subscription`, `/webhooks/mercadopago`, `/cron/subscription-reminders`. All protected routes validate `session?.user?.id`. Write routes (POST/PUT/DELETE) also check subscription access via `requireWriteAccess()` — returns 403 if subscription is expired.
+**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/datos-personales`, `/cron/presentaciones`, `/subscription`, `/webhooks/mercadopago`, `/cron/subscription-reminders`, `/soporte` (tickets + AI chat). All protected routes validate `session?.user?.id`. Write routes (POST/PUT/DELETE) also check subscription access via `requireWriteAccess()` — returns 403 if subscription is expired.
 
 **Business logic** lives in `src/lib/`, organized by domain:
 
@@ -54,8 +54,9 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `domestic/` — Domestic workers domain logic (schemas, validators)
 - `subscription/` — Subscription management: plans/pricing constants, access control (`resolveCanWrite`), trial creation
 - `mercadopago/` — MercadoPago SDK integration: client init, preapproval (subscription) creation/cancellation, webhook processing
+- `soporte/` — AI support chat: system prompt with app knowledge, OpenAI tool definitions for ticket creation and WhatsApp escalation
 
-**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`, `auth/`, `subscription/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
+**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`, `auth/`, `subscription/`, `soporte/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
 
 **Hooks** (`src/hooks/`) contain shared React hooks:
 
@@ -79,7 +80,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 ## Testing
 
-**Framework**: Vitest with 728+ tests across 30 test files.
+**Framework**: Vitest with 747+ tests across 32 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -98,6 +99,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `validators/` — password complexity rules, schemas (24 tests)
 - `rate-limit` — in-memory rate limiter (5 tests)
 - `subscription/` — plans constants, access control logic (22 tests)
+- `soporte/` — system prompt content, tool definitions, types (16 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
 
@@ -127,4 +129,4 @@ Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_te
 
 ## Environment Variables
 
-`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for Railway cron endpoint auth), `MERCADOPAGO_ACCESS_TOKEN` (MercadoPago API key for subscriptions), `MERCADOPAGO_WEBHOOK_SECRET` (webhook signature validation).
+`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for Railway cron endpoint auth), `MERCADOPAGO_ACCESS_TOKEN` (MercadoPago API key for subscriptions), `MERCADOPAGO_WEBHOOK_SECRET` (webhook signature validation), `SUPPORT_EMAIL` (email for new ticket notifications), `SUPPORT_WHATSAPP` (WhatsApp number for escalation, e.g. 5491112345678).
