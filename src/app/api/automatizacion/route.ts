@@ -259,6 +259,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ job }, { status: 201 });
     }
 
+    // PULL_PROFILE: compound job that imports all Perfil Impositivo data in a single ARCA session
+    if (jobType === "PULL_PROFILE") {
+      if (!fiscalYear) {
+        return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
+      }
+
+      // Prevent concurrent profile pull jobs
+      const activeJob = await prisma.automationJob.findFirst({
+        where: {
+          userId: session.user.id,
+          jobType: "PULL_PROFILE",
+          status: { in: ["PENDING", "RUNNING"] },
+        },
+      });
+      if (activeJob) {
+        return NextResponse.json(
+          { error: "Ya hay una importación de perfil en curso" },
+          { status: 409 },
+        );
+      }
+
+      const job = await prisma.automationJob.create({
+        data: {
+          userId: session.user.id,
+          jobType,
+          fiscalYear,
+          status: "PENDING",
+        },
+      });
+
+      after(async () => {
+        try {
+          await processJob(job.id);
+        } catch (err) {
+          console.error("Job processing error:", err);
+        }
+      });
+
+      return NextResponse.json({ job }, { status: 201 });
+    }
+
     // PULL_DOMESTIC_WORKERS: import only worker data from ARCA "Personal de Casas Particulares"
     if (jobType === "PULL_DOMESTIC_WORKERS") {
       if (!fiscalYear) {

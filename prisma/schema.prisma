@@ -255,6 +255,7 @@ enum JobType {
   PULL_EMPLOYERS
   PUSH_EMPLOYERS
   PULL_PERSONAL_DATA
+  PULL_PROFILE
 }
 
 enum JobStatus {

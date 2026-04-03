@@ -523,9 +523,13 @@ function DependentDialog({
 export function FamilyDependentsSection({
   fiscalYear,
   readOnly,
+  profileImporting,
+  refreshKey,
 }: {
   fiscalYear: number;
   readOnly?: boolean;
+  profileImporting?: boolean;
+  refreshKey?: number;
 }) {
   const [dependents, setDependents] = useState<FamilyDependent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -631,6 +635,14 @@ export function FamilyDependentsSection({
       .catch(() => toast.error("Error al cargar las cargas de familia"))
       .finally(() => setLoading(false));
   }, [fiscalYear]);
+
+  // Re-fetch when compound import completes
+  useEffect(() => {
+    if (!refreshKey) return;
+    fetch(`/api/cargas-familia?year=${fiscalYear}`)
+      .then((r) => r.json())
+      .then((d) => setDependents(d.dependents ?? []));
+  }, [refreshKey, fiscalYear]);
 
   // Fetch skip preference
   useEffect(() => {
@@ -943,7 +955,7 @@ export function FamilyDependentsSection({
           variant="outline"
           size="sm"
           onClick={() => setImportDialogOpen(true)}
-          disabled={importing || isExporting || readOnly}
+          disabled={importing || isExporting || readOnly || profileImporting}
         >
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

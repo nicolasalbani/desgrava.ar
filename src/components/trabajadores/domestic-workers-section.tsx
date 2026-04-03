@@ -354,9 +354,13 @@ function WorkerDialog({
 export function DomesticWorkersSection({
   fiscalYear,
   readOnly,
+  profileImporting,
+  refreshKey,
 }: {
   fiscalYear: number;
   readOnly?: boolean;
+  profileImporting?: boolean;
+  refreshKey?: number;
 }) {
   const { invalidate: invalidateWorkerCount } = useDomesticWorkerCount();
   const [workers, setWorkers] = useState<DomesticWorker[]>([]);
@@ -448,6 +452,17 @@ export function DomesticWorkersSection({
       .catch(() => toast.error("Error al cargar trabajadores"))
       .finally(() => setLoading(false));
   }, [fiscalYear]);
+
+  // Re-fetch when compound import completes
+  useEffect(() => {
+    if (!refreshKey) return;
+    fetch(`/api/trabajadores?fiscalYear=${fiscalYear}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setWorkers(d.workers ?? []);
+        invalidateWorkerCount();
+      });
+  }, [refreshKey, fiscalYear, invalidateWorkerCount]);
 
   // Fetch skip preference
   useEffect(() => {
@@ -576,7 +591,7 @@ export function DomesticWorkersSection({
           variant="outline"
           size="sm"
           onClick={() => setImportDialogOpen(true)}
-          disabled={importing || readOnly}
+          disabled={importing || readOnly || profileImporting}
         >
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

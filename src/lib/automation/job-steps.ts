@@ -92,6 +92,15 @@ export const JOB_TYPE_STEPS: Record<string, StepDefinition[]> = {
     { key: "extract", label: "Extrayendo datos personales" },
     { key: "done", label: "Listo" },
   ],
+  PULL_PROFILE: [
+    { key: "login", label: "Iniciando sesión en ARCA" },
+    { key: "siradig", label: "Abriendo SiRADIG" },
+    { key: "datos_personales", label: "Extrayendo datos personales" },
+    { key: "empleadores", label: "Extrayendo empleadores" },
+    { key: "cargas_familia", label: "Extrayendo cargas de familia" },
+    { key: "casas_particulares", label: "Importando trabajadores domésticos" },
+    { key: "done", label: "Listo" },
+  ],
 };
 
 export function getStepsForJobType(jobType: string): StepDefinition[] {

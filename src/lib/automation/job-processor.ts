@@ -961,6 +961,390 @@ async function processPullDomesticWorkers(
 }
 
 /**
+ * Process a PULL_PROFILE compound job:
+ * Single ARCA session that pulls all Perfil Impositivo data:
+ * 1. Login → SiRADIG → personal data → employers → family dependents
+ * 2. Close SiRADIG → portal → Casas Particulares → domestic workers
+ *
+ * Each sub-task is wrapped in try/catch so failures don't abort the whole job.
+ */
+async function processPullProfile(
+  page: Page,
+  siradigPage: Page,
+  job: { userId: string; fiscalYear?: number | null },
+  jobId: string,
+  onLog: LogCallback | undefined,
+  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
+  appendLogFn: typeof appendLog,
+): Promise<void> {
+  const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
+  const results: Record<string, unknown> = {};
+  let hasFailure = false;
+
+  // ── Step 1: Navigate to SiRADIG main menu (person + year + draft) ──
+  const navResult = await navigateToSiradigMainMenu(
+    siradigPage,
+    fiscalYear,
+    (msg) => appendLogFn(jobId, msg, onLog),
+    onScreenshot,
+  );
+
+  if (!navResult.success) {
+    setJobStatus(jobId, "FAILED");
+    await prisma.automationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "FAILED",
+        errorMessage: "No se pudo navegar al menu principal de SiRADIG",
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
+  // ── Step 2: Extract personal data ──
+  await appendStep(jobId, "datos_personales", onLog);
+  try {
+    await appendLogFn(jobId, "Extrayendo datos personales...", onLog);
+
+    const sel = ARCA_SELECTORS.siradig.datosPersonales;
+    const datosBtn = siradigPage.locator(sel.menuButton);
+    await datosBtn.waitFor({ state: "visible", timeout: 15000 });
+    await datosBtn.click();
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(1500);
+
+    await onScreenshot(
+      await siradigPage.screenshot({ fullPage: true }),
+      "datos-personales",
+      "Datos Personales",
+    );
+
+    const readField = (selector: string) =>
+      siradigPage.$eval(selector, (el) => (el as HTMLInputElement).value).catch(() => "");
+
+    const apellido = await readField(sel.formApellido);
+    const nombre = await readField(sel.formNombre);
+    const dirCalle = await readField(sel.formDirCalle);
+    const dirNro = await readField(sel.formDirNro);
+    const dirPiso = await readField(sel.formDirPiso);
+    const dirDpto = await readField(sel.formDirDpto);
+    const descProvincia = await readField(sel.formDescProvincia);
+    const localidad = await readField(sel.formLocalidad);
+    const codPostal = await readField(sel.formCodPostal);
+
+    await prisma.personalData.upsert({
+      where: { userId_fiscalYear: { userId: job.userId, fiscalYear } },
+      create: {
+        userId: job.userId,
+        fiscalYear,
+        apellido,
+        nombre,
+        dirCalle,
+        dirNro,
+        dirPiso: dirPiso || null,
+        dirDpto: dirDpto || null,
+        descProvincia,
+        localidad,
+        codPostal,
+      },
+      update: {
+        apellido,
+        nombre,
+        dirCalle,
+        dirNro,
+        dirPiso: dirPiso || null,
+        dirDpto: dirDpto || null,
+        descProvincia,
+        localidad,
+        codPostal,
+      },
+    });
+
+    await appendLogFn(jobId, `Datos personales importados: ${apellido} ${nombre}`, onLog);
+    results.personalData = { apellido, nombre };
+
+    // Navigate back to main menu
+    const volverBtn = siradigPage.locator(sel.volverBtn);
+    await volverBtn.click();
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(1000);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Error desconocido";
+    await appendLogFn(jobId, `Error extrayendo datos personales: ${msg}`, onLog);
+    results.personalData = { error: msg };
+    hasFailure = true;
+  }
+
+  // ── Step 3: Extract employers ──
+  await appendStep(jobId, "empleadores", onLog);
+  try {
+    await appendLogFn(jobId, "Extrayendo empleadores...", onLog);
+
+    const sel = ARCA_SELECTORS.siradig.empleadores;
+    const empTab = siradigPage.locator(sel.menuButton);
+    await empTab.waitFor({ state: "visible", timeout: 15000 });
+    await empTab.click();
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(2000);
+
+    await onScreenshot(
+      await siradigPage.screenshot({ fullPage: true }),
+      "employers-section",
+      "Seccion de empleadores",
+    );
+
+    const rows = siradigPage.locator(sel.tableRows);
+    const rowCount = await rows.count();
+
+    interface ExtractedEmployer {
+      cuit: string;
+      razonSocial: string;
+      fechaInicio: string;
+      fechaFin: string;
+      agenteRetencion: boolean;
+    }
+
+    const employers: ExtractedEmployer[] = [];
+
+    for (let i = 0; i < rowCount; i++) {
+      const row = rows.nth(i);
+      const editBtn = row.locator(sel.editButton);
+      if ((await editBtn.count()) === 0) continue;
+
+      await editBtn.click();
+      await siradigPage.waitForLoadState("networkidle");
+      await siradigPage.waitForTimeout(1500);
+
+      const cuit = await siradigPage
+        .$eval(sel.formCuit, (el) => (el as HTMLInputElement).value)
+        .catch(() => "");
+      const razonSocial = await siradigPage
+        .$eval(sel.formRazonSocial, (el) => (el as HTMLInputElement).value)
+        .catch(() => "");
+      const fechaInicio = await siradigPage
+        .$eval(sel.formFechaInicio, (el) => (el as HTMLInputElement).value)
+        .catch(() => "");
+      const fechaFin = await siradigPage
+        .$eval(sel.formFechaFin, (el) => (el as HTMLInputElement).value)
+        .catch(() => "");
+      const agenteVal = await siradigPage
+        .$eval(sel.formAgenteRetencion, (el) => (el as HTMLSelectElement).value)
+        .catch(() => "N");
+
+      if (cuit) {
+        employers.push({
+          cuit: cuit.replace(/-/g, ""),
+          razonSocial,
+          fechaInicio,
+          fechaFin,
+          agenteRetencion: agenteVal === "S",
+        });
+      }
+
+      // Go back to list
+      const volverBtn = siradigPage.locator(sel.formVolverBtn).first();
+      await volverBtn.click();
+      await siradigPage.waitForLoadState("networkidle");
+      await siradigPage.waitForTimeout(1500);
+    }
+
+    // Upsert employers
+    let empCreated = 0;
+    let empUpdated = 0;
+
+    for (const emp of employers) {
+      const existing = await prisma.employer.findFirst({
+        where: { userId: job.userId, fiscalYear, cuit: emp.cuit },
+      });
+
+      const data = {
+        razonSocial: emp.razonSocial,
+        fechaInicio: emp.fechaInicio,
+        fechaFin: emp.fechaFin || null,
+        agenteRetencion: emp.agenteRetencion,
+      };
+
+      if (existing) {
+        await prisma.employer.update({ where: { id: existing.id }, data });
+        empUpdated++;
+      } else {
+        await prisma.employer.create({
+          data: { ...data, userId: job.userId, fiscalYear, cuit: emp.cuit },
+        });
+        empCreated++;
+      }
+    }
+
+    await appendLogFn(
+      jobId,
+      `${employers.length} empleadores importados (${empCreated} nuevos, ${empUpdated} actualizados)`,
+      onLog,
+    );
+    results.employers = { total: employers.length, created: empCreated, updated: empUpdated };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Error desconocido";
+    await appendLogFn(jobId, `Error extrayendo empleadores: ${msg}`, onLog);
+    results.employers = { error: msg };
+    hasFailure = true;
+  }
+
+  // ── Step 4: Extract family dependents ──
+  // Need to navigate from main menu → deduction section → cargas de familia
+  await appendStep(jobId, "cargas_familia", onLog);
+  try {
+    await appendLogFn(jobId, "Extrayendo cargas de familia...", onLog);
+
+    const deductionNav = await navigateToDeductionSection(
+      siradigPage,
+      fiscalYear,
+      (msg) => appendLogFn(jobId, msg, onLog),
+      onScreenshot,
+    );
+
+    if (!deductionNav.success) {
+      throw new Error(deductionNav.error || "No se pudo navegar a la seccion de deducciones");
+    }
+
+    const cfNav = await navigateToCargasFamilia(
+      siradigPage,
+      (msg) => appendLogFn(jobId, msg, onLog),
+      onScreenshot,
+    );
+
+    if (!cfNav.success) {
+      throw new Error(cfNav.error || "No se pudo acceder a cargas de familia");
+    }
+
+    const extractResult = await extractCargasFamilia(
+      siradigPage,
+      (msg) => appendLogFn(jobId, msg, onLog),
+      onScreenshot,
+    );
+
+    if (!extractResult.success) {
+      throw new Error(extractResult.error || "No se pudieron extraer cargas de familia");
+    }
+
+    const { created, updated } = await upsertFamilyDependents(
+      job.userId,
+      fiscalYear,
+      extractResult.dependents,
+    );
+
+    await appendLogFn(
+      jobId,
+      `${extractResult.dependents.length} cargas de familia importadas (${created} nuevas, ${updated} actualizadas)`,
+      onLog,
+    );
+    results.familyDependents = { total: extractResult.dependents.length, created, updated };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Error desconocido";
+    await appendLogFn(jobId, `Error extrayendo cargas de familia: ${msg}`, onLog);
+    results.familyDependents = { error: msg };
+    hasFailure = true;
+  }
+
+  // ── Step 5: Close SiRADIG → portal → Casas Particulares → domestic workers ──
+  await appendStep(jobId, "casas_particulares", onLog);
+  try {
+    await appendLogFn(jobId, "Importando trabajadores domésticos...", onLog);
+
+    // Close SiRADIG tab and return to portal
+    await siradigPage.close();
+
+    const workers = await pullDomesticWorkersOnly(
+      page,
+      (msg) => appendLogFn(jobId, msg, onLog),
+      onScreenshot,
+    );
+
+    let workersCreated = 0;
+    let workersUpdated = 0;
+
+    for (const w of workers) {
+      const existing = await prisma.domesticWorker.findFirst({
+        where: { userId: job.userId, fiscalYear, cuil: w.cuil },
+      });
+
+      const workerData = {
+        apellidoNombre: w.apellidoNombre,
+        tipoTrabajo: w.tipoTrabajo,
+        domicilioLaboral: w.domicilioLaboral,
+        horasSemanales: w.horasSemanales,
+        condicion: w.condicion,
+        obraSocial: w.obraSocial,
+        fechaNacimiento: w.fechaNacimiento,
+        fechaIngreso: w.fechaIngreso,
+        modalidadPago: w.modalidadPago,
+        modalidadTrabajo: w.modalidadTrabajo,
+        remuneracionPactada: w.remuneracionPactada ? parseFloat(w.remuneracionPactada) : null,
+      };
+
+      if (existing) {
+        await prisma.domesticWorker.update({ where: { id: existing.id }, data: workerData });
+        workersUpdated++;
+      } else {
+        await prisma.domesticWorker.create({
+          data: { ...workerData, userId: job.userId, fiscalYear, cuil: w.cuil },
+        });
+        workersCreated++;
+      }
+    }
+
+    await appendLogFn(
+      jobId,
+      `${workers.length} trabajadores importados (${workersCreated} nuevos, ${workersUpdated} actualizados)`,
+      onLog,
+    );
+    results.domesticWorkers = {
+      total: workers.length,
+      created: workersCreated,
+      updated: workersUpdated,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Error desconocido";
+    await appendLogFn(jobId, `Error importando trabajadores domésticos: ${msg}`, onLog);
+    results.domesticWorkers = { error: msg };
+    hasFailure = true;
+  }
+
+  // ── Finalize ──
+  await appendStep(jobId, "done", onLog);
+
+  const summaryParts: string[] = [];
+  if (results.personalData && !("error" in (results.personalData as Record<string, unknown>))) {
+    summaryParts.push("datos personales");
+  }
+  const empResult = results.employers as { total?: number } | undefined;
+  if (empResult?.total) summaryParts.push(`${empResult.total} empleadores`);
+  const cfResult = results.familyDependents as { total?: number } | undefined;
+  if (cfResult?.total) summaryParts.push(`${cfResult.total} cargas de familia`);
+  const dwResult = results.domesticWorkers as { total?: number } | undefined;
+  if (dwResult?.total) summaryParts.push(`${dwResult.total} trabajadores`);
+
+  const summary =
+    summaryParts.length > 0
+      ? `Importacion completada: ${summaryParts.join(", ")}`
+      : "Importacion completada (sin datos encontrados)";
+  if (hasFailure) {
+    await appendLogFn(jobId, `${summary} (con errores parciales)`, onLog);
+  } else {
+    await appendLogFn(jobId, summary, onLog);
+  }
+
+  setJobStatus(jobId, "COMPLETED");
+  await prisma.automationJob.update({
+    where: { id: jobId },
+    data: {
+      status: "COMPLETED",
+      completedAt: new Date(),
+      resultData: JSON.parse(JSON.stringify(results)),
+    },
+  });
+}
+
+/**
  * Process a PULL_DOMESTIC_RECEIPTS job:
  * Read workers from DB, navigate to "Personal de Casas Particulares",
  * go to "PAGOS Y RECIBOS" for each worker, download receipts for the fiscal year.
@@ -2730,6 +3114,12 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         // ── PULL_PERSONAL_DATA flow ──
         if (job.jobType === "PULL_PERSONAL_DATA") {
           await processPullPersonalData(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
+          return;
+        }
+
+        // ── PULL_PROFILE compound flow ──
+        if (job.jobType === "PULL_PROFILE") {
+          await processPullProfile(page, siradigPage, job, jobId, onLog, onScreenshot, appendLog);
           return;
         }
 

@@ -22,9 +22,13 @@ interface PersonalData {
 export function PersonalDataSection({
   fiscalYear,
   readOnly,
+  profileImporting,
+  refreshKey,
 }: {
   fiscalYear: number;
   readOnly?: boolean;
+  profileImporting?: boolean;
+  refreshKey?: number;
 }) {
   const [data, setData] = useState<PersonalData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +54,18 @@ export function PersonalDataSection({
       .catch(() => toast.error("Error al cargar datos personales"))
       .finally(() => setLoading(false));
   }, [fiscalYear]);
+
+  // Re-fetch when compound import completes
+  useEffect(() => {
+    if (!refreshKey) return;
+    fetch(`/api/datos-personales?year=${fiscalYear}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setData(d.personalData ?? null);
+        setHighlighted(true);
+        setTimeout(() => setHighlighted(false), 3000);
+      });
+  }, [refreshKey, fiscalYear]);
 
   // SSE for import
   const connectToJobSSE = useCallback(
@@ -173,7 +189,12 @@ export function PersonalDataSection({
     <>
       {/* Action button */}
       <div>
-        <Button variant="outline" size="sm" onClick={handleImport} disabled={importing || readOnly}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleImport}
+          disabled={importing || readOnly || profileImporting}
+        >
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
           ) : (

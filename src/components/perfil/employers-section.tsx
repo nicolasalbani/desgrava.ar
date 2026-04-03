@@ -236,9 +236,13 @@ function EmployerFormDialog({
 export function EmployersSection({
   fiscalYear,
   readOnly,
+  profileImporting,
+  refreshKey,
 }: {
   fiscalYear: number;
   readOnly?: boolean;
+  profileImporting?: boolean;
+  refreshKey?: number;
 }) {
   const [employers, setEmployers] = useState<Employer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -289,6 +293,14 @@ export function EmployersSection({
       .catch(() => toast.error("Error al cargar empleadores"))
       .finally(() => setLoading(false));
   }, [fiscalYear]);
+
+  // Re-fetch when compound import completes
+  useEffect(() => {
+    if (!refreshKey) return;
+    fetch(`/api/empleadores?year=${fiscalYear}`)
+      .then((r) => r.json())
+      .then((d) => setEmployers(d.employers ?? []));
+  }, [refreshKey, fiscalYear]);
 
   // ── SSE for import ──
   const connectToJobSSE = useCallback(
@@ -570,7 +582,7 @@ export function EmployersSection({
           variant="outline"
           size="sm"
           onClick={handleImport}
-          disabled={importing || isExporting || readOnly}
+          disabled={importing || isExporting || readOnly || profileImporting}
         >
           {importing ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

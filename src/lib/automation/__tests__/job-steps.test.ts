@@ -16,6 +16,7 @@ const ALL_JOB_TYPES = [
   "PULL_EMPLOYERS",
   "PUSH_EMPLOYERS",
   "PULL_PERSONAL_DATA",
+  "PULL_PROFILE",
 ];
 
 describe("JOB_TYPE_STEPS", () => {
