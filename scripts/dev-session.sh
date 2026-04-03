@@ -4,12 +4,15 @@ set -euo pipefail
 # Dev Session Launcher
 # Starts: npm run dev, cloudflared tunnel, and Claude Code remote session
 # Outputs both URLs and copies them to clipboard
+# Claude Code auto-restarts if the session drops
 
 PIDS=()
+SHUTTING_DOWN=false
 
 cleanup() {
   echo ""
   echo "Shutting down..."
+  SHUTTING_DOWN=true
   for pid in "${PIDS[@]}"; do
     kill "$pid" 2>/dev/null || true
   done
@@ -70,28 +73,58 @@ done
 rm -f "$CLOUDFLARED_LOG"
 echo "Tunnel ready: $TUNNEL_URL"
 
-# 3. Start Claude Code remote control session
-echo "Starting Claude Code remote control session..."
-CLAUDE_LOG=$(mktemp)
-claude remote-control --name "desgrava.ar dev session" >"$CLAUDE_LOG" 2>&1 &
-PIDS+=($!)
+# 3. Start Claude Code remote control session with auto-restart
+start_claude_remote() {
+  local log=$(mktemp)
+  claude remote-control --name "desgrava.ar dev session" >"$log" 2>&1 &
+  local pid=$!
+  PIDS+=($pid)
 
-echo "Waiting for Claude Code session URL..."
-CLAUDE_URL=""
-for i in $(seq 1 60); do
-  CLAUDE_URL=$(grep -o 'https://[^ ]*' "$CLAUDE_LOG" 2>/dev/null | head -1 || true)
-  if [ -n "$CLAUDE_URL" ]; then
-    break
-  fi
-  if [ "$i" -eq 60 ]; then
-    echo "Error: Could not get Claude Code session URL within 60s." >&2
-    echo "Debug output:"
-    cat "$CLAUDE_LOG" >&2
-    exit 1
-  fi
-  sleep 1
-done
-echo "Claude Code remote control ready."
+  # Wait for session URL
+  local url=""
+  for i in $(seq 1 60); do
+    url=$(grep -o 'https://[^ ]*' "$log" 2>/dev/null | head -1 || true)
+    if [ -n "$url" ]; then
+      break
+    fi
+    if [ "$i" -eq 60 ]; then
+      echo "Error: Could not get Claude Code session URL within 60s." >&2
+      echo "Debug output:"
+      cat "$log" >&2
+      rm -f "$log"
+      return 1
+    fi
+    sleep 1
+  done
+  rm -f "$log"
+
+  CLAUDE_URL="$url"
+  CLAUDE_PID=$pid
+}
+
+claude_watchdog() {
+  while true; do
+    wait "$CLAUDE_PID" 2>/dev/null || true
+    if [ "$SHUTTING_DOWN" = true ]; then
+      return
+    fi
+    echo ""
+    echo "Claude Code session ended. Restarting in 5s..."
+    sleep 5
+    if [ "$SHUTTING_DOWN" = true ]; then
+      return
+    fi
+    echo "Restarting Claude Code remote control..."
+    start_claude_remote || continue
+    echo ""
+    echo "  New Claude Code URL: $CLAUDE_URL"
+    printf "%s\n%s" "$TUNNEL_URL" "$CLAUDE_URL" | pbcopy
+    echo "  (copied to clipboard)"
+  done
+}
+
+echo "Starting Claude Code remote control session..."
+start_claude_remote
 
 # 4. Output results
 echo ""
@@ -108,7 +141,8 @@ echo "========================================="
 printf "%s\n%s" "$TUNNEL_URL" "$CLAUDE_URL" | pbcopy
 echo "Both URLs copied to clipboard."
 
-# Keep running until interrupted
+# Keep running with auto-restart watchdog
 echo ""
 echo "Press Ctrl+C to stop all services."
-wait
+echo "Claude Code will auto-restart if the session drops."
+claude_watchdog
