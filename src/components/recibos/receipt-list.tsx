@@ -245,7 +245,7 @@ export function ReceiptList({
   async function handleSubmitToSiradig() {
     if (selectedIds.size === 0) return;
     if (!fiscalYear) {
-      toast.error("Selecciona un año fiscal antes de enviar a SiRADIG", { duration: 5000 });
+      toast.error("Selecciona un año fiscal antes de desgravar", { duration: 5000 });
       return;
     }
     setSubmitting(true);
@@ -271,7 +271,7 @@ export function ReceiptList({
               errorMessage: null,
             }
           : null;
-        toast.success("Deduccion de servicio domestico enviada a la cola de SiRADIG");
+        toast.success("Deduccion de servicio domestico desgravada");
         setReceipts((prev) =>
           prev.map((r) =>
             selectedIds.has(r.id)
@@ -283,10 +283,10 @@ export function ReceiptList({
         invalidateAttention();
       } else {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "Error al enviar a SiRADIG");
+        toast.error(data?.error ?? "Error al desgravar");
       }
     } catch {
-      toast.error("Error de conexion al enviar a SiRADIG");
+      toast.error("Error de conexion al desgravar");
     } finally {
       setSubmitting(false);
     }
@@ -294,7 +294,7 @@ export function ReceiptList({
 
   async function handleSendSingle(receiptId: string) {
     if (!fiscalYear) {
-      toast.error("Selecciona un año fiscal antes de enviar a SiRADIG");
+      toast.error("Selecciona un año fiscal antes de desgravar");
       return;
     }
     try {
@@ -324,14 +324,14 @@ export function ReceiptList({
               : r,
           ),
         );
-        toast.success("Recibo salarial enviado a la cola de SiRADIG");
+        toast.success("Recibo salarial desgravado");
         invalidateAttention();
       } else {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "Error al enviar a SiRADIG");
+        toast.error(data?.error ?? "Error al desgravar");
       }
     } catch {
-      toast.error("Error de conexion al enviar a SiRADIG");
+      toast.error("Error de conexion al desgravar");
     }
   }
 
@@ -453,7 +453,7 @@ export function ReceiptList({
             ) : (
               <Send className="mr-2 h-4 w-4" />
             )}
-            Enviar a SiRADIG
+            Desgravar
           </Button>
           <Button
             size="sm"
@@ -512,7 +512,7 @@ export function ReceiptList({
                       checked={selectedIds.has(r.id)}
                       onCheckedChange={() => toggleSelect(r.id)}
                       disabled={isInFlight || readOnly}
-                      title={isInFlight ? "Hay un envio en curso" : undefined}
+                      title={isInFlight ? "Hay una desgravacion en curso" : undefined}
                       aria-label={`Seleccionar recibo salarial ${r.id}`}
                     />
                     <div className="min-w-0 flex-1">
@@ -555,7 +555,7 @@ export function ReceiptList({
                           size="icon"
                           className="text-muted-foreground hover:text-foreground h-7 w-7"
                           onClick={() => handleSendSingle(r.id)}
-                          title="Enviar a SiRADIG"
+                          title="Desgravar"
                         >
                           <Send className="h-3.5 w-3.5" />
                         </Button>
@@ -910,7 +910,7 @@ export function ReceiptList({
                           checked={selectedIds.has(r.id)}
                           onCheckedChange={() => toggleSelect(r.id)}
                           disabled={isInFlight || readOnly}
-                          title={isInFlight ? "Hay un envio en curso" : undefined}
+                          title={isInFlight ? "Hay una desgravacion en curso" : undefined}
                           aria-label={`Seleccionar recibo salarial ${r.id}`}
                         />
                       </TableCell>
@@ -972,7 +972,7 @@ export function ReceiptList({
                               size="icon"
                               className="text-muted-foreground hover:text-foreground h-8 w-8"
                               onClick={() => handleSendSingle(r.id)}
-                              title="Enviar a SiRADIG"
+                              title="Desgravar"
                             >
                               <Send className="h-3.5 w-3.5" />
                             </Button>

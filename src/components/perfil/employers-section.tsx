@@ -668,7 +668,7 @@ export function EmployersSection({
                       className="h-8 w-8"
                       onClick={() => handleExport(emp.id)}
                       disabled={importing || isExporting || readOnly}
-                      title="Exportar a SiRADIG"
+                      title="Desgravar"
                     >
                       {isExportingThis ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />

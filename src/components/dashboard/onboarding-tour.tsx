@@ -69,12 +69,12 @@ function getSteps(fiscalYear: number): StepDef[] {
     },
     {
       id: "automation",
-      title: "Enviar a SiRADIG",
-      description: "Envia tus deducciones a SiRADIG",
-      completedDescription: "Envios activos",
+      title: "Desgravar",
+      description: "Envia tus deducciones automaticamente",
+      completedDescription: "Desgravaciones activas",
       icon: Send,
       href: "/facturas",
-      activeLabel: "Enviar",
+      activeLabel: "Desgravar",
     },
   ];
 }
@@ -167,7 +167,7 @@ function CelebrationBanner() {
         <Sparkles className="text-primary h-4 w-4" />
       </div>
       <p className="text-muted-foreground text-sm">
-        Completaste la configuracion. Tus deducciones se cargan automaticamente en SiRADIG.
+        Completaste la configuracion. Tus deducciones se desgravan automaticamente.
       </p>
     </div>
   );

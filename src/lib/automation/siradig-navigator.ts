@@ -811,7 +811,7 @@ export async function fillDeductionForm(
           return {
             success: false,
             error:
-              "Factura educativa sin familiar vinculado. Vincula un familiar en desgrava.ar antes de enviar.",
+              "Factura educativa sin familiar vinculado. Vincula un familiar en desgrava.ar antes de desgravar.",
           };
         }
 

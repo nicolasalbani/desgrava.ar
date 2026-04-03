@@ -1044,7 +1044,7 @@ export function FamilyDependentsSection({
                       }`}
                       onClick={() => handleExportDependent(dep.id)}
                       disabled={isExporting || importing || readOnly}
-                      title="Exportar a SiRADIG"
+                      title="Desgravar"
                     >
                       {isThisExporting ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />

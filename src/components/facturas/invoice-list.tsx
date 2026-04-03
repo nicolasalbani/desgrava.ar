@@ -239,7 +239,7 @@ export function InvoiceList({
           colors: ["#6366f1", "#8b5cf6", "#a78bfa"],
         });
       }, 200);
-      toast.success("Tu primera deduccion fue enviada a SiRADIG", {
+      toast.success("Tu primera deduccion fue desgravada", {
         duration: 6000,
       });
     }
@@ -399,7 +399,7 @@ export function InvoiceList({
   async function handleSubmitToSiradig() {
     if (selectedIds.size === 0) return;
     if (fiscalYear === null) {
-      toast.error("Seleccioná un año fiscal antes de enviar comprobantes a SiRADIG", {
+      toast.error("Seleccioná un año fiscal antes de desgravar", {
         duration: 5000,
       });
       return;
@@ -432,7 +432,7 @@ export function InvoiceList({
       }
       if (inv && inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId) {
         toast.error(
-          `"${inv.providerName || "Comprobante"}" es un gasto educativo sin familiar vinculado. Vinculá un familiar antes de enviar.`,
+          `"${inv.providerName || "Comprobante"}" es un gasto educativo sin familiar vinculado. Vinculá un familiar antes de desgravar.`,
           { duration: 6000 },
         );
         failedIds.add(invoiceId);
@@ -477,11 +477,11 @@ export function InvoiceList({
     }
 
     if (successCount > 0) {
-      toast.success(`${successCount} comprobante(s) enviado(s) a la cola de SiRADIG`);
+      toast.success(`${successCount} comprobante(s) desgravado(s)`);
       invalidateAttention();
     }
     if (failCount > 0) {
-      toast.error(`${failCount} comprobante(s) no se pudieron enviar`);
+      toast.error(`${failCount} comprobante(s) no se pudieron desgravar`);
     }
 
     setSelectedIds(failedIds);
@@ -492,7 +492,7 @@ export function InvoiceList({
     const inv = invoices.find((i) => i.id === invoiceId);
     if (!inv) return;
     if (fiscalYear === null) {
-      toast.error("Selecciona un año fiscal antes de enviar a SiRADIG");
+      toast.error("Selecciona un año fiscal antes de desgravar");
       return;
     }
     if (inv.fiscalYear !== fiscalYear) {
@@ -508,7 +508,7 @@ export function InvoiceList({
       return;
     }
     if (inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId) {
-      toast.error("Vincula un familiar antes de enviar gastos educativos a SiRADIG");
+      toast.error("Vincula un familiar antes de desgravar gastos educativos");
       return;
     }
     try {
@@ -537,14 +537,14 @@ export function InvoiceList({
               : i,
           ),
         );
-        toast.success("Comprobante enviado a la cola de SiRADIG");
+        toast.success("Comprobante desgravado");
         invalidateAttention();
       } else {
         const data = await res.json().catch(() => null);
-        toast.error(data?.error ?? "Error al enviar a SiRADIG");
+        toast.error(data?.error ?? "Error al desgravar");
       }
     } catch {
-      toast.error("Error de conexion al enviar a SiRADIG");
+      toast.error("Error de conexion al desgravar");
     }
   }
 
@@ -632,7 +632,7 @@ export function InvoiceList({
             ) : (
               <Send className="mr-2 h-4 w-4" />
             )}
-            Enviar a SiRADIG
+            Desgravar
           </Button>
           <Popover open={bulkCategoryOpen} onOpenChange={setBulkCategoryOpen}>
             <PopoverTrigger asChild>
@@ -783,7 +783,7 @@ export function InvoiceList({
                               size="icon"
                               className="h-7 w-7"
                               onClick={() => handleSendSingle(inv.id)}
-                              title="Enviar a SiRADIG"
+                              title="Desgravar"
                             >
                               <Send className="h-3.5 w-3.5" />
                             </Button>
@@ -1132,7 +1132,7 @@ export function InvoiceList({
                                 isFuture
                                   ? "No disponible: el periodo fiscal aun no esta habilitado en SiRADIG"
                                   : isInFlight
-                                    ? "Hay un envio en curso"
+                                    ? "Hay una desgravacion en curso"
                                     : undefined
                               }
                               aria-label={`Seleccionar comprobante ${inv.id}`}
@@ -1241,7 +1241,7 @@ export function InvoiceList({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleSendSingle(inv.id)}
-                                  title="Enviar a SiRADIG"
+                                  title="Desgravar"
                                 >
                                   <Send className="h-4 w-4" />
                                 </Button>
@@ -1346,7 +1346,7 @@ export function InvoiceList({
             </AlertDialogTitle>
             <AlertDialogDescription>
               Esta accion no se puede deshacer. Se eliminaran permanentemente los comprobantes
-              seleccionados y sus envios a SiRADIG asociados.
+              seleccionados y sus desgravaciones asociadas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

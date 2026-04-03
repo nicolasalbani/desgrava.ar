@@ -47,26 +47,28 @@ done
 echo "Dev server ready."
 
 # 2. Start cloudflared tunnel
+TUNNEL_URL="https://dev.desgrava.ar"
+
 echo "Starting cloudflared tunnel..."
 CLOUDFLARED_LOG=$(mktemp)
-cloudflared tunnel --url http://localhost:3000 2>"$CLOUDFLARED_LOG" &
+cloudflared tunnel run dev 2>"$CLOUDFLARED_LOG" &
 PIDS+=($!)
 
-echo "Waiting for tunnel URL..."
-TUNNEL_URL=""
-for i in $(seq 1 30); do
-  TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' "$CLOUDFLARED_LOG" 2>/dev/null | head -1 || true)
-  if [ -n "$TUNNEL_URL" ]; then
+echo "Waiting for tunnel to be ready..."
+for i in $(seq 1 60); do
+  if grep -qi 'registered\|connected\|serving' "$CLOUDFLARED_LOG" 2>/dev/null; then
     break
   fi
-  if [ "$i" -eq 30 ]; then
-    echo "Error: Could not get tunnel URL within 30s." >&2
+  if [ "$i" -eq 60 ]; then
+    echo "Error: Tunnel not ready within 60s." >&2
+    echo "Debug output:"
+    cat "$CLOUDFLARED_LOG" >&2
     exit 1
   fi
   sleep 1
 done
 rm -f "$CLOUDFLARED_LOG"
-echo "Tunnel ready."
+echo "Tunnel ready: $TUNNEL_URL"
 
 # 3. Start Claude Code remote control session
 echo "Starting Claude Code remote control session..."

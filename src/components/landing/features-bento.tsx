@@ -39,7 +39,7 @@ const cards: BentoCard[] = [
   },
   {
     icon: SendIcon,
-    title: "Envio automatico a SiRADIG",
+    title: "Desgravacion automatica",
     description: "Con un click cargas todas tus deducciones al formulario F.572 sin entrar a ARCA.",
     accent: "group-hover:text-amber-500 dark:group-hover:text-amber-400",
     accentGlow: "bg-amber-500/10 dark:bg-amber-400/10",

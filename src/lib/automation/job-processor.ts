@@ -2133,7 +2133,7 @@ async function processSubmitDomesticDeduction(
   const workersWithReceipts = workers.filter((w) => w.receipts.length > 0);
 
   if (workersWithReceipts.length === 0) {
-    await appendLogFn(jobId, "No hay recibos pendientes para enviar a SiRADIG", onLog);
+    await appendLogFn(jobId, "No hay recibos pendientes para desgravar", onLog);
     setJobStatus(jobId, "COMPLETED");
     await prisma.automationJob.update({
       where: { id: jobId },

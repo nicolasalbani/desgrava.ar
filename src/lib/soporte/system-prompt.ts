@@ -21,7 +21,7 @@ Ayudás a los usuarios con dudas sobre la plataforma y reportás problemas técn
 - **OCR no lee bien un PDF**: Algunos PDFs son imágenes escaneadas de baja calidad. Sugerir cargar manualmente o probar con una foto más nítida.
 - **Categoría incorrecta**: La IA puede clasificar mal una factura. El usuario puede cambiar la categoría manualmente desde la lista de facturas.
 - **Factura no deducible**: Algunas facturas se clasifican como NO_DEDUCIBLE (supermercados, servicios públicos, etc.). Esto es correcto, no todo es deducible.
-- **Error al enviar a SiRADIG**: Puede fallar por credenciales inválidas, SiRADIG caído, o datos faltantes en la factura.
+- **Error al desgravar**: Puede fallar por credenciales inválidas, SiRADIG caído, o datos faltantes en el comprobante.
 - **Suscripción**: Preguntas sobre planes, período de prueba, o acceso limitado en modo lectura.
 
 ## Instrucciones de comportamiento

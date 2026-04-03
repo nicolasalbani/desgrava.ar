@@ -398,8 +398,7 @@ export async function POST(req: NextRequest) {
       if (invoice.deductionCategory === "GASTOS_EDUCATIVOS" && !invoice.familyDependentId) {
         return NextResponse.json(
           {
-            error:
-              "Los gastos educativos requieren un familiar vinculado antes de enviar a SiRADIG",
+            error: "Los gastos educativos requieren un familiar vinculado antes de desgravar",
           },
           { status: 400 },
         );
@@ -413,7 +412,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Las deducciones de alquiler requieren las fechas de vigencia del contrato (desde y hasta) antes de enviar a SiRADIG",
+              "Las deducciones de alquiler requieren las fechas de vigencia del contrato (desde y hasta) antes de desgravar",
           },
           { status: 400 },
         );
