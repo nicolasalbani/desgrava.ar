@@ -82,10 +82,10 @@ function EmailIngestDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-auto max-w-[90vw]">
         <DialogHeader>
-          <DialogTitle>Subir factura por email</DialogTitle>
+          <DialogTitle>Subir comprobante por email</DialogTitle>
           <DialogDescription>
-            Envia un email con tu factura adjunta (PDF, JPG o PNG) a esta direccion y la procesamos
-            automaticamente.
+            Envia un email con tu comprobante adjunto (PDF, JPG o PNG) a esta direccion y lo
+            procesamos automaticamente.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-1">
@@ -138,7 +138,7 @@ const METHOD_CARDS = [
     key: "email",
     icon: Mail,
     title: "Por email",
-    description: "Envia un email con la factura adjunta a tu direccion personal de carga.",
+    description: "Envia un email con el comprobante adjunto a tu direccion personal de carga.",
     cta: "Ver direccion",
   },
   {
@@ -252,7 +252,7 @@ function FacturasInner() {
         style={{ animationFillMode: "backwards" }}
       >
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Facturas</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Comprobantes deducibles</h1>
           <p className="text-muted-foreground/70 mt-1 text-sm">
             Comprobantes para deducciones SiRADIG
           </p>

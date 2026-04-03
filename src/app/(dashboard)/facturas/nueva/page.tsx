@@ -4,7 +4,7 @@ export default function NuevaFacturaPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Carga manual de factura</h1>
+        <h1 className="text-3xl font-bold">Carga manual de comprobante</h1>
         <p className="text-muted-foreground mt-1">Ingresa los datos del comprobante manualmente</p>
       </div>
       <InvoiceForm />

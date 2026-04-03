@@ -144,7 +144,7 @@ export function EmailIngestCard() {
       <div className="space-y-4">
         <div className="text-muted-foreground/70 flex items-center gap-2 text-sm">
           <Mail className="h-4 w-4" />
-          <span>Envia facturas como adjuntos a este email y se cargan automaticamente</span>
+          <span>Envia comprobantes como adjuntos a este email y se cargan automaticamente</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -218,7 +218,7 @@ export function EmailIngestCard() {
                       {log.invoicesCreated > 0 && (
                         <span className="text-muted-foreground/50 text-xs">
                           ({log.invoicesCreated}{" "}
-                          {log.invoicesCreated === 1 ? "factura" : "facturas"})
+                          {log.invoicesCreated === 1 ? "comprobante" : "comprobantes"})
                         </span>
                       )}
                     </div>

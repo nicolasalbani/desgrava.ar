@@ -194,11 +194,11 @@ export function ReceiptList({
         next.delete(deleteId);
         return next;
       });
-      toast.success("Recibo eliminado");
+      toast.success("Recibo salarial eliminado");
       invalidateAttention();
       refetch();
     } catch {
-      toast.error("Error al eliminar recibo");
+      toast.error("Error al eliminar recibo salarial");
     } finally {
       setDeleting(false);
       setDeleteId(null);
@@ -229,13 +229,15 @@ export function ReceiptList({
         return next;
       });
       toast.success(
-        deleted.length === 1 ? "Recibo eliminado" : `${deleted.length} recibos eliminados`,
+        deleted.length === 1
+          ? "Recibo salarial eliminado"
+          : `${deleted.length} recibos salariales eliminados`,
       );
       invalidateAttention();
       refetch();
     }
     const failed = deletableIds.length - deleted.length;
-    if (failed > 0) toast.error(`${failed} recibo(s) no se pudieron eliminar`);
+    if (failed > 0) toast.error(`${failed} recibo(s) salarial(es) no se pudieron eliminar`);
 
     setBulkDeleting(false);
   }
@@ -322,7 +324,7 @@ export function ReceiptList({
               : r,
           ),
         );
-        toast.success("Recibo enviado a la cola de SiRADIG");
+        toast.success("Recibo salarial enviado a la cola de SiRADIG");
         invalidateAttention();
       } else {
         const data = await res.json().catch(() => null);
@@ -404,7 +406,7 @@ export function ReceiptList({
         <div className="bg-muted mb-3 flex h-10 w-10 items-center justify-center rounded-full">
           <Receipt className="text-muted-foreground/50 h-5 w-5" />
         </div>
-        <p className="text-muted-foreground/70 text-sm">No hay recibos cargados</p>
+        <p className="text-muted-foreground/70 text-sm">No hay recibos salariales cargados</p>
         <p className="text-muted-foreground/50 mt-1 text-xs">
           Importa desde ARCA o subi un archivo para empezar
         </p>
@@ -434,7 +436,8 @@ export function ReceiptList({
         </div>
         {pagination.totalCount > 0 && (
           <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
-            {pagination.totalCount} {pagination.totalCount === 1 ? "recibo" : "recibos"}
+            {pagination.totalCount}{" "}
+            {pagination.totalCount === 1 ? "recibo salarial" : "recibos salariales"}
           </span>
         )}
       </div>
@@ -510,7 +513,7 @@ export function ReceiptList({
                       onCheckedChange={() => toggleSelect(r.id)}
                       disabled={isInFlight || readOnly}
                       title={isInFlight ? "Hay un envio en curso" : undefined}
-                      aria-label={`Seleccionar recibo ${r.id}`}
+                      aria-label={`Seleccionar recibo salarial ${r.id}`}
                     />
                     <div className="min-w-0 flex-1">
                       {r.domesticWorker ? (
@@ -908,7 +911,7 @@ export function ReceiptList({
                           onCheckedChange={() => toggleSelect(r.id)}
                           disabled={isInFlight || readOnly}
                           title={isInFlight ? "Hay un envio en curso" : undefined}
-                          aria-label={`Seleccionar recibo ${r.id}`}
+                          aria-label={`Seleccionar recibo salarial ${r.id}`}
                         />
                       </TableCell>
                       <TableCell>
@@ -1046,9 +1049,9 @@ export function ReceiptList({
       <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar recibo</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar recibo salarial</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminara este recibo. Esta accion no se puede deshacer.
+              Se eliminara este recibo salarial. Esta accion no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1066,10 +1069,11 @@ export function ReceiptList({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Eliminar {selectedIds.size} {selectedIds.size === 1 ? "recibo" : "recibos"}
+              Eliminar {selectedIds.size}{" "}
+              {selectedIds.size === 1 ? "recibo salarial" : "recibos salariales"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta accion no se puede deshacer. Se eliminaran permanentemente los recibos
+              Esta accion no se puede deshacer. Se eliminaran permanentemente los recibos salariales
               seleccionados.
             </AlertDialogDescription>
           </AlertDialogHeader>

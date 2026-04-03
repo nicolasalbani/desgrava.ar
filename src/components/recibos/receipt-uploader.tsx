@@ -157,7 +157,7 @@ export function ReceiptUploader({ onSaved }: { onSaved: () => void }) {
         throw new Error(err.error || "Error al guardar");
       }
 
-      toast.success("Recibo creado");
+      toast.success("Recibo salarial creado");
       onSaved();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al guardar");
@@ -284,7 +284,7 @@ export function ReceiptUploader({ onSaved }: { onSaved: () => void }) {
         </Button>
         <Button onClick={handleSave} disabled={saving}>
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Crear recibo
+          Crear recibo salarial
         </Button>
       </div>
     </div>

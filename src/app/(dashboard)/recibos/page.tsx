@@ -114,7 +114,7 @@ function RecibosInner() {
         style={{ animationFillMode: "backwards" }}
       >
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Recibos</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Recibos salariales</h1>
           <p className="text-muted-foreground/70 mt-1 text-sm">
             Recibos de sueldo de personal de casas particulares
           </p>
@@ -165,7 +165,7 @@ function RecibosInner() {
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="max-h-[90vh] [grid-template-rows:auto_1fr] overflow-hidden sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Subir recibo</DialogTitle>
+            <DialogTitle>Subir recibo salarial</DialogTitle>
             <DialogDescription>
               Subi un archivo PDF, JPG o PNG y extraeremos los datos automaticamente.
             </DialogDescription>
@@ -181,7 +181,9 @@ function RecibosInner() {
         <DialogContent className="max-h-[90vh] [grid-template-rows:auto_1fr] overflow-hidden sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Carga manual</DialogTitle>
-            <DialogDescription>Ingresa los datos del recibo manualmente.</DialogDescription>
+            <DialogDescription>
+              Ingresa los datos del recibo salarial manualmente.
+            </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 overflow-y-auto">
             <ReceiptForm onSaved={handleSaved} onCancel={() => setManualOpen(false)} />

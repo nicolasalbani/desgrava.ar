@@ -105,7 +105,7 @@ export function ImportArcaReceiptsDialog({
             connectedJobRef.current = null;
             if (data.status === "COMPLETED") {
               setStatus("completed");
-              toast.success("Recibos importados desde ARCA");
+              toast.success("Recibos salariales importados desde ARCA");
               onImportComplete();
               // Auto-close dialog after a short delay so the user sees the success state
               setTimeout(() => onOpenChange(false), 1500);
@@ -120,7 +120,7 @@ export function ImportArcaReceiptsDialog({
                 })
                 .catch(() => {});
               setStatus("failed");
-              toast.error("Error al importar recibos");
+              toast.error("Error al importar recibos salariales");
             }
           }
         } catch {
@@ -251,7 +251,7 @@ export function ImportArcaReceiptsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Importar recibos desde ARCA</DialogTitle>
+          <DialogTitle>Importar recibos salariales desde ARCA</DialogTitle>
           <DialogDescription>
             Se conectara a Personal de Casas Particulares y descargara los recibos de sueldo de
             todos los trabajadores.

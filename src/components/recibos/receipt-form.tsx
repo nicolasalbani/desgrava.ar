@@ -107,7 +107,7 @@ export function ReceiptForm({ onSaved, onCancel }: { onSaved: () => void; onCanc
         throw new Error(err.error || "Error al guardar");
       }
 
-      toast.success("Recibo creado");
+      toast.success("Recibo salarial creado");
       onSaved();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al guardar");
@@ -221,7 +221,7 @@ export function ReceiptForm({ onSaved, onCancel }: { onSaved: () => void; onCanc
         </Button>
         <Button type="submit" disabled={saving}>
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Crear recibo
+          Crear recibo salarial
         </Button>
       </div>
     </form>

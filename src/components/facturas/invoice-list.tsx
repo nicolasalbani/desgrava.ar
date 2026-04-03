@@ -280,7 +280,7 @@ export function InvoiceList({
         next.delete(id);
         return next;
       });
-      toast.success("Factura eliminada");
+      toast.success("Comprobante eliminado");
       invalidateAttention();
       refetch();
     } else {
@@ -313,13 +313,15 @@ export function InvoiceList({
         return next;
       });
       toast.success(
-        deleted.length === 1 ? "Factura eliminada" : `${deleted.length} facturas eliminadas`,
+        deleted.length === 1
+          ? "Comprobante eliminado"
+          : `${deleted.length} comprobantes eliminados`,
       );
       invalidateAttention();
       refetch();
     }
     const failed = deletableIds.length - deleted.length;
-    if (failed > 0) toast.error(`${failed} factura(s) no se pudieron eliminar`);
+    if (failed > 0) toast.error(`${failed} comprobante(s) no se pudieron eliminar`);
 
     setBulkDeleting(false);
   }
@@ -397,7 +399,7 @@ export function InvoiceList({
   async function handleSubmitToSiradig() {
     if (selectedIds.size === 0) return;
     if (fiscalYear === null) {
-      toast.error("Seleccioná un año fiscal antes de enviar facturas a SiRADIG", {
+      toast.error("Seleccioná un año fiscal antes de enviar comprobantes a SiRADIG", {
         duration: 5000,
       });
       return;
@@ -412,7 +414,7 @@ export function InvoiceList({
       const inv = invoices.find((i) => i.id === invoiceId);
       if (inv && inv.fiscalYear !== fiscalYear) {
         toast.error(
-          `"${inv.providerName || inv.providerCuit}" es del año ${inv.fiscalYear}, pero el año fiscal activo es ${fiscalYear}. Cambiá el año o deseleccioná la factura.`,
+          `"${inv.providerName || inv.providerCuit}" es del año ${inv.fiscalYear}, pero el año fiscal activo es ${fiscalYear}. Cambiá el año o deseleccioná el comprobante.`,
           { duration: 6000 },
         );
         failedIds.add(invoiceId);
@@ -430,7 +432,7 @@ export function InvoiceList({
       }
       if (inv && inv.deductionCategory === "GASTOS_EDUCATIVOS" && !inv.familyDependentId) {
         toast.error(
-          `"${inv.providerName || "Factura"}" es un gasto educativo sin familiar vinculado. Vinculá un familiar antes de enviar.`,
+          `"${inv.providerName || "Comprobante"}" es un gasto educativo sin familiar vinculado. Vinculá un familiar antes de enviar.`,
           { duration: 6000 },
         );
         failedIds.add(invoiceId);
@@ -475,11 +477,11 @@ export function InvoiceList({
     }
 
     if (successCount > 0) {
-      toast.success(`${successCount} factura(s) enviada(s) a la cola de SiRADIG`);
+      toast.success(`${successCount} comprobante(s) enviado(s) a la cola de SiRADIG`);
       invalidateAttention();
     }
     if (failCount > 0) {
-      toast.error(`${failCount} factura(s) no se pudieron enviar`);
+      toast.error(`${failCount} comprobante(s) no se pudieron enviar`);
     }
 
     setSelectedIds(failedIds);
@@ -501,7 +503,7 @@ export function InvoiceList({
     }
     if (inv.deductionCategory === "NO_DEDUCIBLE") {
       toast.error(
-        "Esta factura está marcada como no deducible. Cambiá la categoría si corresponde.",
+        "Este comprobante está marcado como no deducible. Cambiá la categoría si corresponde.",
       );
       return;
     }
@@ -535,7 +537,7 @@ export function InvoiceList({
               : i,
           ),
         );
-        toast.success("Factura enviada a la cola de SiRADIG");
+        toast.success("Comprobante enviado a la cola de SiRADIG");
         invalidateAttention();
       } else {
         const data = await res.json().catch(() => null);
@@ -702,8 +704,8 @@ export function InvoiceList({
           <p className="text-muted-foreground/70 text-sm font-medium">Sin comprobantes</p>
           <p className="text-muted-foreground/50 mt-1.5 max-w-xs text-xs">
             {fiscalYear !== null
-              ? `No hay facturas cargadas para ${fiscalYear}`
-              : "No hay facturas cargadas"}
+              ? `No hay comprobantes cargados para ${fiscalYear}`
+              : "No hay comprobantes cargados"}
           </p>
         </div>
       ) : (
@@ -1133,7 +1135,7 @@ export function InvoiceList({
                                     ? "Hay un envio en curso"
                                     : undefined
                               }
-                              aria-label={`Seleccionar factura ${inv.id}`}
+                              aria-label={`Seleccionar comprobante ${inv.id}`}
                             />
                           </TableCell>
                           <TableCell>
@@ -1324,9 +1326,9 @@ export function InvoiceList({
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar factura</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar comprobante</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta accion no se puede deshacer. Se eliminara la factura permanentemente.
+              Esta accion no se puede deshacer. Se eliminara el comprobante permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1340,11 +1342,11 @@ export function InvoiceList({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Eliminar {selectedIds.size} {selectedIds.size === 1 ? "factura" : "facturas"}
+              Eliminar {selectedIds.size} {selectedIds.size === 1 ? "comprobante" : "comprobantes"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta accion no se puede deshacer. Se eliminaran permanentemente las facturas
-              seleccionadas y sus envios a SiRADIG asociados.
+              Esta accion no se puede deshacer. Se eliminaran permanentemente los comprobantes
+              seleccionados y sus envios a SiRADIG asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

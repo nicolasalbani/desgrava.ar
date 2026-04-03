@@ -186,7 +186,7 @@ export function FileUploader({ onInvoiceSaved }: { onInvoiceSaved?: () => void }
             </div>
             <div className="text-center">
               <p className="text-foreground/70 text-sm font-medium">
-                Arrastra tu factura aca o hace click para seleccionar
+                Arrastra tu comprobante aca o hace click para seleccionar
               </p>
               <p className="text-muted-foreground mt-1.5 text-xs">
                 PDF, JPG, PNG o WebP &mdash; maximo 10MB

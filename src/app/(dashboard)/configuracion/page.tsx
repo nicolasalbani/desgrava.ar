@@ -81,9 +81,9 @@ export default function ConfiguracionPage() {
         <div className="border-border border-t" />
 
         <div className="space-y-2">
-          <Label>Email para facturas</Label>
+          <Label>Email para comprobantes</Label>
           <p className="text-muted-foreground/60 text-xs">
-            Envia facturas por email y se cargan automaticamente
+            Envia comprobantes por email y se cargan automaticamente
           </p>
         </div>
 

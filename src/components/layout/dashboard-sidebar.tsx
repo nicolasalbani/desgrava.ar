@@ -24,8 +24,8 @@ const navItems = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/credenciales", label: "Credenciales ARCA", icon: KeyRound },
   { href: "/perfil", label: "Perfil impositivo", icon: User },
-  { href: "/facturas", label: "Facturas", icon: FileText },
-  { href: "/recibos", label: "Recibos", icon: Receipt },
+  { href: "/facturas", label: "Comprobantes deducibles", icon: FileText },
+  { href: "/recibos", label: "Recibos salariales", icon: Receipt },
   { href: "/presentaciones", label: "Presentaciones", icon: Send },
   { href: "/configuracion", label: "Configuracion", icon: Settings },
 ];

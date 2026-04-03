@@ -276,7 +276,7 @@ export function InvoiceForm({
         return;
       }
 
-      toast.success(invoiceId ? "Factura actualizada" : "Factura cargada correctamente");
+      toast.success(invoiceId ? "Comprobante actualizado" : "Comprobante cargado correctamente");
       if (onSaved) {
         onSaved();
       } else {
@@ -565,7 +565,7 @@ export function InvoiceForm({
       <div className="flex gap-3 pt-2">
         <Button type="submit" disabled={saving}>
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {invoiceId ? "Guardar cambios" : "Guardar factura"}
+          {invoiceId ? "Guardar cambios" : "Guardar comprobante"}
         </Button>
         <Button
           type="button"

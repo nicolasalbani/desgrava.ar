@@ -60,9 +60,9 @@ function getSteps(fiscalYear: number): StepDef[] {
     },
     {
       id: "invoices",
-      title: "Cargar facturas",
+      title: "Cargar comprobantes",
       description: "Subi un PDF, envia por email o carga manualmente",
-      completedDescription: "Facturas cargadas",
+      completedDescription: "Comprobantes cargados",
       icon: FileText,
       href: "/facturas?intro=1",
       activeLabel: "Cargar",
