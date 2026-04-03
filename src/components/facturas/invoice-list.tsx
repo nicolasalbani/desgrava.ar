@@ -93,7 +93,7 @@ interface Invoice {
 const JOB_STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
   RUNNING: "Ejecutando",
-  COMPLETED: "Completado",
+  COMPLETED: "Desgravado",
   FAILED: "Error",
   CANCELLED: "Cancelado",
 };
