@@ -24,9 +24,7 @@ export function FiscalYearProvider({ children }: { children: React.ReactNode }) 
       .then((res) => res.json())
       .then((data) => {
         const year = data.preference?.defaultFiscalYear;
-        if (typeof year === "number") {
-          setFiscalYearState(year);
-        }
+        setFiscalYearState(typeof year === "number" ? year : new Date().getFullYear());
         if (Array.isArray(data.activeYears)) {
           setActiveYears(data.activeYears);
         }

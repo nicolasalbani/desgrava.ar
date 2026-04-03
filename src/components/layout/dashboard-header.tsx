@@ -32,14 +32,6 @@ export function DashboardHeader() {
 
   useEffect(() => setMounted(true), []);
 
-  useEffect(() => {
-    function handler() {
-      setFiscalYearOpen(true);
-    }
-    window.addEventListener("open-fiscal-year-selector", handler);
-    return () => window.removeEventListener("open-fiscal-year-selector", handler);
-  }, []);
-
   function cycleTheme() {
     const order = ["light", "dark", "system"] as const;
     const current = (theme ?? "system") as (typeof order)[number];
