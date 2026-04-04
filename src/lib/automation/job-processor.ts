@@ -1190,21 +1190,11 @@ async function processPullProfile(
   }
 
   // ── Step 4: Extract family dependents ──
-  // Need to navigate from main menu → deduction section → cargas de familia
+  // Page is already on the deductions menu (verMenuDeducciones.do) after employers step.
+  // Just expand the cargas de familia accordion directly.
   await appendStep(jobId, "cargas_familia", onLog);
   try {
     await appendLogFn(jobId, "Extrayendo cargas de familia...", onLog);
-
-    const deductionNav = await navigateToDeductionSection(
-      siradigPage,
-      fiscalYear,
-      (msg) => appendLogFn(jobId, msg, onLog),
-      onScreenshot,
-    );
-
-    if (!deductionNav.success) {
-      throw new Error(deductionNav.error || "No se pudo navegar a la seccion de deducciones");
-    }
 
     const cfNav = await navigateToCargasFamilia(
       siradigPage,

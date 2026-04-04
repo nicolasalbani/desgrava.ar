@@ -16,6 +16,8 @@ interface OnboardingState {
   activePullProfileJobId: string | null;
   activePullProfileStep: string | null;
   profilePullCompleted: boolean;
+  activePullComprobantesJobId: string | null;
+  activeSubmitInvoiceJobId: string | null;
   deducibleInvoiceCount: number;
   hasCompletedSubmission: boolean;
 }
@@ -144,6 +146,7 @@ export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
           )}
           {currentStep === 3 && (
             <OnboardingStepInvoices
+              activeJobId={state.activePullComprobantesJobId}
               onComplete={(hasDeducible) => {
                 if (hasDeducible) {
                   advanceToStep(4);
@@ -153,7 +156,12 @@ export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
               }}
             />
           )}
-          {currentStep === 4 && <OnboardingStepSubmit onComplete={completeOnboarding} />}
+          {currentStep === 4 && (
+            <OnboardingStepSubmit
+              activeJobId={state.activeSubmitInvoiceJobId}
+              onComplete={completeOnboarding}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -4,8 +4,17 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { User, ExternalLink, RefreshCw, SkipForward, CheckCircle2 } from "lucide-react";
 import { StepProgress } from "@/components/shared/step-progress";
-import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
+import type { StepDefinition } from "@/lib/automation/job-steps";
 import { toast } from "sonner";
+
+const ONBOARDING_PROFILE_STEPS: StepDefinition[] = [
+  { key: "login", label: "Iniciando sesión en ARCA" },
+  { key: "siradig", label: "Abriendo SiRADIG" },
+  { key: "datos_personales", label: "Extrayendo datos personales" },
+  { key: "empleadores", label: "Extrayendo empleadores" },
+  { key: "cargas_familia", label: "Extrayendo cargas de familia" },
+  { key: "casas_particulares", label: "Extrayendo trabajadores domésticos" },
+];
 
 interface Props {
   pullProfileJobId: string | null;
@@ -66,9 +75,10 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
           if (data.done) {
             es.close();
             eventSourceRef.current = null;
-            setJobStatus(data.status === "COMPLETED" ? "COMPLETED" : "FAILED");
             if (data.status === "COMPLETED") {
-              fetchSummary();
+              fetchSummary().then(() => setJobStatus("COMPLETED"));
+            } else {
+              setJobStatus("FAILED");
             }
           }
         } catch {
@@ -87,8 +97,26 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
 
   useEffect(() => {
     if (jobId) {
-      setJobStatus("RUNNING");
-      connectToSSE(jobId);
+      // Check if the job already completed before we connect to SSE
+      fetch(`/api/automatizacion/${jobId}`)
+        .then((r) => r.json())
+        .then(async (data) => {
+          if (data.job?.status === "COMPLETED") {
+            await fetchSummary();
+            setJobStatus("COMPLETED");
+          } else if (data.job?.status === "FAILED") {
+            setJobStatus("FAILED");
+          } else {
+            setJobStatus("RUNNING");
+            if (data.job?.currentStep) setCurrentStep(data.job.currentStep);
+            connectToSSE(jobId);
+          }
+        })
+        .catch(() => {
+          // Fallback: try SSE anyway
+          setJobStatus("RUNNING");
+          connectToSSE(jobId);
+        });
     } else {
       // No job — maybe profile was already pulled, check summary
       fetchSummary().then(() => setJobStatus("COMPLETED"));
@@ -130,6 +158,14 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
     summary.familyDependents === 0 &&
     summary.domesticWorkers === 0;
 
+  // Auto-advance when profile pull completes with data
+  useEffect(() => {
+    if (jobStatus === "COMPLETED" && summary && !isEmpty) {
+      const timer = setTimeout(() => onComplete(), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [jobStatus, summary, isEmpty, onComplete]);
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 space-y-6 duration-500">
       <div className="text-center">
@@ -146,7 +182,7 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
       {jobStatus !== "COMPLETED" && jobStatus !== "FAILED" && (
         <div className="bg-muted/50 rounded-xl p-4">
           <StepProgress
-            steps={JOB_TYPE_STEPS.PULL_PROFILE}
+            steps={ONBOARDING_PROFILE_STEPS}
             currentStep={currentStep}
             status={jobStatus}
           />
@@ -184,9 +220,6 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
               )}
             </div>
           </div>
-          <Button onClick={onComplete} className="w-full">
-            Continuar
-          </Button>
         </div>
       )}
 

@@ -1,13 +1,21 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, CheckCircle2 } from "lucide-react";
+import { FileText, CheckCircle2 } from "lucide-react";
 import { StepProgress } from "@/components/shared/step-progress";
-import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
+import type { StepDefinition } from "@/lib/automation/job-steps";
 import { toast } from "sonner";
 
+const ONBOARDING_PULL_STEPS: StepDefinition[] = [
+  { key: "login", label: "Iniciando sesión en ARCA" },
+  { key: "siradig", label: "Abriendo SiRADIG" },
+  { key: "siradig_extract", label: "Extrayendo comprobantes deducidos" },
+  { key: "download", label: "Extrayendo comprobantes deducibles" },
+];
+
 interface Props {
+  activeJobId?: string | null;
   onComplete: (hasDeducible: boolean) => void;
 }
 
@@ -18,7 +26,7 @@ interface ImportResult {
   deducible: number;
 }
 
-export function OnboardingStepInvoices({ onComplete }: Props) {
+export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
   const [started, setStarted] = useState(false);
   const [currentStep, setCurrentStep] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string>("PENDING");
@@ -76,12 +84,13 @@ export function OnboardingStepInvoices({ onComplete }: Props) {
     }
   }
 
-  // Check deducible count after completion
+  // Check deducible count after completion — include already-submitted invoices
+  // so step 4 is never skipped (the user must experience the full onboarding)
   async function handleContinue() {
     const fiscalYear = new Date().getFullYear();
     try {
       const res = await fetch(
-        `/api/facturas?fiscalYear=${fiscalYear}&pageSize=1&excludeNoDeducible=true&excludeSubmitted=true`,
+        `/api/facturas?fiscalYear=${fiscalYear}&pageSize=1&excludeNoDeducible=true`,
       );
       const data = await res.json();
       onComplete((data.total ?? 0) > 0);
@@ -91,37 +100,52 @@ export function OnboardingStepInvoices({ onComplete }: Props) {
     }
   }
 
-  // Not started yet — show description + button
-  if (!started) {
-    return (
-      <div className="animate-in fade-in slide-in-from-bottom-3 space-y-6 duration-500">
-        <div className="text-center">
-          <div className="bg-primary/10 mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full">
-            <FileText className="text-primary h-7 w-7" />
-          </div>
-          <h2 className="text-xl font-semibold">Importar comprobantes de ARCA</h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Vamos a descargar tus comprobantes de &quot;Mis Comprobantes&quot; en ARCA y clasificar
-            automáticamente cuáles son deducibles.
-          </p>
-        </div>
+  // Resume an active job or auto-start a new one
+  useEffect(() => {
+    if (started) return;
 
-        <div className="bg-muted/40 rounded-xl p-4 text-sm">
-          <p className="text-foreground/80 mb-2 font-medium">Esto va a:</p>
-          <ul className="text-muted-foreground space-y-1.5 text-xs">
-            <li>1. Iniciar sesión en ARCA con tus credenciales</li>
-            <li>2. Ir a &quot;Mis Comprobantes&quot; → Comprobantes recibidos</li>
-            <li>3. Descargar y clasificar cada comprobante con IA</li>
-          </ul>
-        </div>
+    if (activeJobId) {
+      // Resume: check if already completed, otherwise connect to SSE
+      setStarted(true);
+      fetch(`/api/automatizacion/${activeJobId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.job?.status === "COMPLETED") {
+            setJobStatus("COMPLETED");
+            if (data.job.result) setResult(data.job.result);
+          } else if (data.job?.status === "FAILED") {
+            setJobStatus("FAILED");
+          } else {
+            setJobStatus("RUNNING");
+            if (data.job?.currentStep) setCurrentStep(data.job.currentStep);
+            connectToSSE(activeJobId);
+          }
+        })
+        .catch(() => {
+          setJobStatus("RUNNING");
+          connectToSSE(activeJobId);
+        });
+    } else {
+      handleStart();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-        <Button onClick={handleStart} className="w-full">
-          <Download className="mr-2 h-4 w-4" />
-          Importar desde ARCA
-        </Button>
-      </div>
-    );
-  }
+  // Auto-advance when import completes
+  useEffect(() => {
+    if (jobStatus === "COMPLETED") {
+      // Brief delay so user sees the success state
+      const timer = setTimeout(() => handleContinue(), 1500);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobStatus]);
+
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+    };
+  }, []);
 
   return (
     <div className="animate-in fade-in space-y-6 duration-500">
@@ -135,10 +159,10 @@ export function OnboardingStepInvoices({ onComplete }: Props) {
       </div>
 
       {/* Progress */}
-      {jobStatus !== "COMPLETED" && (
+      {jobStatus !== "COMPLETED" && jobStatus !== "FAILED" && (
         <div className="bg-muted/50 rounded-xl p-4">
           <StepProgress
-            steps={JOB_TYPE_STEPS.PULL_COMPROBANTES}
+            steps={ONBOARDING_PULL_STEPS}
             currentStep={currentStep}
             status={jobStatus}
           />
@@ -166,9 +190,6 @@ export function OnboardingStepInvoices({ onComplete }: Props) {
               </div>
             )}
           </div>
-          <Button onClick={handleContinue} className="w-full">
-            Continuar
-          </Button>
         </div>
       )}
 

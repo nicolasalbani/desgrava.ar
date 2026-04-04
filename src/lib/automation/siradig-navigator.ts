@@ -1274,40 +1274,39 @@ export async function extractCargasFamilia(
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(500);
 
-      // Read all form fields
-      const data = await page.evaluate((selectors) => {
-        const getSelectValue = (id: string) => {
-          const el = document.querySelector(id) as HTMLSelectElement | null;
-          return el?.value ?? "";
-        };
-        const getInputValue = (id: string) => {
-          const el = document.querySelector(id) as HTMLInputElement | null;
-          return el?.value ?? "";
-        };
-        const getCheckboxChecked = (id: string) => {
-          const el = document.querySelector(id) as HTMLInputElement | null;
-          return el?.checked ?? false;
-        };
+      // Read all form fields using Playwright locators to avoid esbuild __name injection
+      // that breaks page.evaluate in production (Next.js server-side bundling).
+      const getValue = async (selector: string) => {
+        const el = page.locator(selector);
+        return (await el.isVisible().catch(() => false))
+          ? await el.inputValue().catch(() => "")
+          : "";
+      };
+      const isChecked = async (selector: string) => {
+        const el = page.locator(selector);
+        return (await el.isVisible().catch(() => false))
+          ? await el.isChecked().catch(() => false)
+          : false;
+      };
 
-        return {
-          tipoDoc: getSelectValue(selectors.formTipoDoc),
-          numeroDoc: getInputValue(selectors.formNumeroDoc),
-          apellido: getInputValue(selectors.formApellido),
-          nombre: getInputValue(selectors.formNombre),
-          fechaNacimiento: getInputValue(selectors.formFechaNacimiento),
-          parentesco: getSelectValue(selectors.formParentesco),
-          fechaCasamiento: getInputValue(selectors.formFechaCasamiento),
-          porcentajeDed: getSelectValue(selectors.formPorcentajeDed),
-          cuitOtroDed: getInputValue(selectors.formCuitOtroDed),
-          familiaCargo: getSelectValue(selectors.formFamiliaCargo),
-          residente: getSelectValue(selectors.formResidente),
-          ingresos: getSelectValue(selectors.formIngresos),
-          montoIngresos: getInputValue(selectors.formMontoIngresos),
-          mesDesde: getSelectValue(selectors.formMesDesde),
-          mesHasta: getSelectValue(selectors.formMesHasta),
-          proximosPeriodos: getCheckboxChecked(selectors.formProximosPeriodos),
-        };
-      }, sel);
+      const data = {
+        tipoDoc: await getValue(sel.formTipoDoc),
+        numeroDoc: await getValue(sel.formNumeroDoc),
+        apellido: await getValue(sel.formApellido),
+        nombre: await getValue(sel.formNombre),
+        fechaNacimiento: await getValue(sel.formFechaNacimiento),
+        parentesco: await getValue(sel.formParentesco),
+        fechaCasamiento: await getValue(sel.formFechaCasamiento),
+        porcentajeDed: await getValue(sel.formPorcentajeDed),
+        cuitOtroDed: await getValue(sel.formCuitOtroDed),
+        familiaCargo: await getValue(sel.formFamiliaCargo),
+        residente: await getValue(sel.formResidente),
+        ingresos: await getValue(sel.formIngresos),
+        montoIngresos: await getValue(sel.formMontoIngresos),
+        mesDesde: await getValue(sel.formMesDesde),
+        mesHasta: await getValue(sel.formMesHasta),
+        proximosPeriodos: await isChecked(sel.formProximosPeriodos),
+      };
 
       await capture(
         await page.screenshot({ fullPage: true }),

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import confetti from "canvas-confetti";
 
 interface Props {
+  activeJobId?: string | null;
   onComplete: () => void;
 }
 
@@ -22,7 +23,7 @@ interface InvoiceOption {
   deductionCategory: string;
 }
 
-export function OnboardingStepSubmit({ onComplete }: Props) {
+export function OnboardingStepSubmit({ activeJobId, onComplete }: Props) {
   const [invoices, setInvoices] = useState<InvoiceOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -32,10 +33,34 @@ export function OnboardingStepSubmit({ onComplete }: Props) {
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
+    // If there's an active submit job, resume it
+    if (activeJobId) {
+      setLoading(false);
+      setSubmitting(true);
+      fetch(`/api/automatizacion/${activeJobId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.job?.status === "COMPLETED") {
+            setJobStatus("COMPLETED");
+            confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+            setTimeout(() => onComplete(), 2000);
+          } else if (data.job?.status === "FAILED") {
+            setJobStatus("FAILED");
+          } else {
+            setJobStatus("RUNNING");
+            if (data.job?.currentStep) setCurrentStep(data.job.currentStep);
+            connectToSSE(activeJobId);
+          }
+        })
+        .catch(() => {
+          setJobStatus("RUNNING");
+          connectToSSE(activeJobId);
+        });
+      return;
+    }
+
     const fiscalYear = new Date().getFullYear();
-    fetch(
-      `/api/facturas?fiscalYear=${fiscalYear}&pageSize=20&excludeNoDeducible=true&excludeSubmitted=true`,
-    )
+    fetch(`/api/facturas?fiscalYear=${fiscalYear}&pageSize=20&excludeNoDeducible=true`)
       .then((r) => r.json())
       .then((data) => {
         const items: InvoiceOption[] = (data.invoices ?? []).map(
@@ -57,6 +82,7 @@ export function OnboardingStepSubmit({ onComplete }: Props) {
         if (items.length > 0) setSelectedId(items[0].id);
       })
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const connectToSSE = useCallback(

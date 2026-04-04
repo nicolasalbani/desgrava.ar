@@ -21,6 +21,7 @@ function LoginForm() {
   const [view, setView] = useState<View>(initialError === "invite_required" ? "register" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState(() => {
     if (initialError === "invite_required")
@@ -118,7 +119,9 @@ function LoginForm() {
   }
 
   const canSubmitLogin = email.trim() && password.trim();
-  const canSubmitRegister = email.trim() && isPasswordValid(password) && inviteCode.trim();
+  const passwordsMatch = password === confirmPassword;
+  const canSubmitRegister =
+    email.trim() && isPasswordValid(password) && passwordsMatch && inviteCode.trim();
 
   return (
     <div className="mx-4 flex w-full max-w-md flex-col items-center">
@@ -210,6 +213,20 @@ function LoginForm() {
               autoComplete={view === "login" ? "current-password" : "new-password"}
             />
             {view === "register" && <PasswordStrengthIndicator password={password} />}
+            {view === "register" && (
+              <>
+                <PasswordInput
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  disabled={loading}
+                  placeholder="Confirmar contraseña"
+                  autoComplete="new-password"
+                />
+                {confirmPassword && !passwordsMatch && (
+                  <p className="text-destructive text-xs">Las contraseñas no coinciden</p>
+                )}
+              </>
+            )}
           </div>
 
           {view === "login" ? (
@@ -251,6 +268,7 @@ function LoginForm() {
                   setView("register");
                   setError("");
                   setSuccess("");
+                  setConfirmPassword("");
                 }}
                 className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
               >
@@ -262,6 +280,7 @@ function LoginForm() {
                   setView("login");
                   setError("");
                   setSuccess("");
+                  setConfirmPassword("");
                 }}
                 className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
               >
