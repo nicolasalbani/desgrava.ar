@@ -27,7 +27,7 @@ interface ImportResult {
 }
 
 export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
-  const [started, setStarted] = useState(false);
+  const startedRef = useRef(false);
   const [currentStep, setCurrentStep] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string>("PENDING");
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -63,7 +63,6 @@ export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
   }, []);
 
   async function handleStart() {
-    setStarted(true);
     setJobStatus("RUNNING");
     setCurrentStep(null);
     try {
@@ -93,7 +92,7 @@ export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
         `/api/facturas?fiscalYear=${fiscalYear}&pageSize=1&excludeNoDeducible=true`,
       );
       const data = await res.json();
-      onComplete((data.total ?? 0) > 0);
+      onComplete((data.pagination?.totalCount ?? 0) > 0);
     } catch {
       // Fallback: use result if available
       onComplete((result?.deducible ?? 0) > 0);
@@ -102,11 +101,11 @@ export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
 
   // Resume an active job or auto-start a new one
   useEffect(() => {
-    if (started) return;
+    if (startedRef.current) return;
+    startedRef.current = true;
 
     if (activeJobId) {
       // Resume: check if already completed, otherwise connect to SSE
-      setStarted(true);
       fetch(`/api/automatizacion/${activeJobId}`)
         .then((r) => r.json())
         .then((data) => {
@@ -202,10 +201,11 @@ export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
               variant="outline"
               className="flex-1"
               onClick={() => {
-                setStarted(false);
+                startedRef.current = false;
                 setJobStatus("PENDING");
                 setCurrentStep(null);
                 setResult(null);
+                handleStart();
               }}
             >
               Reintentar

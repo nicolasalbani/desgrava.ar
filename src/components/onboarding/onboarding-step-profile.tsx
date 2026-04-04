@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { User, ExternalLink, RefreshCw, SkipForward, CheckCircle2 } from "lucide-react";
+import { User, RefreshCw, SkipForward, CheckCircle2 } from "lucide-react";
 import { StepProgress } from "@/components/shared/step-progress";
 import type { StepDefinition } from "@/lib/automation/job-steps";
 import { toast } from "sonner";
@@ -58,7 +58,8 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
         hasPersonalData: !!pdData.personalData,
       });
     } catch {
-      // Best-effort
+      // On any error, set an empty summary so the UI doesn't get stuck
+      setSummary({ employers: 0, familyDependents: 0, domesticWorkers: 0, hasPersonalData: false });
     }
   }, []);
 
@@ -151,20 +152,21 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
     }
   }
 
+  // Domestic workers are optional — most users don't have them.
+  // Only consider the profile empty if there's no personal data, employers, or dependents.
   const isEmpty =
     summary &&
     !summary.hasPersonalData &&
     summary.employers === 0 &&
-    summary.familyDependents === 0 &&
-    summary.domesticWorkers === 0;
+    summary.familyDependents === 0;
 
-  // Auto-advance when profile pull completes with data
+  // Auto-advance when profile pull completes (with or without data)
   useEffect(() => {
-    if (jobStatus === "COMPLETED" && summary && !isEmpty) {
+    if (jobStatus === "COMPLETED" && summary) {
       const timer = setTimeout(() => onComplete(), 1500);
       return () => clearTimeout(timer);
     }
-  }, [jobStatus, summary, isEmpty, onComplete]);
+  }, [jobStatus, summary, onComplete]);
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 space-y-6 duration-500">
@@ -224,22 +226,11 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
       )}
 
       {/* Empty profile */}
-      {jobStatus === "COMPLETED" && isEmpty && (
-        <div className="space-y-4 text-center">
-          <p className="text-muted-foreground text-sm">
-            No encontramos datos en tu perfil de ARCA. Podés completarlos manualmente.
+      {jobStatus === "COMPLETED" && summary && isEmpty && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            No encontramos datos en tu perfil de ARCA. Podés completarlos después desde el panel.
           </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="outline" className="flex-1" asChild>
-              <a href="/perfil" target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Completar perfil
-              </a>
-            </Button>
-            <Button className="flex-1" onClick={onComplete}>
-              Continuar sin perfil
-            </Button>
-          </div>
         </div>
       )}
 

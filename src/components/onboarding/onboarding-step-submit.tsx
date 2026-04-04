@@ -4,7 +4,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Send, Check } from "lucide-react";
 import { StepProgress } from "@/components/shared/step-progress";
-import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
+import type { StepDefinition } from "@/lib/automation/job-steps";
+
+const ONBOARDING_SUBMIT_STEPS: StepDefinition[] = [
+  { key: "login", label: "Iniciando sesión en ARCA" },
+  { key: "siradig", label: "Abriendo SiRADIG" },
+  { key: "fill", label: "Cargando deducción" },
+];
 import { CATEGORY_LABELS } from "@/lib/simulador/deduction-rules";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -196,7 +202,7 @@ export function OnboardingStepSubmit({ activeJobId, onComplete }: Props) {
         {jobStatus !== "COMPLETED" && (
           <div className="bg-muted/50 rounded-xl p-4">
             <StepProgress
-              steps={JOB_TYPE_STEPS.SUBMIT_INVOICE}
+              steps={ONBOARDING_SUBMIT_STEPS}
               currentStep={currentStep}
               status={jobStatus}
             />
@@ -278,7 +284,7 @@ export function OnboardingStepSubmit({ activeJobId, onComplete }: Props) {
 
       <Button onClick={handleSubmit} disabled={!selectedId || submitting} className="w-full">
         <Send className="mr-2 h-4 w-4" />
-        Enviar a SiRADIG
+        Desgravar
       </Button>
     </div>
   );

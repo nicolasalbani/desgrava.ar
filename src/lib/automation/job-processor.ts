@@ -3289,7 +3289,10 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               onScreenshot,
             );
 
-            if (editResult.success) {
+            if (editResult.success && editResult.alreadyExists) {
+              // Comprobante already exists in SiRADIG — treat as success
+              submitResult = { success: true };
+            } else if (editResult.success) {
               // Re-submit the edited form
               submitResult = await submitDeduction(
                 siradigPage,

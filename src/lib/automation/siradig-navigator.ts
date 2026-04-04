@@ -99,6 +99,8 @@ export interface FillResult {
   error?: string;
   /** True when the error indicates the comprobante already exists in SiRADIG */
   isDuplicate?: boolean;
+  /** True when the comprobante was already in SiRADIG — no save needed */
+  alreadyExists?: boolean;
   screenshotBuffer?: Buffer;
 }
 
@@ -2369,7 +2371,7 @@ async function editStandardDeductionEntry(
       if (editBtn) (editBtn as HTMLElement).click();
     },
     {
-      tableSelector: sel.gastosMedicosTable as string,
+      tableSelector,
       listRowSelector: sel.listRow as string,
       editBtnSelector: sel.editButton as string,
       idx: rowIndex,
@@ -2419,11 +2421,13 @@ async function editStandardDeductionEntry(
   );
 
   if (alreadyHasComprobante) {
-    // Comprobante already exists in this entry — just save without modifying comprobantes.
-    // Deleting and re-adding the same number triggers SiRADIG's duplicate check.
-    log(
-      `Comprobante ${invoiceNumber} ya existe en la entrada — guardando sin modificar comprobantes`,
-    );
+    // Comprobante already exists — nothing to change, skip save entirely.
+    log(`Comprobante ${invoiceNumber} ya existe en la entrada — ya está deducido en SiRADIG`);
+    // Click "Volver" to exit the edit form without saving
+    const volverBtn = page.getByText("Volver", { exact: true }).first();
+    await volverBtn.click().catch(() => {});
+    await page.waitForLoadState("networkidle").catch(() => {});
+    return { success: true, alreadyExists: true };
   } else {
     // Different comprobante — delete existing ones and add the new one
     log("Eliminando comprobantes existentes...");
