@@ -12,14 +12,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   // Verify the user record actually exists in the DB (session cookie may outlive a DB reset)
-  const userExists = await prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { id: session.user!.id },
-    select: { id: true },
+    select: { id: true, onboardingCompleted: true },
   });
 
-  if (!userExists) {
+  if (!user) {
     redirect("/api/auth/signout");
   }
 
-  return <DashboardShell>{children}</DashboardShell>;
+  return <DashboardShell onboardingCompleted={user.onboardingCompleted}>{children}</DashboardShell>;
 }
