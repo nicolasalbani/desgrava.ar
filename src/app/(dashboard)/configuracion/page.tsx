@@ -80,6 +80,10 @@ export default function ConfiguracionPage() {
 
         <div className="border-border border-t" />
 
+        <AutoSubmitCard />
+
+        <div className="border-border border-t" />
+
         <div className="space-y-2">
           <Label>Email para comprobantes</Label>
           <p className="text-muted-foreground/60 text-xs">
@@ -88,10 +92,6 @@ export default function ConfiguracionPage() {
         </div>
 
         <EmailIngestCard />
-
-        <div className="border-border border-t" />
-
-        <AutoSubmitCard />
       </div>
     </div>
   );
