@@ -1,41 +1,88 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { OnboardingTour } from "@/components/dashboard/onboarding-tour";
+import { MetricsPanel } from "@/components/dashboard/metrics-panel";
+import { Decimal } from "decimal.js";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const userId = session!.user!.id;
   const firstName = session?.user?.name?.split(" ")[0] ?? "usuario";
+  const fiscalYear = new Date().getFullYear();
 
-  const activeYear =
-    (
-      await prisma.userPreference.findUnique({
-        where: { userId },
-        select: { defaultFiscalYear: true },
-      })
-    )?.defaultFiscalYear ?? new Date().getFullYear();
-
-  const [credentialCount, invoiceCount, completedJobCount, yearPref] = await Promise.all([
-    prisma.arcaCredential.count({ where: { userId } }),
-    prisma.invoice.count({ where: { userId, fiscalYear: activeYear } }),
-    prisma.automationJob.count({ where: { userId, status: "COMPLETED" } }),
-    prisma.userYearPreference.findUnique({
-      where: { userId_fiscalYear: { userId, fiscalYear: activeYear } },
-      select: { id: true },
+  const [
+    totalInvoices,
+    submittedCount,
+    pendingCount,
+    submittedTotal,
+    monthCategoryBreakdown,
+    subscription,
+  ] = await Promise.all([
+    prisma.invoice.count({
+      where: { userId, fiscalYear, deductionCategory: { not: "NO_DEDUCIBLE" } },
     }),
+    prisma.invoice.count({
+      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
+    }),
+    prisma.invoice.count({
+      where: {
+        userId,
+        fiscalYear,
+        deductionCategory: { not: "NO_DEDUCIBLE" },
+        siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING"] },
+      },
+    }),
+    prisma.invoice.aggregate({
+      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
+      _sum: { amount: true },
+    }),
+    // Group by month AND category for the stacked chart
+    prisma.invoice.groupBy({
+      by: ["fiscalMonth", "deductionCategory"],
+      where: {
+        userId,
+        fiscalYear,
+        siradiqStatus: "SUBMITTED",
+        deductionCategory: { not: "NO_DEDUCIBLE" },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.subscription.findUnique({ where: { userId } }),
   ]);
 
-  const completedSteps: [boolean, boolean, boolean, boolean] = [
-    credentialCount > 0,
-    yearPref != null,
-    invoiceCount > 0,
-    completedJobCount > 0,
-  ];
+  const totalDeducted = submittedTotal._sum.amount
+    ? new Decimal(submittedTotal._sum.amount.toString()).toNumber()
+    : 0;
+
+  const estimatedSavings = new Decimal(totalDeducted).mul(0.35).toDP(2).toNumber();
+
+  // Build month×category data
+  const monthCategoryData = monthCategoryBreakdown.map((entry) => ({
+    month: entry.fiscalMonth,
+    category: entry.deductionCategory,
+    amount: entry._sum.amount ? new Decimal(entry._sum.amount.toString()).toNumber() : 0,
+  }));
 
   return (
-    <div className="space-y-8">
-      <OnboardingTour completedSteps={completedSteps} firstName={firstName} />
-    </div>
+    <MetricsPanel
+      firstName={firstName}
+      fiscalYear={fiscalYear}
+      totalDeducted={totalDeducted}
+      estimatedSavings={estimatedSavings}
+      totalInvoices={totalInvoices}
+      submittedCount={submittedCount}
+      pendingCount={pendingCount}
+      monthCategoryData={monthCategoryData}
+      subscription={
+        subscription
+          ? {
+              plan: subscription.plan,
+              status: subscription.status,
+              trialEndDate: subscription.trialEndDate?.toISOString() ?? null,
+              currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
+            }
+          : null
+      }
+    />
   );
 }
