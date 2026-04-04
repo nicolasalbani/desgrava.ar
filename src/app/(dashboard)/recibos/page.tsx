@@ -44,7 +44,7 @@ function ExpandingButton({
       className={cn("group gap-0 overflow-hidden transition-all duration-300", className)}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-300 ease-out group-hover:ml-2 group-hover:max-w-[140px] group-hover:opacity-100">
+      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-300 ease-out group-hover:ml-2 group-hover:max-w-[200px] group-hover:opacity-100">
         {label}
       </span>
     </Button>
