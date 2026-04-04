@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,45 +13,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Mail,
-  Copy,
-  RefreshCw,
-  Check,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  XCircle,
-} from "lucide-react";
+import { Mail, Copy, RefreshCw, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-interface IngestLog {
-  id: string;
-  fromAddress: string;
-  subject: string | null;
-  status: string;
-  attachmentCount: number;
-  invoicesCreated: number;
-  errorMessage: string | null;
-  createdAt: string;
-}
-
-const STATUS_CONFIG: Record<
-  string,
-  {
-    label: string;
-    variant: "default" | "secondary" | "destructive" | "outline";
-    icon: typeof Check;
-  }
-> = {
-  COMPLETED: { label: "Completado", variant: "default", icon: CheckCircle2 },
-  PARTIAL: { label: "Parcial", variant: "secondary", icon: AlertCircle },
-  PROCESSING: { label: "Procesando", variant: "outline", icon: Clock },
-  RECEIVED: { label: "Recibido", variant: "outline", icon: Clock },
-  FAILED: { label: "Fallido", variant: "destructive", icon: XCircle },
-  REJECTED: { label: "Rechazado", variant: "destructive", icon: XCircle },
-};
 
 export function EmailIngestCard() {
   const [ingestEmail, setIngestEmail] = useState("");
@@ -60,12 +22,9 @@ export function EmailIngestCard() {
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [logs, setLogs] = useState<IngestLog[]>([]);
-  const [logsLoading, setLogsLoading] = useState(true);
 
   useEffect(() => {
     fetchIngestEmail();
-    fetchLogs();
   }, []);
 
   async function fetchIngestEmail() {
@@ -78,19 +37,6 @@ export function EmailIngestCard() {
       toast.error("Error al obtener el email de ingesta");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function fetchLogs() {
-    try {
-      const res = await fetch("/api/email/logs");
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setLogs(data.logs.slice(0, 5));
-    } catch {
-      // Silent fail for logs
-    } finally {
-      setLogsLoading(false);
     }
   }
 
@@ -119,16 +65,6 @@ export function EmailIngestCard() {
       setRegenerating(false);
       setConfirmOpen(false);
     }
-  }
-
-  function formatDate(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   }
 
   if (loading) {
@@ -189,57 +125,6 @@ export function EmailIngestCard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Recent activity */}
-      {!logsLoading && logs.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-muted-foreground/70 text-sm font-medium">Actividad reciente</h3>
-          <div className="space-y-2">
-            {logs.map((log) => {
-              const config = STATUS_CONFIG[log.status] || STATUS_CONFIG.FAILED;
-              const Icon = config.icon;
-              const isFailed = log.status === "FAILED" || log.status === "REJECTED";
-              const iconColor = isFailed
-                ? "text-destructive/70"
-                : log.status === "COMPLETED"
-                  ? "text-emerald-600/70"
-                  : "text-muted-foreground/60";
-              return (
-                <div
-                  key={log.id}
-                  className="border-border space-y-1 rounded-md border px-3 py-2 text-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Icon className={`h-3.5 w-3.5 shrink-0 ${iconColor}`} />
-                      <span className="text-muted-foreground/70 truncate">
-                        {log.subject || log.fromAddress}
-                      </span>
-                      {log.invoicesCreated > 0 && (
-                        <span className="text-muted-foreground/50 text-xs">
-                          ({log.invoicesCreated}{" "}
-                          {log.invoicesCreated === 1 ? "comprobante" : "comprobantes"})
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge variant={config.variant} className="text-xs">
-                        {config.label}
-                      </Badge>
-                      <span className="text-muted-foreground/50 text-xs">
-                        {formatDate(log.createdAt)}
-                      </span>
-                    </div>
-                  </div>
-                  {isFailed && log.errorMessage && (
-                    <p className="text-muted-foreground/50 pl-5 text-xs">{log.errorMessage}</p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
