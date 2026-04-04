@@ -9,6 +9,8 @@ import {
   isEducationCategory,
   isIndumentariaTrabajoCategory,
   isSchoolProvider,
+  getIndumentariaConceptoValue,
+  INDUMENTARIA_CONCEPTO_MAP,
   SIRADIG_CATEGORY_MAP,
   SIRADIG_INVOICE_TYPE_MAP,
   SIRADIG_CATEGORY_LINK_MAP,
@@ -202,6 +204,37 @@ describe("data integrity", () => {
   it("all link map values are non-empty strings starting with 'link_'", () => {
     for (const [key, value] of Object.entries(SIRADIG_CATEGORY_LINK_MAP)) {
       expect(value, `${key} should start with 'link_'`).toMatch(/^link_/);
+    }
+  });
+});
+
+describe("getIndumentariaConceptoValue", () => {
+  it("returns '1' for INDUMENTARIA", () => {
+    expect(getIndumentariaConceptoValue("INDUMENTARIA")).toBe("1");
+  });
+
+  it("returns '2' for EQUIPAMIENTO", () => {
+    expect(getIndumentariaConceptoValue("EQUIPAMIENTO")).toBe("2");
+  });
+
+  it("defaults to '2' (Equipamiento) when no concept is provided", () => {
+    expect(getIndumentariaConceptoValue(undefined)).toBe("2");
+    expect(getIndumentariaConceptoValue("")).toBe("2");
+  });
+
+  it("defaults to '2' for unknown concept values", () => {
+    expect(getIndumentariaConceptoValue("UNKNOWN")).toBe("2");
+    expect(getIndumentariaConceptoValue("CONECTIVIDAD")).toBe("2");
+  });
+
+  it("has entries for all known concepts", () => {
+    expect(Object.keys(INDUMENTARIA_CONCEPTO_MAP)).toContain("INDUMENTARIA");
+    expect(Object.keys(INDUMENTARIA_CONCEPTO_MAP)).toContain("EQUIPAMIENTO");
+  });
+
+  it("all concept map values are numeric strings", () => {
+    for (const [key, value] of Object.entries(INDUMENTARIA_CONCEPTO_MAP)) {
+      expect(value, `${key} should be a numeric string`).toMatch(/^\d+$/);
     }
   });
 });

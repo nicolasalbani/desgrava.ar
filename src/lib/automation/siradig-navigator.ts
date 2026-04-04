@@ -11,6 +11,7 @@ import {
   isSchoolProvider,
   reverseLookupCategory,
   reverseLookupInvoiceType,
+  getIndumentariaConceptoValue,
 } from "./deduction-mapper";
 import { ARCA_SELECTORS } from "./selectors";
 import type { ScreenshotCallback } from "./arca-navigator";
@@ -86,6 +87,8 @@ export interface InvoiceData {
   contractEndDate?: string; // ISO date string
   // User preference: affects which alquiler benefit applies
   ownsProperty?: boolean; // true = 10% (Art. 85 inc. k), false = 40% (Art. 85 inc. h)
+  // For GASTOS_INDUMENTARIA_TRABAJO: concept selection (INDUMENTARIA | EQUIPAMIENTO)
+  indumentariaConcepto?: string;
   // For GASTOS_EDUCATIVOS: linked family dependent
   familyDependent?: {
     numeroDoc: string;
@@ -97,10 +100,6 @@ export interface InvoiceData {
 export interface FillResult {
   success: boolean;
   error?: string;
-  /** True when the error indicates the comprobante already exists in SiRADIG */
-  isDuplicate?: boolean;
-  /** True when the comprobante was already in SiRADIG — no save needed */
-  alreadyExists?: boolean;
   screenshotBuffer?: Buffer;
 }
 
@@ -586,8 +585,90 @@ async function fillAlquilerLocatarioForm(
 }
 
 /**
+ * Delete an existing deduction entry from the SiRADIG deductions table.
+ *
+ * Searches #div_tabla_deducciones_agrupadas for a fieldset matching the category,
+ * then finds a row matching the CUIT and period. If found, clicks the delete button
+ * on the row and auto-accepts the window.confirm() dialog.
+ *
+ * Returns true if an entry was deleted, false if no matching entry was found.
+ */
+async function deleteExistingDeduction(
+  page: Page,
+  categoryText: string,
+  cuitDigits: string,
+  monthName: string,
+  log: (msg: string) => void,
+): Promise<boolean> {
+  const categoryLower = categoryText.toLowerCase();
+
+  const deleteResult = await page.evaluate(
+    ({
+      categoryLower,
+      cuitDigits,
+      monthName,
+    }: {
+      categoryLower: string;
+      cuitDigits: string;
+      monthName: string;
+    }) => {
+      const fieldsets = document.querySelectorAll(
+        "#div_tabla_deducciones_agrupadas fieldset.grupo_deducciones",
+      );
+      for (let f = 0; f < fieldsets.length; f++) {
+        const legend = fieldsets[f].querySelector("legend");
+        const legendText = (legend?.textContent ?? "").toLowerCase();
+        if (!legendText.includes(categoryLower)) continue;
+
+        const rows = fieldsets[f].querySelectorAll("tbody tr");
+        for (let r = 0; r < rows.length; r++) {
+          const rowText = rows[r].textContent ?? "";
+          const normalizedRow = rowText.replace(/-/g, "");
+          if (normalizedRow.includes(cuitDigits) && rowText.includes(monthName)) {
+            // Found a match — delete it.
+            // SiRADIG deduction table rows use "div.act_eliminar" (not "div.eliminar")
+            // with an inner <span class="ui-icon ui-icon-close">.
+            // Event handlers are bound via jQuery, so use $.trigger("click").
+            const span = rows[r].querySelector("div.act_eliminar span");
+            if (!span) return { found: true, deleted: false, error: "No delete button found" };
+
+            // Override window.confirm to auto-accept the "¿Está seguro?" dialog
+            const origConfirm = window.confirm;
+            window.confirm = () => true;
+            try {
+              (window as any).$(span).trigger("click");
+            } finally {
+              window.confirm = origConfirm;
+            }
+            return { found: true, deleted: true };
+          }
+        }
+      }
+      return { found: false, deleted: false };
+    },
+    { categoryLower, cuitDigits, monthName },
+  );
+
+  if (deleteResult.found && !deleteResult.deleted) {
+    log(`Deduccion existente encontrada pero no se pudo eliminar: ${deleteResult.error}`);
+    return false;
+  }
+
+  if (deleteResult.deleted) {
+    // Wait for the table to update after deletion
+    await page.waitForTimeout(2000);
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Select a deduction category from the "Agregar Deducciones y Desgravaciones"
  * dropdown, then fill the deduction form including the comprobante dialog.
+ *
+ * If a matching deduction already exists (same category + CUIT + period),
+ * it is deleted first, then a fresh entry is created.
  *
  * Steps:
  * 7. Click "Agregar Deducciones y Desgravaciones" toggle
@@ -629,52 +710,25 @@ export async function fillDeductionForm(
     const monthName = monthNames[invoice.fiscalMonth] || "";
 
     // Check for an existing entry in the deductions table matching
-    // category, CUIT, and period — if found, edit it instead of creating new.
+    // category, CUIT, and period — if found, delete it before creating new.
     // Structure: #div_tabla_deducciones_agrupadas > fieldset > legend (category)
     //            > div > table > tbody > tr (CUIT | Denominación | Período | ...)
     log(
       `Buscando deduccion existente para ${categoryText} / CUIT ${invoice.providerCuit} / ${monthName}...`,
     );
-    const categoryLower = categoryText.toLowerCase();
-    const fieldsets = page.locator("#div_tabla_deducciones_agrupadas fieldset.grupo_deducciones");
-
-    let foundExisting = false;
-    const fieldsetCount = await fieldsets.count();
-    for (let f = 0; f < fieldsetCount && !foundExisting; f++) {
-      const fieldset = fieldsets.nth(f);
-      const legendText = (await fieldset.locator("legend").textContent()) ?? "";
-
-      // Case-insensitive category match
-      if (!legendText.toLowerCase().includes(categoryLower)) continue;
-
-      // Search rows within this fieldset for matching CUIT and period
-      const rows = fieldset.locator("tbody tr");
-      const rowCount = await rows.count();
-      for (let r = 0; r < rowCount; r++) {
-        const row = rows.nth(r);
-        const rowText = (await row.textContent()) ?? "";
-        const normalizedRow = rowText.replace(/-/g, "");
-
-        if (normalizedRow.includes(cuitDigits) && rowText.includes(monthName)) {
-          log(
-            `Deduccion existente encontrada para CUIT ${invoice.providerCuit}, periodo ${monthName}. Editando...`,
-          );
-          const editBtn = row.locator(".act_editar");
-          await editBtn.click();
-          await page.waitForLoadState("networkidle");
-
-          await capture(
-            await page.screenshot({ fullPage: true }),
-            "existing-entry-edit",
-            "Editando deduccion existente",
-          );
-          foundExisting = true;
-          break;
-        }
-      }
+    const deleted = await deleteExistingDeduction(page, categoryText, cuitDigits, monthName, log);
+    if (deleted) {
+      log(
+        `Deducción existente eliminada para CUIT ${invoice.providerCuit}, periodo ${monthName}. Recreando...`,
+      );
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "existing-entry-deleted",
+        "Deduccion existente eliminada",
+      );
     }
 
-    if (!foundExisting) {
+    {
       // Step 7: Click "Agregar Deducciones y Desgravaciones" dropdown toggle
       log("Abriendo menu de tipos de deduccion...");
       const addDeductionToggle = page.locator("#btn_agregar_deducciones");
@@ -755,10 +809,12 @@ export async function fillDeductionForm(
         "CUIT ingresado y denominacion obtenida",
       );
 
-      // Indumentaria/Equipamiento-specific: always select "Equipamiento" (#idConcepto value 2)
+      // Indumentaria/Equipamiento-specific: select concept based on invoice data
       if (isIndumentariaTrabajoCategory(invoice.deductionCategory)) {
-        log("Seleccionando concepto: Equipamiento");
-        await page.selectOption("#idConcepto", "2");
+        const conceptoValue = getIndumentariaConceptoValue(invoice.indumentariaConcepto);
+        const conceptoLabel = invoice.indumentariaConcepto || "EQUIPAMIENTO";
+        log(`Seleccionando concepto: ${conceptoLabel} (valor ${conceptoValue})`);
+        await page.selectOption("#idConcepto", conceptoValue);
       }
 
       // Education-specific: Select "Tipo de Gasto" based on provider denomination
@@ -1041,18 +1097,13 @@ export async function submitDeduction(
         if (text?.trim()) messages.push(text.trim());
       }
       const errorMsg = messages.join(" | ") || "Error de validacion desconocido";
-      const isDuplicate = isDuplicateError(errorMsg);
       await capture(
         await page.screenshot({ fullPage: true }),
-        isDuplicate ? "duplicate-detected" : "submission-error",
-        isDuplicate ? "Comprobante duplicado detectado" : "Error al guardar",
+        "submission-error",
+        "Error al guardar",
       );
-      log(
-        isDuplicate
-          ? `Comprobante ya existe en SiRADIG: ${errorMsg}`
-          : `Error al guardar: ${errorMsg}`,
-      );
-      return { success: false, error: errorMsg, isDuplicate };
+      log(`Error al guardar: ${errorMsg}`);
+      return { success: false, error: errorMsg };
     }
 
     if (outcome === "success") {
@@ -1768,773 +1819,6 @@ async function fillCargaFamiliaForm(
   log(`  Formulario completado para ${dep.apellido}, ${dep.nombre}`);
 }
 
-// ── Duplicate detection & edit flow ─────────────────────────
-
-/**
- * Patterns in SiRADIG error messages that indicate a duplicate comprobante.
- * These are matched case-insensitively against the concatenated error text.
- */
-const DUPLICATE_PATTERNS = [
-  "ya fue informado",
-  "ya fue cargado",
-  "ya existe",
-  "comprobante existente",
-  "datos duplicados",
-  "comprobante ya",
-  "duplicado",
-];
-
-/**
- * Check if a SiRADIG error message indicates a duplicate comprobante.
- */
-export function isDuplicateError(errorMsg: string): boolean {
-  const lower = errorMsg.toLowerCase();
-  return DUPLICATE_PATTERNS.some((pattern) => lower.includes(pattern));
-}
-
-/**
- * Attempt to find and edit an existing deduction entry in SiRADIG
- * after a duplicate was detected during submission.
- *
- * Dispatches to per-category edit handlers. Categories without a specific
- * handler return a descriptive error asking the user to edit manually.
- *
- * Flow:
- *  1. Navigate back to the deduction list (#div_listado)
- *  2. Find the matching row in the category's deduction table
- *  3. Click edit → fill updated values → save
- */
-export async function findAndEditExisting(
-  page: Page,
-  invoice: InvoiceData,
-  onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
-): Promise<FillResult> {
-  const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
-
-  try {
-    log("Comprobante ya existe en SiRADIG — intentando actualizar...");
-
-    // Step 1: Go back to the deduction list view
-    const volverBtn = page.locator(ARCA_SELECTORS.siradigEdit.editVolverBtn);
-    await volverBtn.click().catch(() => {
-      // Volver might not exist if we're already on the list view
-    });
-    await page.waitForLoadState("networkidle").catch(() => {});
-    await page.waitForTimeout(1000);
-
-    // Re-expand the "Deducciones y desgravaciones" accordion — it may collapse after Volver
-    try {
-      const deductionsHeader = page.getByText("Deducciones y desgravaciones").first();
-      const isExpanded = await page
-        .locator("#div_tabla_deducciones_agrupadas")
-        .isVisible()
-        .catch(() => false);
-      if (!isExpanded) {
-        log("Re-expandiendo seccion de deducciones...");
-        await deductionsHeader.click();
-        await page.waitForLoadState("networkidle").catch(() => {});
-        await page.waitForTimeout(1000);
-      }
-    } catch {
-      // Section might already be expanded
-    }
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "edit-list-view",
-      "Lista de deducciones existentes",
-    );
-
-    // Step 2: Dispatch to per-category edit handler
-    switch (invoice.deductionCategory) {
-      case "GASTOS_MEDICOS":
-        return await editStandardDeductionEntry(
-          page,
-          invoice,
-          ARCA_SELECTORS.siradigEdit.gastosMedicosTable as string,
-          "Gastos Medicos",
-          log,
-          capture,
-        );
-
-      case "GASTOS_INDUMENTARIA_TRABAJO":
-        return await editStandardDeductionEntry(
-          page,
-          invoice,
-          ARCA_SELECTORS.siradigEdit.gastosIndumentariaTable as string,
-          "Gastos de Indumentaria",
-          log,
-          capture,
-        );
-
-      case "GASTOS_EDUCATIVOS":
-        return await editStandardDeductionEntry(
-          page,
-          invoice,
-          ARCA_SELECTORS.siradigEdit.gastosEducativosTable as string,
-          "Gastos de Educacion",
-          log,
-          capture,
-        );
-
-      case "ALQUILER_VIVIENDA":
-        return await editAlquilerEntry(page, invoice, log, capture);
-
-      default:
-        log(
-          `Flujo de actualización aun no implementado para categoria: ${invoice.deductionCategory}. ` +
-            `Editar manualmente en SiRADIG.`,
-        );
-        return {
-          success: false,
-          error:
-            `Comprobante duplicado — actualización automatica no disponible para ${invoice.deductionCategory}. ` +
-            `Editar manualmente en SiRADIG.`,
-        };
-    }
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : "Error desconocido";
-    log(`Error al intentar editar comprobante existente: ${msg}`);
-    try {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "edit-error",
-        "Error editando comprobante existente",
-      );
-    } catch {
-      /* screenshot may fail too */
-    }
-    return { success: false, error: `Error al editar existente: ${msg}` };
-  }
-}
-
-const MONTH_NAMES = [
-  "",
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-];
-
-/**
- * Edit an existing ALQUILER_VIVIENDA entry in SiRADIG.
- *
- * The alquiler edit form differs from standard deductions:
- *   - It has a monthly detail table (#tabla_meses) with per-month amounts
- *   - Each month row has its own comprobante sub-table
- *   - Contract dates and locador fields are at the top
- *
- * Strategy:
- *   1. Find the existing entry by fieldset legend ("alquiler") + CUIT
- *   2. Click edit to open the edit form
- *   3. Check if the target month already exists in #tabla_meses
- *      - If yes: delete that month row, then re-add with updated values
- *      - If no: add the month as a new row
- *   4. Return success so the caller can call submitDeduction()
- */
-async function editAlquilerEntry(
-  page: Page,
-  invoice: InvoiceData,
-  log: (msg: string) => void,
-  capture: (buffer: Buffer, slug: string, label: string) => Promise<void>,
-): Promise<FillResult> {
-  const cuitDigits = invoice.providerCuit.replace(/-/g, "");
-  const monthName = MONTH_NAMES[invoice.fiscalMonth] || "";
-
-  log(`Buscando entrada de alquiler existente: CUIT ${cuitDigits}, periodo ${monthName}...`);
-
-  // Find the alquiler entry by searching all fieldsets in the deducciones container.
-  // Search broadly: first in #div_tabla_deducciones_agrupadas, then across all fieldsets on page.
-  // Alquiler fieldsets may or may not have .grupo_deducciones class.
-  // Each row represents a contract — match by CUIT first, then prefer rows whose
-  // period text contains the target month name (e.g. "Julio").
-  const match = await page.evaluate(
-    ({ cuit, month }: { cuit: string; month: string }) => {
-      const containers = [
-        "#div_tabla_deducciones_agrupadas fieldset",
-        "#content fieldset",
-        "fieldset",
-      ];
-      let bestMatch: {
-        selector: string;
-        fieldsetIdx: number;
-        rowIdx: number;
-      } | null = null;
-
-      for (const selector of containers) {
-        const fieldsets = document.querySelectorAll(selector);
-        for (let f = 0; f < fieldsets.length; f++) {
-          const legend = fieldsets[f].querySelector("legend");
-          const legendText = legend?.textContent?.toLowerCase() ?? "";
-          if (
-            !legendText.includes("alquiler") &&
-            !legendText.includes("locatario") &&
-            !legendText.includes("inquilino")
-          )
-            continue;
-          const rows = fieldsets[f].querySelectorAll("table tbody tr");
-          for (let r = 0; r < rows.length; r++) {
-            const text = (rows[r].textContent || "").replace(/-/g, "");
-            if (!text.includes(cuit)) continue;
-            // Exact period match — best result
-            if (month && rows[r].textContent?.includes(month)) {
-              return { selector, fieldsetIdx: f, rowIdx: r };
-            }
-            // CUIT-only match — keep as fallback
-            if (!bestMatch) {
-              bestMatch = { selector, fieldsetIdx: f, rowIdx: r };
-            }
-          }
-        }
-        // If we found any match in this scope, use it (don't broaden further)
-        if (bestMatch) return bestMatch;
-      }
-      return bestMatch;
-    },
-    { cuit: cuitDigits, month: monthName },
-  );
-
-  if (!match) {
-    // Log available fieldsets for debugging
-    const debugInfo = await page.evaluate(() => {
-      const fieldsets = document.querySelectorAll("fieldset");
-      return Array.from(fieldsets).map((f) => ({
-        legend: f.querySelector("legend")?.textContent?.trim().substring(0, 80) ?? "(no legend)",
-        classes: f.className,
-        rowCount: f.querySelectorAll("table tbody tr").length,
-      }));
-    });
-    log(
-      `No se encontro entrada de alquiler para CUIT ${cuitDigits}. Fieldsets visibles: ${JSON.stringify(debugInfo)}`,
-    );
-    return {
-      success: false,
-      error: `No se encontro la entrada de alquiler existente para CUIT ${cuitDigits}`,
-    };
-  }
-
-  log(
-    `Entrada de alquiler encontrada (${match.selector}, fieldset ${match.fieldsetIdx}). Abriendo formulario de edicion...`,
-  );
-
-  // Click the edit button on the matching row
-  await page.evaluate(
-    ({ selector, fIdx, rIdx }: { selector: string; fIdx: number; rIdx: number }) => {
-      const fieldsets = document.querySelectorAll(selector);
-      const rows = fieldsets[fIdx].querySelectorAll("table tbody tr");
-      const editBtn = rows[rIdx].querySelector("div.act_editar");
-      if (editBtn) (editBtn as HTMLElement).click();
-    },
-    { selector: match.selector, fIdx: match.fieldsetIdx, rIdx: match.rowIdx },
-  );
-
-  await page.waitForLoadState("networkidle").catch(() => {});
-  await page.waitForTimeout(2000);
-
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "alquiler-edit-form",
-    "Formulario de edicion de alquiler abierto",
-  );
-
-  // Verify we're in the edit form by checking for the monthly detail table
-  const hasMesTable = await page
-    .locator("#tabla_meses")
-    .isVisible()
-    .catch(() => false);
-
-  if (!hasMesTable) {
-    log("No se detecto el formulario de edicion (tabla de meses no visible)");
-    return {
-      success: false,
-      error: "No se pudo abrir el formulario de edicion de alquiler",
-    };
-  }
-
-  // Check if the target month already exists in the monthly detail table.
-  // The table ID is #tabla_meses; cell format is "07 - Julio".
-  // Match by month name (case-insensitive, includes) or numeric prefix (e.g. "07").
-  const monthValue = String(invoice.fiscalMonth);
-  const paddedMonth = monthValue.padStart(2, "0"); // "7" → "07"
-  const monthSearch = await page.evaluate(
-    ({
-      monthName,
-      monthNum,
-      paddedMonth,
-    }: {
-      monthName: string;
-      monthNum: string;
-      paddedMonth: string;
-    }) => {
-      // Try #tabla_meses first, then any table in the page that has "Mes" header
-      const table =
-        document.querySelector("#tabla_meses") ??
-        document.querySelector("table:has(th:first-child)");
-      if (!table) return { idx: -1, rowTexts: ["(tabla no encontrada)"], tableId: "none" };
-
-      const rows = table.querySelectorAll("tbody tr");
-      const rowTexts: string[] = [];
-      for (let i = 0; i < rows.length; i++) {
-        const rowText = rows[i].textContent?.trim() ?? "";
-        rowTexts.push(rowText);
-        const lower = rowText.toLowerCase();
-        // Match "07 - Julio", "Julio", "7", "07"
-        if (
-          lower.includes(monthName.toLowerCase()) ||
-          Array.from(rows[i].querySelectorAll("td")).some((td) => {
-            const cellText = td.textContent?.trim() ?? "";
-            return (
-              cellText === monthNum ||
-              cellText === paddedMonth ||
-              cellText.startsWith(paddedMonth + " ")
-            );
-          })
-        ) {
-          return { idx: i, rowTexts, tableId: table.id || "(no id)" };
-        }
-      }
-      return { idx: -1, rowTexts, tableId: table.id || "(no id)" };
-    },
-    { monthName, monthNum: monthValue, paddedMonth },
-  );
-
-  const existingMonthIdx = monthSearch.idx;
-  if (existingMonthIdx === -1) {
-    log(
-      `Mes ${monthName} no encontrado en tabla ${monthSearch.tableId}. Filas: ${JSON.stringify(monthSearch.rowTexts.map((t) => t.substring(0, 80)))}`,
-    );
-  }
-
-  if (existingMonthIdx >= 0) {
-    // Month already exists — delete it so we can re-add with updated values
-    log(
-      `Mes ${monthName} ya existe en la entrada (fila ${existingMonthIdx + 1}). Eliminando para actualizar...`,
-    );
-
-    // The delete handler is bound via jQuery .live() on "#tabla_meses div span"
-    // and uses window.confirm() — a native browser dialog. We must:
-    // 1. Override window.confirm to auto-accept
-    // 2. Trigger the click on the <span> inside div.eliminar via jQuery
-    const deleteSelector =
-      monthSearch.tableId !== "none" ? `#${monthSearch.tableId}` : "#tabla_meses";
-    await page.evaluate(
-      ({ tableSelector, idx }: { tableSelector: string; idx: number }) => {
-        // Override confirm to auto-accept the "¿Está seguro?" dialog
-        const origConfirm = window.confirm;
-        window.confirm = () => true;
-        try {
-          const table = document.querySelector(tableSelector);
-          if (!table) return;
-          const rows = table.querySelectorAll("tbody tr");
-          // Click the <span> inside div.eliminar — jQuery .live() listens on
-          // "#tabla_meses div span", not on the div itself
-          const span = rows[idx].querySelector("div.eliminar span");
-          if (span) {
-            (window as any).$(span).trigger("click");
-          }
-        } finally {
-          window.confirm = origConfirm;
-        }
-      },
-      { tableSelector: deleteSelector, idx: existingMonthIdx },
-    );
-    await page.waitForTimeout(1000);
-
-    log("Mes eliminado. Agregando con valores actualizados...");
-  } else {
-    log(`Mes ${monthName} no existe en la entrada. Agregando nuevo mes...`);
-  }
-
-  // Add the month with updated values
-  log("Abriendo dialogo de agregar mes...");
-  await page.evaluate(() => {
-    (window as any).$("#btn_alta_mes").trigger("click");
-  });
-  await page.waitForTimeout(1000);
-
-  // Select month
-  log(`Seleccionando mes: ${monthValue}`);
-  await page.evaluate((v: string) => {
-    (window as any).$("#detalleIndividualMes").val(v).trigger("change");
-  }, monthValue);
-  await page.waitForTimeout(300);
-
-  // Type amount
-  log(`Ingresando monto de alquiler: $${invoice.amount}`);
-  const montoField = page.locator("#detalleIndividualMontoRealMensual");
-  await montoField.click();
-  await montoField.fill("");
-  await montoField.pressSequentially(invoice.amount, { delay: 30 });
-  await montoField.press("Tab");
-  await page.waitForTimeout(800);
-
-  // Click "Agregar" in the mes dialog
-  log("Confirmando mes individual...");
-  const mesDialog = page.locator(".ui-dialog").filter({ has: page.locator("#dialog_alta_mes") });
-  const mesAgregarBtn = mesDialog.locator(".ui-dialog-buttonset button").first();
-  await mesAgregarBtn.waitFor({ state: "visible", timeout: 5000 });
-  await mesAgregarBtn.click();
-  await page.waitForTimeout(1500);
-
-  // Add comprobante — non-fatal
-  try {
-    // First, delete any existing comprobante with the same invoice number
-    // to avoid "comprobante duplicado" errors. The delete handler uses
-    // window.confirm() via jQuery .live() on "#tabla_comprobantes div span".
-    if (invoice.invoiceNumber) {
-      const deletedCmp = await page.evaluate(
-        ({ invoiceNum }: { invoiceNum: string }) => {
-          const table = document.querySelector("#tabla_comprobantes");
-          if (!table) return false;
-          const rows = table.querySelectorAll("tbody tr");
-          for (let i = 0; i < rows.length; i++) {
-            const text = rows[i].textContent || "";
-            // Match by invoice number (e.g. "00002 - 00000078" or "00002-00000078")
-            const normalizedNum = invoiceNum.replace("-", " - ");
-            if (text.includes(invoiceNum) || text.includes(normalizedNum)) {
-              const origConfirm = window.confirm;
-              window.confirm = () => true;
-              try {
-                const span = rows[i].querySelector("div.eliminar span");
-                if (span) {
-                  (window as any).$(span).trigger("click");
-                  return true;
-                }
-              } finally {
-                window.confirm = origConfirm;
-              }
-            }
-          }
-          return false;
-        },
-        { invoiceNum: invoice.invoiceNumber },
-      );
-      if (deletedCmp) {
-        log("Comprobante existente eliminado para reemplazar.");
-        await page.waitForTimeout(1000);
-      }
-    }
-
-    log("Agregando comprobante actualizado...");
-    const lastMesRow = page.locator("#tabla_meses tbody tr").last();
-    const cmpCellLink = lastMesRow.locator("td").nth(3).locator("a, button").first();
-
-    const cmpOpened = await cmpCellLink.isVisible().catch(() => false);
-    if (cmpOpened) {
-      await cmpCellLink.click();
-    } else {
-      await page.locator("#btn_alta_comprobante").click();
-    }
-    await page.waitForTimeout(1000);
-
-    // Fill comprobante fields
-    if (invoice.invoiceDate) {
-      const dateStr = formatDateDDMMYYYY(invoice.invoiceDate);
-      await page.evaluate((d: string) => {
-        (window as any).$("#cmpFechaEmision").val(d).trigger("change");
-      }, dateStr);
-      await page.waitForTimeout(300);
-    }
-
-    const invoiceTypeText = getSiradigInvoiceTypeText(invoice.invoiceType);
-    await page.evaluate((label: string) => {
-      const $sel = (window as any).$("#cmpTipo");
-      const $opt = $sel.find("option").filter(function (this: HTMLOptionElement) {
-        return (window as any).$(this).text().trim() === label;
-      });
-      if ($opt.length > 0) {
-        $sel.val($opt.val()).trigger("change");
-      }
-    }, invoiceTypeText);
-    await page.waitForTimeout(300);
-
-    if (invoice.invoiceNumber) {
-      const parts = invoice.invoiceNumber.split("-");
-      if (parts.length === 2) {
-        await page.evaluate(
-          ([pv, num]: string[]) => {
-            (window as any).$("#cmpPuntoVenta").val(pv).trigger("change");
-            (window as any).$("#cmpNumero").val(num).trigger("change");
-          },
-          [parts[0], parts[1]],
-        );
-      } else {
-        await page.evaluate((num: string) => {
-          (window as any).$("#cmpNumero").val(num).trigger("change");
-        }, invoice.invoiceNumber);
-      }
-      await page.waitForTimeout(300);
-    }
-
-    await page.evaluate((v: string) => {
-      (window as any).$("#cmpMontoFacturado").val(v).trigger("change");
-    }, invoice.amount);
-
-    // Click "Agregar" in comprobante dialog
-    const cmpDialog = page
-      .locator(".ui-dialog")
-      .filter({ has: page.locator("#dialog_alta_comprobante") });
-    const cmpAgregarBtn = cmpDialog.locator(".ui-dialog-buttonset button").first();
-    await cmpAgregarBtn.waitFor({ state: "visible", timeout: 5000 });
-    await cmpAgregarBtn.click();
-    await page.waitForTimeout(1500);
-    await dismissDialogOverlay(page);
-  } catch (err) {
-    log(
-      `Advertencia: no se pudo agregar el comprobante (${err instanceof Error ? err.message : err}). Continuando con Guardar...`,
-    );
-  }
-
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "alquiler-edit-ready",
-    "Formulario de edicion de alquiler listo para guardar",
-  );
-
-  log("Formulario de edicion de alquiler listo para guardar");
-  return { success: true };
-}
-
-/**
- * Edit an existing standard deduction entry in SiRADIG.
- * Works for categories whose edit form follows the common pattern:
- *   - CUIT + monto are read-only
- *   - Comprobantes sub-table with add/delete
- *   - Matching by CUIT + Periodo (month name) in the list table
- *
- * Verified for: Gastos Médicos (#nueva_tabla_deducciones7),
- *               Gastos de Educación (#nueva_tabla_deducciones32)
- * Recorded via /arca-assisted-navigation on 2026-03-15.
- */
-async function editStandardDeductionEntry(
-  page: Page,
-  invoice: InvoiceData,
-  tableSelector: string,
-  categoryLabel: string,
-  log: (msg: string) => void,
-  capture: (buffer: Buffer, slug: string, label: string) => Promise<void>,
-): Promise<FillResult> {
-  const sel = ARCA_SELECTORS.siradigEdit;
-  const monthName = MONTH_NAMES[invoice.fiscalMonth] || "";
-  const cuitDigits = invoice.providerCuit.replace(/[-\s]/g, "");
-
-  log(`Buscando entrada existente: CUIT ${cuitDigits} / ${monthName} en ${categoryLabel}...`);
-
-  // Find the matching row in the deduction list table
-  const rowIndex = await page.evaluate(
-    ({ tableSelector, listRowSelector, cuit, month }) => {
-      const table = document.querySelector(tableSelector);
-      if (!table) return -1;
-      const rows = table.querySelectorAll(listRowSelector);
-      for (let i = 0; i < rows.length; i++) {
-        const text = rows[i].textContent || "";
-        if (text.includes(cuit) && text.includes(month)) return i;
-      }
-      return -1;
-    },
-    {
-      tableSelector,
-      listRowSelector: sel.listRow as string,
-      cuit: cuitDigits,
-      month: monthName,
-    },
-  );
-
-  if (rowIndex === -1) {
-    log(
-      `No se encontro entrada para CUIT ${cuitDigits} / ${monthName} en la tabla de ${categoryLabel}`,
-    );
-    return {
-      success: false,
-      error: `No se encontro la entrada existente para CUIT ${cuitDigits} / ${monthName}`,
-    };
-  }
-
-  log(`Entrada encontrada en fila ${rowIndex + 1}. Abriendo formulario de edicion...`);
-
-  // Click the edit button on the matching row
-  await page.evaluate(
-    ({ tableSelector, listRowSelector, editBtnSelector, idx }) => {
-      const table = document.querySelector(tableSelector);
-      const rows = table!.querySelectorAll(listRowSelector);
-      const editBtn = rows[idx].querySelector(editBtnSelector);
-      if (editBtn) (editBtn as HTMLElement).click();
-    },
-    {
-      tableSelector,
-      listRowSelector: sel.listRow as string,
-      editBtnSelector: sel.editButton as string,
-      idx: rowIndex,
-    },
-  );
-
-  await page.waitForLoadState("networkidle").catch(() => {});
-  await page.waitForTimeout(2000);
-
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "edit-form-open",
-    "Formulario de edicion abierto",
-  );
-
-  // Verify we're in the edit form by checking for the comprobantes table
-  const hasCompTable = await page
-    .locator(sel.comprobantesTable)
-    .isVisible()
-    .catch(() => false);
-
-  if (!hasCompTable) {
-    log("No se detecto el formulario de edicion (tabla de comprobantes no visible)");
-    return {
-      success: false,
-      error: `No se pudo abrir el formulario de edicion de ${categoryLabel}`,
-    };
-  }
-
-  // Check if the invoice's comprobante already exists in the edit form's table.
-  // SiRADIG rejects re-adding a comprobante with the same number (server-side dedup),
-  // so we only delete+re-add if the number differs. If it matches, just save as-is.
-  const invoiceNumber = invoice.invoiceNumber ?? "";
-  const existingComprobantes = await page.evaluate((tableSelector) => {
-    const table = document.querySelector(tableSelector);
-    if (!table) return [];
-    return Array.from(table.querySelectorAll("tbody tr")).map((tr) => {
-      const cells = Array.from(tr.querySelectorAll("td"));
-      return cells.map((td) => td.textContent?.trim() ?? "");
-    });
-  }, sel.comprobantesTable as string);
-
-  // Check if any existing comprobante matches the invoice number
-  const normalizedInvoiceNum = invoiceNumber.replace(/\s/g, "");
-  const alreadyHasComprobante = existingComprobantes.some((cells) =>
-    cells.some((cell) => cell.replace(/\s/g, "") === normalizedInvoiceNum),
-  );
-
-  if (alreadyHasComprobante) {
-    // Comprobante already exists — nothing to change, skip save entirely.
-    log(`Comprobante ${invoiceNumber} ya existe en la entrada — ya está deducido en SiRADIG`);
-    // Click "Volver" to exit the edit form without saving
-    const volverBtn = page.getByText("Volver", { exact: true }).first();
-    await volverBtn.click().catch(() => {});
-    await page.waitForLoadState("networkidle").catch(() => {});
-    return { success: true, alreadyExists: true };
-  } else {
-    // Different comprobante — delete existing ones and add the new one
-    log("Eliminando comprobantes existentes...");
-    const deleteCount = await page
-      .locator(`${sel.comprobantesTable} ${sel.deleteComprobanteBtn}`)
-      .count();
-
-    for (let i = 0; i < deleteCount; i++) {
-      await page.locator(`${sel.comprobantesTable} ${sel.deleteComprobanteBtn}`).first().click();
-      await page.waitForTimeout(500);
-    }
-
-    log("Agregando comprobante actualizado...");
-    await page.locator(sel.altaComprobanteBtn).click();
-    await page.waitForTimeout(1000);
-    await fillComprobanteDialog(page, invoice, log);
-  }
-
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "edit-ready-to-save",
-    "Formulario de edicion listo para guardar",
-  );
-
-  // The form is now ready — submitDeduction (called by the job processor) will click Guardar
-  log("Formulario de edicion listo para guardar");
-  return { success: true };
-}
-
-/**
- * Fill the "Alta de Comprobante" dialog fields and click Agregar.
- *
- * Verified selectors via /arca-assisted-navigation on 2026-03-15:
- *   #cmpFechaEmision, #cmpTipo, #cmpPuntoVenta, #cmpNumero,
- *   #cmpMontoFacturado, #cmpMontoReintegrado, button "Agregar"
- */
-async function fillComprobanteDialog(
-  page: Page,
-  invoice: InvoiceData,
-  log: (msg: string) => void,
-): Promise<void> {
-  const sel = ARCA_SELECTORS.siradigEdit;
-
-  // Wait for the dialog to open
-  await page.locator(sel.cmpTipo).waitFor({ state: "visible", timeout: 10000 });
-
-  // Invoice date
-  if (invoice.invoiceDate) {
-    const dateStr = formatDateDDMMYYYY(invoice.invoiceDate);
-    log(`Ingresando fecha: ${dateStr}`);
-    await page.evaluate((d: string) => {
-      (window as any).$("#cmpFechaEmision").val(d).trigger("change");
-    }, dateStr);
-    await page.waitForTimeout(300);
-  }
-
-  // Invoice type select
-  if (invoice.invoiceType) {
-    const typeValue = mapInvoiceTypeToSiradigValue(invoice.invoiceType);
-    if (typeValue) {
-      log(`Seleccionando tipo de comprobante: ${invoice.invoiceType}`);
-      await page.evaluate((val: string) => {
-        (window as any).$("#cmpTipo").val(val).trigger("change");
-      }, typeValue);
-      await page.waitForTimeout(500);
-    }
-  }
-
-  // Invoice number: split "XXXXX-YYYYYYYY" into punto de venta + numero
-  if (invoice.invoiceNumber) {
-    const parts = invoice.invoiceNumber.split("-");
-    if (parts.length === 2) {
-      log(`Ingresando numero: ${invoice.invoiceNumber}`);
-      await page.locator(sel.cmpPuntoVenta).fill(parts[0]);
-      await page.waitForTimeout(200);
-      await page.locator(sel.cmpNumero).fill(parts[1]);
-      await page.waitForTimeout(200);
-    }
-  }
-
-  // Amount
-  if (invoice.amount) {
-    log(`Ingresando monto: $${invoice.amount}`);
-    const montoField = page.locator(sel.cmpMontoFacturado);
-    await montoField.click();
-    await montoField.fill("");
-    await montoField.pressSequentially(invoice.amount, { delay: 30 });
-    await montoField.press("Tab");
-    await page.waitForTimeout(500);
-  }
-
-  // Monto reintegrado: always 0
-  const reintegrado = page.locator(sel.cmpMontoReintegrado);
-  if (await reintegrado.isVisible().catch(() => false)) {
-    await reintegrado.fill("0");
-    await page.waitForTimeout(200);
-  }
-
-  // Click "Agregar" to add the comprobante to the list
-  const agregarBtn = page.getByText("Agregar", { exact: true }).first();
-  await agregarBtn.click();
-  await page.waitForTimeout(1000);
-
-  // Dismiss dialog overlay if it persists
-  await dismissDialogOverlay(page);
-}
-
 /**
  * Dismiss any lingering jQuery UI dialog overlay that blocks the page.
  * SiRADIG's "Alta de Comprobante" dialog sometimes leaves the overlay
@@ -2559,27 +1843,57 @@ async function dismissDialogOverlay(page: Page): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-/**
- * Map InvoiceType enum to SiRADIG's tipoComprobante select value.
- */
-function mapInvoiceTypeToSiradigValue(invoiceType: string): string | null {
-  const map: Record<string, string> = {
-    FACTURA_A: "1",
-    FACTURA_B: "6",
-    FACTURA_C: "11",
-    NOTA_DEBITO_A: "2",
-    NOTA_DEBITO_B: "7",
-    NOTA_DEBITO_C: "12",
-    NOTA_CREDITO_A: "3",
-    NOTA_CREDITO_B: "8",
-    NOTA_CREDITO_C: "13",
-    RECIBO: "4",
-    TICKET: "83",
-  };
-  return map[invoiceType] ?? null;
-}
-
 // ── Domestic worker deduction ──────────────────────────────────────────────
+
+/**
+ * Delete an existing domestic worker deduction entry from the SiRADIG deductions table.
+ * Searches the "Deducción del Personal Doméstico" fieldset for a row matching the CUIL.
+ * Returns true if an entry was deleted, false if no matching entry was found.
+ */
+async function deleteDomesticDeduction(
+  page: Page,
+  cuil: string,
+  log: (msg: string) => void,
+): Promise<boolean> {
+  const deleteResult = await page.evaluate(
+    ({ cuil }: { cuil: string }) => {
+      const fieldsets = document.querySelectorAll("#div_tabla_deducciones_agrupadas fieldset");
+      for (let f = 0; f < fieldsets.length; f++) {
+        const legend = fieldsets[f].querySelector("legend");
+        if (!legend || !legend.textContent?.toLowerCase().includes("personal doméstico")) continue;
+        const rows = fieldsets[f].querySelectorAll("table tbody tr");
+        for (let i = 0; i < rows.length; i++) {
+          if (!(rows[i].textContent || "").includes(cuil)) continue;
+          // SiRADIG deduction table rows use "div.act_eliminar" with inner span
+          const span = rows[i].querySelector("div.act_eliminar span");
+          if (!span) return { found: true, deleted: false };
+          const origConfirm = window.confirm;
+          window.confirm = () => true;
+          try {
+            (window as any).$(span).trigger("click");
+          } finally {
+            window.confirm = origConfirm;
+          }
+          return { found: true, deleted: true };
+        }
+      }
+      return { found: false, deleted: false };
+    },
+    { cuil },
+  );
+
+  if (deleteResult.found && !deleteResult.deleted) {
+    log(`Entrada doméstica existente encontrada para CUIL ${cuil} pero no se pudo eliminar`);
+    return false;
+  }
+
+  if (deleteResult.deleted) {
+    await page.waitForTimeout(2000);
+    return true;
+  }
+
+  return false;
+}
 
 export interface DomesticWorkerDeduction {
   cuil: string; // 11 digits, no dashes
@@ -2615,84 +1929,53 @@ export async function fillDomesticDeductionForm(
 
   try {
     // Check if an entry already exists for this CUIL in the domestic deductions table.
-    // The table ID is dynamic (e.g., #nueva_tabla_deducciones8) so we find it by
-    // the fieldset legend text "Deducción del Personal Doméstico".
-    const existingRowIndex = await page.evaluate(
-      ({ cuil }: { cuil: string }) => {
-        const fieldsets = document.querySelectorAll("#div_tabla_deducciones_agrupadas fieldset");
-        for (let f = 0; f < fieldsets.length; f++) {
-          const legend = fieldsets[f].querySelector("legend");
-          if (!legend || !legend.textContent?.toLowerCase().includes("personal doméstico"))
-            continue;
-          const rows = fieldsets[f].querySelectorAll("table tbody tr");
-          for (let i = 0; i < rows.length; i++) {
-            if ((rows[i].textContent || "").includes(cuil)) return { fieldsetIdx: f, rowIdx: i };
-          }
-        }
-        return null;
-      },
-      { cuil: worker.cuil },
-    );
-
-    if (existingRowIndex) {
-      // Edit existing entry — click the edit button on the matching row
-      log(`Entrada existente encontrada para CUIL ${worker.cuil}. Editando...`);
-
-      await page.evaluate(
-        ({ fIdx, rIdx }: { fIdx: number; rIdx: number }) => {
-          const fieldsets = document.querySelectorAll("#div_tabla_deducciones_agrupadas fieldset");
-          const rows = fieldsets[fIdx].querySelectorAll("table tbody tr");
-          const editBtn = rows[rIdx].querySelector("div.act_editar");
-          if (editBtn) (editBtn as HTMLElement).click();
-        },
-        { fIdx: existingRowIndex.fieldsetIdx, rIdx: existingRowIndex.rowIdx },
-      );
-
-      await page.waitForLoadState("networkidle").catch(() => {});
-      await page.waitForTimeout(2_000);
-    } else {
-      // Create new entry via the "Agregar" dropdown
-      log("No hay entrada existente. Creando nueva deduccion domestica...");
-
-      const addDeductionToggle = page.locator("#btn_agregar_deducciones");
-      await addDeductionToggle.waitFor({ state: "visible", timeout: 10_000 });
-      await addDeductionToggle.click();
-      await page.waitForTimeout(500);
-
-      const domesticoLink = page.locator("#link_agregar_personal_domestico");
-      await domesticoLink.waitFor({ state: "visible", timeout: 5_000 });
-      await domesticoLink.click();
-      await page.waitForLoadState("networkidle");
-      await page.waitForTimeout(1_000);
-
-      // Fill CUIL — after Tab, SiRADIG does an AJAX lookup that
-      // auto-fills the readonly #razonSocial field with the worker's name.
-      log(`Ingresando CUIL: ${worker.cuil}`);
-      const cuitField = page.locator(sel.formCuit);
-      await cuitField.waitFor({ state: "visible", timeout: 10_000 });
-      await cuitField.click();
-      await cuitField.fill(worker.cuil);
-      await cuitField.press("Tab");
-
-      // Wait for AJAX to populate the name field
-      const nombreField = page.locator(sel.formApellidoNombre);
-      await nombreField.waitFor({ state: "visible", timeout: 10_000 });
-      try {
-        await page.waitForFunction(
-          (s: string) => {
-            const el = document.querySelector(s) as HTMLInputElement | null;
-            return el && el.value.trim().length > 0;
-          },
-          sel.formApellidoNombre,
-          { timeout: 10_000 },
-        );
-        const name = await nombreField.inputValue();
-        log(`Nombre auto-completado: ${name}`);
-      } catch {
-        log("Nombre no se auto-completo, continuando...");
-      }
-      await page.waitForTimeout(300);
+    // If found, delete it first, then create a fresh entry.
+    const deleted = await deleteDomesticDeduction(page, worker.cuil, log);
+    if (deleted) {
+      log(`Deducción doméstica existente eliminada para CUIL ${worker.cuil}. Recreando...`);
     }
+
+    // Create new entry via the "Agregar" dropdown
+    log("Creando nueva deduccion domestica...");
+
+    const addDeductionToggle = page.locator("#btn_agregar_deducciones");
+    await addDeductionToggle.waitFor({ state: "visible", timeout: 10_000 });
+    await addDeductionToggle.click();
+    await page.waitForTimeout(500);
+
+    const domesticoLink = page.locator("#link_agregar_personal_domestico");
+    await domesticoLink.waitFor({ state: "visible", timeout: 5_000 });
+    await domesticoLink.click();
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(1_000);
+
+    // Fill CUIL — after Tab, SiRADIG does an AJAX lookup that
+    // auto-fills the readonly #razonSocial field with the worker's name.
+    log(`Ingresando CUIL: ${worker.cuil}`);
+    const cuitField = page.locator(sel.formCuit);
+    await cuitField.waitFor({ state: "visible", timeout: 10_000 });
+    await cuitField.click();
+    await cuitField.fill(worker.cuil);
+    await cuitField.press("Tab");
+
+    // Wait for AJAX to populate the name field
+    const nombreField = page.locator(sel.formApellidoNombre);
+    await nombreField.waitFor({ state: "visible", timeout: 10_000 });
+    try {
+      await page.waitForFunction(
+        (s: string) => {
+          const el = document.querySelector(s) as HTMLInputElement | null;
+          return el && el.value.trim().length > 0;
+        },
+        sel.formApellidoNombre,
+        { timeout: 10_000 },
+      );
+      const name = await nombreField.inputValue();
+      log(`Nombre auto-completado: ${name}`);
+    } catch {
+      log("Nombre no se auto-completo, continuando...");
+    }
+    await page.waitForTimeout(300);
 
     await capture(
       await page.screenshot({ fullPage: true }),
@@ -2885,6 +2168,22 @@ export function parseSiradigAmount(raw: string): string {
   // Otherwise the dot is already the decimal separator
   return cleaned;
 }
+
+const MONTH_NAMES = [
+  "",
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
 
 // Month name → month number reverse lookup
 const MONTH_NAME_TO_NUM: Record<string, number> = {};

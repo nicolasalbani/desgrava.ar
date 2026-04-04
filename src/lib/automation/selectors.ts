@@ -159,15 +159,8 @@ export const ARCA_SELECTORS = {
     historicosLink: "a:has-text('VER TRABAJADORES HISTÓRICOS')",
   },
 
-  // SiRADIG deduction edit flow (verified 2026-03-15)
+  // SiRADIG deduction list & extraction selectors (verified 2026-03-15)
   siradigEdit: {
-    // Deduction list tables — each category has its own table
-    // NOTE: table IDs are dynamic per SiRADIG version; when a specific ID isn't
-    // known, use fieldset legend text matching via reverseLookupCategory() instead.
-    gastosMedicosTable: "#nueva_tabla_deducciones7",
-    gastosIndumentariaTable: "#nueva_tabla_deducciones21",
-    gastosEducativosTable: "#nueva_tabla_deducciones32",
-
     // Container for all deduction fieldsets
     deductionsContainer: "#div_tabla_deducciones_agrupadas",
     fieldsetSelector: "fieldset.grupo_deducciones",
@@ -175,28 +168,18 @@ export const ARCA_SELECTORS = {
     // Common selectors for deduction list rows
     listRow: "tbody tr[data-id-reg]",
     editButton: "div.act_editar",
-    deleteRowButton: "div.eliminar",
+    deleteRowButton: "div.act_eliminar",
 
-    // Edit form fields (Gastos Médicos y Paramédicos)
-    editCuit: "#numeroDoc", // read-only in edit mode
-    editDenominacion: "#razonSocial", // read-only in edit mode
-    editPeriodo: "#mesDesde", // select dropdown (standard) or hidden input (detalle mensual)
-    editMontoTotal: "#montoTotal", // read-only, computed from comprobantes
+    // Edit/extraction form fields
+    editCuit: "#numeroDoc",
+    editDenominacion: "#razonSocial",
+    editPeriodo: "#mesDesde",
+    editMontoTotal: "#montoTotal",
 
-    // Comprobantes sub-table inside edit form
+    // Comprobantes sub-table (used by extraction)
     comprobantesTable: "#tabla_comprobantes",
-    altaComprobanteBtn: "#btn_alta_comprobante",
-    deleteComprobanteBtn: "div.eliminar span.ui-icon-close",
 
-    // Comprobante dialog fields (inside "Alta de Comprobante" popup)
-    cmpFechaEmision: "#cmpFechaEmision",
-    cmpTipo: "#cmpTipo",
-    cmpPuntoVenta: "#cmpPuntoVenta",
-    cmpNumero: "#cmpNumero",
-    cmpMontoFacturado: "#cmpMontoFacturado",
-    cmpMontoReintegrado: "#cmpMontoReintegrado",
-
-    // Edit form buttons
+    // Form navigation buttons
     editVolverBtn: "#btn_volver",
     editGuardarBtn: "#btn_guardar",
   },

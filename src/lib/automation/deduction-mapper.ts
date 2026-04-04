@@ -118,6 +118,30 @@ export function isIndumentariaTrabajoCategory(category: string): boolean {
   return category === "GASTOS_INDUMENTARIA_TRABAJO";
 }
 
+/**
+ * Maps InvoiceData.indumentariaConcepto to the SiRADIG #idConcepto select value.
+ *
+ * SiRADIG's "Indumentaria y Equipamiento" form has a concept dropdown:
+ *   1 = Indumentaria (clothing)
+ *   2 = Equipamiento (equipment)
+ *   3 = Herramientas educativas (educational tools — not typically used here)
+ *
+ * TODO: Use /arca-assisted-navigation to verify if a "Conectividad" option exists
+ * in the current SiRADIG version. If so, add it here.
+ */
+export const INDUMENTARIA_CONCEPTO_MAP: Record<string, string> = {
+  INDUMENTARIA: "1",
+  EQUIPAMIENTO: "2",
+};
+
+export function getIndumentariaConceptoValue(concepto?: string): string {
+  if (concepto && INDUMENTARIA_CONCEPTO_MAP[concepto]) {
+    return INDUMENTARIA_CONCEPTO_MAP[concepto];
+  }
+  // Default to Equipamiento for backward compatibility
+  return "2";
+}
+
 // Keywords that indicate the provider is a school/educational institution
 // (as opposed to a store selling educational tools/supplies)
 const SCHOOL_KEYWORDS = [

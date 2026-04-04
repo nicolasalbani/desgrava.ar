@@ -47,6 +47,16 @@ export function ImportArcaDialog({
   const skippedRef = useRef<string[]>([]);
   const autoStartedRef = useRef(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const resumeCheckedRef = useRef(false);
+
+  // Prevent closing the dialog while a job is running
+  const handleOpenChange = useCallback(
+    (v: boolean) => {
+      if (!v && state === "running") return; // block close while running
+      onOpenChange(v);
+    },
+    [state, onOpenChange],
+  );
 
   const cleanup = useCallback(() => {
     if (eventSourceRef.current) {
@@ -58,6 +68,73 @@ export function ImportArcaDialog({
   useEffect(() => {
     return cleanup;
   }, [cleanup]);
+
+  // Connect SSE to an existing running job (used for resume)
+  const connectToJob = useCallback(
+    (existingJobId: string, existingStep: string | null) => {
+      setJobId(existingJobId);
+      setState("running");
+      setCurrentStep(existingStep);
+
+      const es = new EventSource(`/api/automatizacion/${existingJobId}/logs`);
+      eventSourceRef.current = es;
+
+      es.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.step) setCurrentStep(payload.step);
+          if (payload.done) {
+            es.close();
+            eventSourceRef.current = null;
+            if (payload.status === "COMPLETED") {
+              setState("completed");
+              fetch(`/api/automatizacion/${existingJobId}`)
+                .then((r) => r.json())
+                .then((d) => {
+                  if (d.job?.resultData) setResult(d.job.resultData as ImportResult);
+                  if (d.job?.errorMessage) setErrorMessage(d.job.errorMessage);
+                })
+                .catch(() => {});
+              onImportComplete?.();
+            } else {
+              fetch(`/api/automatizacion/${existingJobId}`)
+                .then((r) => r.json())
+                .then((d) => {
+                  if (d.job?.errorMessage) setErrorMessage(d.job.errorMessage);
+                })
+                .catch(() => {});
+              setState("failed");
+            }
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      };
+
+      es.onerror = () => {
+        es.close();
+        eventSourceRef.current = null;
+      };
+    },
+    [onImportComplete],
+  );
+
+  // Check for an active PULL_COMPROBANTES job on mount and auto-resume
+  useEffect(() => {
+    if (resumeCheckedRef.current) return;
+    resumeCheckedRef.current = true;
+
+    fetch("/api/automatizacion?activeJob=PULL_COMPROBANTES")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.job) {
+          // There's an active job — open the dialog and resume tracking
+          onOpenChange(true);
+          connectToJob(data.job.id, data.job.currentStep);
+        }
+      })
+      .catch(() => {});
+  }, [onOpenChange, connectToJob]);
 
   // Poll job status as fallback for SSE step events
   useEffect(() => {
@@ -100,18 +177,22 @@ export function ImportArcaDialog({
       .catch(() => setSkipPrefLoaded(true));
   }, []);
 
-  // Reset state when dialog opens
+  // Reset state when dialog opens (skip if resuming a running job)
   useEffect(() => {
     if (open) {
-      setState("idle");
-      setCurrentStep(null);
-      setErrorMessage(null);
-      setResult(null);
-      setJobId(null);
-      autoStartedRef.current = false;
+      // Don't reset if we're already tracking a running job (resumed)
+      if (state !== "running") {
+        setState("idle");
+        setCurrentStep(null);
+        setErrorMessage(null);
+        setResult(null);
+        setJobId(null);
+        autoStartedRef.current = false;
+      }
     } else {
       cleanup();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- state intentionally excluded to avoid loop
   }, [open, cleanup]);
 
   const startImport = useCallback(async () => {
@@ -237,8 +318,17 @@ export function ImportArcaDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="max-w-lg"
+        {...(state === "running"
+          ? {
+              onPointerDownOutside: (e: Event) => e.preventDefault(),
+              onEscapeKeyDown: (e: Event) => e.preventDefault(),
+            }
+          : {})}
+        showCloseButton={state !== "running"}
+      >
         <DialogHeader>
           <DialogTitle>Importar desde ARCA</DialogTitle>
           <DialogDescription>

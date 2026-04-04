@@ -507,10 +507,25 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  // If ?activeJob=<jobType> is specified, return the active (PENDING/RUNNING) job for that type
+  const activeJobType = req.nextUrl.searchParams.get("activeJob");
+  if (activeJobType) {
+    const activeJob = await prisma.automationJob.findFirst({
+      where: {
+        userId: session.user.id,
+        jobType: activeJobType as import("@/generated/prisma/enums").JobType,
+        status: { in: ["PENDING", "RUNNING"] },
+      },
+      select: { id: true, status: true, currentStep: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    });
+    return NextResponse.json({ job: activeJob });
   }
 
   const jobs = await prisma.automationJob.findMany({

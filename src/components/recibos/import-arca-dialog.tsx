@@ -43,6 +43,15 @@ export function ImportArcaReceiptsDialog({
   const eventSourceRef = useRef<EventSource | null>(null);
   const connectedJobRef = useRef<string | null>(null);
 
+  // Prevent closing the dialog while a job is running
+  const handleOpenChange = useCallback(
+    (v: boolean) => {
+      if (!v && status === "running") return;
+      onOpenChange(v);
+    },
+    [status, onOpenChange],
+  );
+
   // Cleanup SSE on unmount
   useEffect(() => {
     return () => {
@@ -248,8 +257,17 @@ export function ImportArcaReceiptsDialog({
   }, [status, onImportComplete]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="sm:max-w-lg"
+        {...(status === "running"
+          ? {
+              onPointerDownOutside: (e: Event) => e.preventDefault(),
+              onEscapeKeyDown: (e: Event) => e.preventDefault(),
+            }
+          : {})}
+        showCloseButton={status !== "running"}
+      >
         <DialogHeader>
           <DialogTitle>Importar recibos salariales desde ARCA</DialogTitle>
           <DialogDescription>

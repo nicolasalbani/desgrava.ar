@@ -10,7 +10,6 @@ import {
   fillDeductionForm,
   fillDomesticDeductionForm,
   submitDeduction,
-  findAndEditExisting,
   navigateToCargasFamilia,
   extractCargasFamilia,
   pushCargasFamilia,
@@ -3249,60 +3248,11 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           }
 
           // Submit the deduction
-          let submitResult = await submitDeduction(
+          const submitResult = await submitDeduction(
             siradigPage,
             (msg) => appendLog(jobId, msg, onLog),
             onScreenshot,
           );
-
-          // If duplicate detected, try to find and edit the existing entry
-          if (!submitResult.success && submitResult.isDuplicate && job.invoice) {
-            await appendLog(
-              jobId,
-              "Comprobante ya existe en SiRADIG — intentando actualizar...",
-              onLog,
-            );
-            const editResult = await findAndEditExisting(
-              siradigPage,
-              {
-                deductionCategory: job.invoice.deductionCategory,
-                providerCuit: job.invoice.providerCuit,
-                invoiceType: job.invoice.invoiceType,
-                invoiceNumber: job.invoice.invoiceNumber ?? undefined,
-                invoiceDate: job.invoice.invoiceDate?.toISOString() ?? undefined,
-                amount: job.invoice.amount.toString(),
-                fiscalMonth: job.invoice.fiscalMonth,
-                contractStartDate: job.invoice.contractStartDate?.toISOString() ?? undefined,
-                contractEndDate: job.invoice.contractEndDate?.toISOString() ?? undefined,
-                ownsProperty:
-                  job.user.yearPreferences.find((p) => p.fiscalYear === job.invoice!.fiscalYear)
-                    ?.ownsProperty ?? false,
-                familyDependent: job.invoice.familyDependent
-                  ? {
-                      numeroDoc: job.invoice.familyDependent.numeroDoc,
-                      apellido: job.invoice.familyDependent.apellido,
-                      nombre: job.invoice.familyDependent.nombre,
-                    }
-                  : undefined,
-              },
-              (msg) => appendLog(jobId, msg, onLog),
-              onScreenshot,
-            );
-
-            if (editResult.success && editResult.alreadyExists) {
-              // Comprobante already exists in SiRADIG — treat as success
-              submitResult = { success: true };
-            } else if (editResult.success) {
-              // Re-submit the edited form
-              submitResult = await submitDeduction(
-                siradigPage,
-                (msg) => appendLog(jobId, msg, onLog),
-                onScreenshot,
-              );
-            } else {
-              submitResult = editResult;
-            }
-          }
 
           setJobStatus(jobId, submitResult.success ? "COMPLETED" : "FAILED");
           await prisma.automationJob.update({

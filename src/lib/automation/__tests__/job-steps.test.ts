@@ -27,10 +27,9 @@ describe("JOB_TYPE_STEPS", () => {
     }
   });
 
-  it("every step list starts with 'login' and ends with 'done'", () => {
+  it("every step list starts with 'login'", () => {
     for (const [jobType, steps] of Object.entries(JOB_TYPE_STEPS)) {
       expect(steps[0].key, `${jobType} should start with 'login'`).toBe("login");
-      expect(steps[steps.length - 1].key, `${jobType} should end with 'done'`).toBe("done");
     }
   });
 

@@ -88,27 +88,16 @@ function RecibosInner() {
   useEffect(() => {
     let cancelled = false;
 
-    async function checkActiveJob() {
-      try {
-        const res = await fetch("/api/automatizacion");
-        if (!res.ok) return;
-        const { jobs } = await res.json();
-        const active = jobs.find(
-          (j: { jobType: string; fiscalYear?: number | null; status: string }) =>
-            j.jobType === "PULL_DOMESTIC_RECEIPTS" &&
-            j.fiscalYear === fiscalYear &&
-            (j.status === "PENDING" || j.status === "RUNNING"),
-        );
-        if (active && !cancelled) {
-          setActiveJobId(active.id);
+    fetch("/api/automatizacion?activeJob=PULL_DOMESTIC_RECEIPTS")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.job && !cancelled) {
+          setActiveJobId(data.job.id);
           setImportArcaOpen(true);
         }
-      } catch {
-        // Best-effort
-      }
-    }
+      })
+      .catch(() => {});
 
-    checkActiveJob();
     return () => {
       cancelled = true;
     };
