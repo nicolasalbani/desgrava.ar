@@ -40,8 +40,8 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
     const fiscalYear = new Date().getFullYear();
     try {
       const [empRes, famRes, workRes, pdRes] = await Promise.all([
-        fetch(`/api/empleadores?fiscalYear=${fiscalYear}`),
-        fetch(`/api/datos-personales/cargas-familia?fiscalYear=${fiscalYear}`),
+        fetch(`/api/empleadores?year=${fiscalYear}`),
+        fetch(`/api/cargas-familia?year=${fiscalYear}`),
         fetch(`/api/trabajadores?fiscalYear=${fiscalYear}&count=true`),
         fetch(`/api/datos-personales?fiscalYear=${fiscalYear}`),
       ]);
