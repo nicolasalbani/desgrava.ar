@@ -77,9 +77,14 @@ export async function sendNewTicketEmail(
   description: string,
   userEmail: string,
   pageUrl: string | null,
+  automationJobId: string | null = null,
 ): Promise<void> {
   const supportEmail = process.env.SUPPORT_EMAIL;
   if (!supportEmail) return;
+
+  const automationSection = automationJobId
+    ? `<p style="color: #555; line-height: 1.6;"><strong>Automatización fallida:</strong> ${automationJobId}</p>`
+    : "";
 
   await getResend().emails.send({
     from: FROM_EMAIL,
@@ -91,6 +96,7 @@ export async function sendNewTicketEmail(
         <p style="color: #555; line-height: 1.6;"><strong>ID:</strong> ${ticketId}</p>
         <p style="color: #555; line-height: 1.6;"><strong>Usuario:</strong> ${userEmail}</p>
         ${pageUrl ? `<p style="color: #555; line-height: 1.6;"><strong>Página:</strong> ${pageUrl}</p>` : ""}
+        ${automationSection}
         <p style="color: #555; line-height: 1.6;"><strong>Asunto:</strong> ${subject}</p>
         <div style="margin-top: 16px; padding: 16px; background: #f9f9f9; border-radius: 8px; color: #333; line-height: 1.6;">
           ${description.replace(/\n/g, "<br>")}

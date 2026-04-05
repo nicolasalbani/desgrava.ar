@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { FiscalYearProvider } from "@/contexts/fiscal-year";
 import { AttentionCountsProvider } from "@/contexts/attention-counts";
 import { DomesticWorkerCountProvider } from "@/contexts/domestic-worker-count";
@@ -19,11 +20,15 @@ export function DashboardShell({
   children: React.ReactNode;
   onboardingCompleted: boolean;
 }) {
+  const router = useRouter();
   const [onboardingCompleted, setOnboardingCompleted] = useState(initialOnboardingCompleted);
   const [showDashboard, setShowDashboard] = useState(initialOnboardingCompleted);
 
   function handleOnboardingComplete() {
     setOnboardingCompleted(true);
+    // Re-run server components to fetch fresh dashboard data
+    // (the initial render had stale/empty data from before onboarding)
+    router.refresh();
     setShowDashboard(true);
   }
 

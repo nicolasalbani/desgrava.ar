@@ -1,3 +1,21 @@
+export const JOB_TYPE_LABELS: Record<string, string> = {
+  VALIDATE_CREDENTIALS: "Validación de credenciales ARCA",
+  SUBMIT_INVOICE: "Envío de factura a SiRADIG",
+  BULK_SUBMIT: "Envío masivo de facturas",
+  PULL_FAMILY_DEPENDENTS: "Importación de cargas de familia",
+  PUSH_FAMILY_DEPENDENTS: "Carga de familiares en SiRADIG",
+  PULL_COMPROBANTES: "Importación de comprobantes",
+  PULL_DOMESTIC_WORKERS: "Importación de trabajadores domésticos",
+  PULL_DOMESTIC_RECEIPTS: "Importación de recibos domésticos",
+  SUBMIT_DOMESTIC_DEDUCTION: "Envío de deducción de servicio doméstico",
+  PULL_PRESENTACIONES: "Importación de presentaciones",
+  SUBMIT_PRESENTACION: "Envío de presentación",
+  PULL_EMPLOYERS: "Importación de empleadores",
+  PUSH_EMPLOYERS: "Carga de empleadores en SiRADIG",
+  PULL_PERSONAL_DATA: "Importación de datos personales",
+  PULL_PROFILE: "Importación de perfil completo",
+};
+
 export const SUPPORT_SYSTEM_PROMPT = `Sos el asistente de soporte de desgrava.ar, una plataforma de automatización de deducciones impositivas para contribuyentes argentinos.
 
 ## Tu rol
@@ -23,6 +41,20 @@ Ayudás a los usuarios con dudas sobre la plataforma y reportás problemas técn
 - **Factura no deducible**: Algunas facturas se clasifican como NO_DEDUCIBLE (supermercados, servicios públicos, etc.). Esto es correcto, no todo es deducible.
 - **Error al desgravar**: Puede fallar por credenciales inválidas, SiRADIG caído, o datos faltantes en el comprobante.
 - **Suscripción**: Preguntas sobre planes, período de prueba, o acceso limitado en modo lectura.
+
+## Automatizaciones fallidas
+Cuando el usuario mencione problemas con automatizaciones, errores al enviar deducciones, fallos en la importación de datos, o cualquier problema técnico relacionado con ARCA/SiRADIG, usá PRIMERO la herramienta \`lookup_failed_automations\` para buscar automatizaciones fallidas recientes antes de hacer preguntas.
+
+Si encontrás automatizaciones fallidas:
+- Presentá cada una con su tipo, entidad relacionada, año fiscal, error, y fecha para que el usuario pueda identificarla.
+- Si hay una sola, preguntá al usuario si es esa la que necesita reportar.
+- Si hay varias, mostrá la lista numerada y pedí al usuario que indique cuál es la que tiene el problema.
+- Una vez que el usuario confirme, usá el ID de la automatización al crear el ticket con \`create_ticket\`.
+
+Tipos de automatización y sus nombres:
+${Object.entries(JOB_TYPE_LABELS)
+  .map(([key, label]) => `- ${key}: "${label}"`)
+  .join("\n")}
 
 ## Instrucciones de comportamiento
 1. Sé conciso, amable y profesional.
@@ -52,6 +84,11 @@ export const SUPPORT_TOOLS = [
             description:
               "A detailed description of the issue including what the user was trying to do, what happened, and any relevant context (in Spanish)",
           },
+          automation_job_id: {
+            type: "string",
+            description:
+              "The ID of the failed automation job related to this ticket. Only include this if the user confirmed a specific failed automation from the lookup_failed_automations results.",
+          },
         },
         required: ["subject", "description"],
       },
@@ -73,6 +110,19 @@ export const SUPPORT_TOOLS = [
           },
         },
         required: ["summary"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "lookup_failed_automations",
+      description:
+        "Look up the user's recent failed automation jobs. Call this FIRST when the user mentions problems with automations, errors submitting deductions, import failures, or any ARCA/SiRADIG technical issue.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
       },
     },
   },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { CATEGORY_LABELS } from "@/lib/simulador/deduction-rules";
 import { TrendingUp, FileText, Send, Clock, CreditCard, Crown, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -123,6 +123,22 @@ export function MetricsPanel({
   const [enabledCategories, setEnabledCategories] = useState<Set<string>>(
     () => new Set(categoryTotals.map((c) => c.category)),
   );
+
+  // Stable key for the set of available categories — only changes when categories actually change
+  const categoryKeys = useMemo(
+    () =>
+      categoryTotals
+        .map((c) => c.category)
+        .sort()
+        .join(","),
+    [categoryTotals],
+  );
+
+  // Sync enabled categories when available categories change (e.g. after onboarding refresh)
+  useEffect(() => {
+    setEnabledCategories(new Set(categoryTotals.map((c) => c.category)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryKeys]);
 
   // Toggling a filter triggers a new animation via a key
   const [animKey, setAnimKey] = useState(0);
