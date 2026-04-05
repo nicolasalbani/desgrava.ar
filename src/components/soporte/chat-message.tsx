@@ -4,6 +4,71 @@ import { cn } from "@/lib/utils";
 import type { SupportEvent } from "@/lib/soporte/types";
 import { MessageCircle, ExternalLink } from "lucide-react";
 
+/** Render simple markdown: **bold**, *italic*, `code`, bullet lists, and line breaks. */
+function renderMarkdown(text: string) {
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let listItems: React.ReactNode[] = [];
+
+  function flushList() {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`list-${elements.length}`} className="my-1 list-inside list-disc space-y-0.5 pl-1">
+          {listItems}
+        </ul>,
+      );
+      listItems = [];
+    }
+  }
+
+  function formatInline(line: string, key: string | number): React.ReactNode {
+    // Split by **bold**, *italic*, and `code` patterns
+    const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return (
+          <strong key={`${key}-${i}`} className="font-semibold">
+            {part.slice(2, -2)}
+          </strong>
+        );
+      }
+      if (part.startsWith("*") && part.endsWith("*")) {
+        return <em key={`${key}-${i}`}>{part.slice(1, -1)}</em>;
+      }
+      if (part.startsWith("`") && part.endsWith("`")) {
+        return (
+          <code key={`${key}-${i}`} className="bg-foreground/10 rounded px-1 py-0.5 text-xs">
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      return part;
+    });
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const bulletMatch = line.match(/^[\s]*[-•]\s+(.*)/);
+    if (bulletMatch) {
+      listItems.push(<li key={`li-${i}`}>{formatInline(bulletMatch[1], `li-${i}`)}</li>);
+    } else {
+      flushList();
+      if (line.trim() === "") {
+        elements.push(<br key={`br-${i}`} />);
+      } else {
+        elements.push(
+          <p key={`p-${i}`} className="my-0">
+            {formatInline(line, `p-${i}`)}
+          </p>,
+        );
+      }
+    }
+  }
+  flushList();
+
+  return elements;
+}
+
 interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
@@ -29,7 +94,7 @@ export function ChatMessage({ role, content, events }: ChatMessageProps) {
               : "bg-muted text-foreground rounded-bl-md",
           )}
         >
-          {content}
+          {isUser ? content : renderMarkdown(content)}
         </div>
 
         {events?.map((event) => {
