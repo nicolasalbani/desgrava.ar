@@ -5,6 +5,7 @@ import {
   getSiradigCategoryLinkId,
   getAlquilerLinkId,
   isAlquilerCategory,
+  isCreditNoteType,
   isDetalleMensualCategory,
   isEducationCategory,
   isIndumentariaTrabajoCategory,
@@ -236,5 +237,29 @@ describe("getIndumentariaConceptoValue", () => {
     for (const [key, value] of Object.entries(INDUMENTARIA_CONCEPTO_MAP)) {
       expect(value, `${key} should be a numeric string`).toMatch(/^\d+$/);
     }
+  });
+});
+
+describe("isCreditNoteType", () => {
+  it.each(["NOTA_CREDITO_A", "NOTA_CREDITO_B", "NOTA_CREDITO_C"])("returns true for %s", (type) => {
+    expect(isCreditNoteType(type)).toBe(true);
+  });
+
+  it.each([
+    "FACTURA_A",
+    "FACTURA_B",
+    "FACTURA_C",
+    "NOTA_DEBITO_A",
+    "NOTA_DEBITO_B",
+    "NOTA_DEBITO_C",
+    "RECIBO",
+    "TICKET",
+  ])("returns false for %s", (type) => {
+    expect(isCreditNoteType(type)).toBe(false);
+  });
+
+  it("returns false for unknown types", () => {
+    expect(isCreditNoteType("UNKNOWN")).toBe(false);
+    expect(isCreditNoteType("")).toBe(false);
   });
 });
