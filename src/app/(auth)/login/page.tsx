@@ -18,11 +18,14 @@ type View = "login" | "register";
 function LoginForm() {
   const searchParams = useSearchParams();
   const initialError = searchParams.get("error");
-  const [view, setView] = useState<View>(initialError === "invite_required" ? "register" : "login");
+  const inviteParam = searchParams.get("invite");
+  const [view, setView] = useState<View>(
+    initialError === "invite_required" || inviteParam ? "register" : "login",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
+  const [inviteCode, setInviteCode] = useState(inviteParam ?? "");
   const [error, setError] = useState(() => {
     if (initialError === "invite_required")
       return "No tenes cuenta. Ingresa un código de invitación para registrarte.";
@@ -157,6 +160,8 @@ function LoginForm() {
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value)}
               disabled={loading}
+              readOnly={!!inviteParam && inviteCode === inviteParam}
+              className={inviteParam && inviteCode === inviteParam ? "bg-muted" : ""}
             />
           )}
 
