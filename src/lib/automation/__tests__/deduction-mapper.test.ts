@@ -11,6 +11,7 @@ import {
   isIndumentariaTrabajoCategory,
   isSchoolProvider,
   getIndumentariaConceptoValue,
+  formatAmountForSiradig,
   INDUMENTARIA_CONCEPTO_MAP,
   SIRADIG_CATEGORY_MAP,
   SIRADIG_INVOICE_TYPE_MAP,
@@ -261,5 +262,38 @@ describe("isCreditNoteType", () => {
   it("returns false for unknown types", () => {
     expect(isCreditNoteType("UNKNOWN")).toBe(false);
     expect(isCreditNoteType("")).toBe(false);
+  });
+});
+
+describe("formatAmountForSiradig", () => {
+  it("formats integer amounts with 2 decimal places", () => {
+    expect(formatAmountForSiradig({ toFixed: (dp: number) => Number(15000).toFixed(dp) })).toBe(
+      "15000.00",
+    );
+    expect(formatAmountForSiradig({ toFixed: (dp: number) => Number(1234).toFixed(dp) })).toBe(
+      "1234.00",
+    );
+  });
+
+  it("preserves existing decimal places", () => {
+    expect(formatAmountForSiradig({ toFixed: (dp: number) => Number(1500.5).toFixed(dp) })).toBe(
+      "1500.50",
+    );
+    expect(formatAmountForSiradig({ toFixed: (dp: number) => Number(99.99).toFixed(dp) })).toBe(
+      "99.99",
+    );
+  });
+
+  it("formats small amounts correctly", () => {
+    expect(formatAmountForSiradig({ toFixed: (dp: number) => Number(1).toFixed(dp) })).toBe("1.00");
+    expect(formatAmountForSiradig({ toFixed: (dp: number) => Number(0.01).toFixed(dp) })).toBe(
+      "0.01",
+    );
+  });
+
+  it("formats large amounts correctly", () => {
+    expect(formatAmountForSiradig({ toFixed: (dp: number) => Number(999999.99).toFixed(dp) })).toBe(
+      "999999.99",
+    );
   });
 });

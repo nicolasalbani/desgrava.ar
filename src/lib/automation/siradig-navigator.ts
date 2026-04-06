@@ -850,6 +850,28 @@ export async function fillDeductionForm(
         const mesDialog = page.locator(".ui-dialog:visible:has(#detalleIndividualMes)");
         await mesDialog.locator(".ui-dialog-buttonset").getByText("Agregar").click();
         await page.waitForTimeout(1500);
+
+        // Check if SiRADIG rejected the monthly detail (e.g. invalid amount format).
+        // If the dialog is still visible after clicking "Agregar", the detail was not added.
+        const dialogStillVisible = await mesDialog.isVisible().catch(() => false);
+        if (dialogStillVisible) {
+          // Try to capture the error message from the dialog
+          const errorText = await mesDialog
+            .locator(".formErrorContent")
+            .first()
+            .textContent()
+            .catch(() => null);
+          const errorMsg =
+            errorText?.trim() ||
+            "Error al agregar detalle mensual — el monto puede tener un formato no aceptado por SiRADIG";
+          await capture(
+            await page.screenshot({ fullPage: true }),
+            "month-detail-error",
+            "Error al agregar detalle mensual",
+          );
+          return { success: false, error: errorMsg };
+        }
+
         await dismissDialogOverlay(page);
 
         await capture(
@@ -1018,6 +1040,25 @@ export async function fillDeductionForm(
     const agregarBtn = comprobanteDialog.locator(".ui-dialog-buttonset").getByText("Agregar");
     await agregarBtn.click();
     await page.waitForTimeout(1500); // Wait for dialog to close and table update
+
+    // Check if SiRADIG rejected the comprobante (dialog still visible = validation error)
+    const cmpDialogStillVisible = await comprobanteDialog.isVisible().catch(() => false);
+    if (cmpDialogStillVisible) {
+      const errorText = await comprobanteDialog
+        .locator(".formErrorContent")
+        .first()
+        .textContent()
+        .catch(() => null);
+      const errorMsg =
+        errorText?.trim() || "Error al agregar comprobante — SiRADIG rechazó los datos ingresados";
+      await capture(
+        await page.screenshot({ fullPage: true }),
+        "comprobante-error",
+        "Error al agregar comprobante",
+      );
+      return { success: false, error: errorMsg };
+    }
+
     await dismissDialogOverlay(page);
 
     // Take final screenshot showing the form with the added comprobante

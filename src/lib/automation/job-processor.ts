@@ -36,7 +36,7 @@ import {
 } from "./presentacion-navigator";
 import { extractReceiptFields } from "@/lib/ocr/receipt-extractor";
 import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } from "./csv-parser";
-import { isCreditNoteType } from "./deduction-mapper";
+import { isCreditNoteType, formatAmountForSiradig } from "./deduction-mapper";
 import { ARCA_SELECTORS } from "./selectors";
 import { resolveCategory } from "@/lib/catalog/provider-catalog";
 import {
@@ -3236,7 +3236,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               invoiceType: job.invoice.invoiceType,
               invoiceNumber: job.invoice.invoiceNumber ?? undefined,
               invoiceDate: job.invoice.invoiceDate?.toISOString() ?? undefined,
-              amount: job.invoice.amount.toString(),
+              amount: formatAmountForSiradig(job.invoice.amount),
               fiscalMonth: job.invoice.fiscalMonth,
               contractStartDate: job.invoice.contractStartDate?.toISOString() ?? undefined,
               contractEndDate: job.invoice.contractEndDate?.toISOString() ?? undefined,

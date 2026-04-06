@@ -121,6 +121,16 @@ export function isDetalleMensualCategory(category: string): boolean {
   return DETALLE_MENSUAL_CATEGORIES.has(category);
 }
 
+/**
+ * Format an amount for SiRADIG form fields.
+ * SiRADIG expects amounts with exactly 2 decimal places (e.g. "15000.00").
+ * Without decimal places, SiRADIG may silently reject the value in dialogs,
+ * causing "Monto Total calculado debe ser mayor a cero" errors on save.
+ */
+export function formatAmountForSiradig(amount: { toFixed: (dp: number) => string }): string {
+  return amount.toFixed(2);
+}
+
 export function isEducationCategory(category: string): boolean {
   return category === "GASTOS_EDUCATIVOS";
 }
