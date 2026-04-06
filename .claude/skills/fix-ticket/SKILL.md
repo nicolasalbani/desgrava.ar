@@ -1,7 +1,7 @@
 ---
 name: fix-ticket
 description: Scheduled agent that fetches open support tickets, classifies bugs via AI, fixes them with /fix-bug, creates PRs, updates ticket status, and notifies the developer.
-argument-hint: [--env dev|prod]
+argument-hint: "--env dev|prod"
 ---
 
 # Scheduled Bug Fix Agent
