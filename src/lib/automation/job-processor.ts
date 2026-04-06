@@ -1681,6 +1681,9 @@ async function processPullComprobantes(
   const invoicesToInsert: Prisma.InvoiceCreateManyInput[] = [];
 
   for (const comp of newComprobantes) {
+    // Credit notes are not expenses — mark as NO_DEDUCIBLE regardless of provider category
+    const isCreditNote = isCreditNoteType(comp.invoiceType);
+
     const category = categoryCache.get(comp.providerCuit);
     if (!category) {
       // Category resolution failed for this CUIT — try individual fallback
@@ -1702,7 +1705,9 @@ async function processPullComprobantes(
           amount: comp.amount,
           fiscalYear: comp.fiscalYear,
           fiscalMonth: comp.fiscalMonth,
-          deductionCategory: fallback as import("@/generated/prisma/client").DeductionCategory,
+          deductionCategory: (isCreditNote
+            ? "NO_DEDUCIBLE"
+            : fallback) as import("@/generated/prisma/client").DeductionCategory,
           source: "ARCA",
         });
       } catch (err) {
@@ -1727,7 +1732,9 @@ async function processPullComprobantes(
       amount: comp.amount,
       fiscalYear: comp.fiscalYear,
       fiscalMonth: comp.fiscalMonth,
-      deductionCategory: category as import("@/generated/prisma/client").DeductionCategory,
+      deductionCategory: (isCreditNote
+        ? "NO_DEDUCIBLE"
+        : category) as import("@/generated/prisma/client").DeductionCategory,
       source: "ARCA",
     });
   }
