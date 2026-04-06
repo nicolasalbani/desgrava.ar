@@ -61,11 +61,41 @@ Respond with JSON only:
 - Skip non-bug tickets silently.
 - Log skipped tickets with their classification for transparency.
 
-## Phase 3: Fix Each Bug (Sequential)
+## Phase 3: Check If Already Fixed
+
+Before attempting any fix, check whether each bug ticket has already been addressed by a recent commit or PR. This prevents creating duplicate/wrong fixes for issues that were resolved between ticket creation and agent run.
+
+For each bug ticket:
+
+1. **Search recent commits** for keywords from the ticket (error message, related terms):
+
+```bash
+git log --all --since="<ticket.createdAt>" --oneline --grep="<keyword>"
+```
+
+Try multiple keywords extracted from the ticket subject and description (e.g. error messages, feature names, domain terms). Also search commit diffs:
+
+```bash
+git log --all --since="<ticket.createdAt>" -p -S "<keyword>" --oneline
+```
+
+2. **If a matching commit/PR is found**: The bug is already fixed. Update the ticket status to `RESOLVED` with a reference to the commit/PR, and skip to the next ticket. Do NOT attempt a fix or create a branch.
+
+```bash
+curl -s -X PATCH \
+  -H "Authorization: Bearer <CRON_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "RESOLVED", "resolution": "Already fixed in <commit-hash>: <commit-subject>"}' \
+  <API_BASE_URL>/api/soporte/<ticket-id>
+```
+
+3. **If no matching commit found**: Proceed to Phase 4.
+
+## Phase 4: Fix Each Bug (Sequential)
 
 Process bug tickets **one at a time** to avoid branch conflicts. For each bug ticket:
 
-### Step 3.1: Prepare Git State
+### Step 4.1: Prepare Git State
 
 ```bash
 git checkout main
@@ -75,7 +105,7 @@ git checkout -b fix/<ticket-id>
 
 If the branch already exists (a previous attempt), skip this ticket.
 
-### Step 3.2: Run /fix-bug
+### Step 4.2: Run /fix-bug
 
 Invoke the `/fix-bug` skill with the ticket's description as the bug report:
 
@@ -101,7 +131,7 @@ The `/fix-bug` skill will:
 2. Clean up: `git checkout main && git branch -D fix/<ticket-id>`
 3. Skip to the next ticket. Do NOT update the ticket status or send email.
 
-### Step 3.3: Push and Create PR
+### Step 4.3: Push and Create PR
 
 After a successful fix:
 
@@ -152,7 +182,7 @@ EOF
 
 Capture the PR URL from the `gh pr create` output.
 
-### Step 3.4: Update Ticket Status
+### Step 4.4: Update Ticket Status
 
 Update the ticket to `IN_PROGRESS` with the PR URL:
 
@@ -164,7 +194,7 @@ curl -s -X PATCH \
   <API_BASE_URL>/api/soporte/<ticket-id>
 ```
 
-### Step 3.5: Notify Developer
+### Step 4.5: Notify Developer
 
 Send an email notification to the developer by calling the API or using a temp script:
 
@@ -190,7 +220,7 @@ npx tsx _tmp_notify.ts "<subject>" "<ticket-id>" "<pr-url>" "<fix-summary>"
 rm _tmp_notify.ts
 ```
 
-### Step 3.6: Return to Main
+### Step 4.6: Return to Main
 
 ```bash
 git checkout main
@@ -198,7 +228,7 @@ git checkout main
 
 Proceed to the next bug ticket.
 
-## Phase 4: Cleanup & Report
+## Phase 5: Cleanup & Report
 
 After processing all tickets:
 
@@ -212,6 +242,7 @@ After processing all tickets:
 - Environment: dev/prod
 - Tickets fetched: N
 - Classified as bugs: N
+- Already fixed (resolved via git history): N
 - Fixes attempted: N
 - PRs created: N (list PR URLs)
 - Skipped (not bugs): N
