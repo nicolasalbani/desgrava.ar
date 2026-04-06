@@ -48,3 +48,6 @@ next-env.d.ts
 # local PostgreSQL data
 /.pgdata
 /.pgdata.log
+
+# dev session logs
+/logs

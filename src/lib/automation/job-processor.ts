@@ -36,6 +36,7 @@ import {
 } from "./presentacion-navigator";
 import { extractReceiptFields } from "@/lib/ocr/receipt-extractor";
 import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } from "./csv-parser";
+import { isCreditNoteType } from "./deduction-mapper";
 import { ARCA_SELECTORS } from "./selectors";
 import { resolveCategory } from "@/lib/catalog/provider-catalog";
 import {
@@ -3185,6 +3186,19 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         // Navigate through SiRADIG to the deductions section
         // (person selection → period → draft → form → deductions accordion)
         if (job.invoice) {
+          // Block credit notes — SiRADIG treats them as negative amounts,
+          // causing "Monto Total calculado debe ser mayor a cero" when submitted standalone.
+          if (isCreditNoteType(job.invoice.invoiceType)) {
+            const msg =
+              "Las notas de crédito no se pueden enviar a SiRADIG como deducciones independientes";
+            await appendLog(jobId, msg, onLog);
+            setJobStatus(jobId, "FAILED");
+            await prisma.automationJob.update({
+              where: { id: jobId },
+              data: { status: "FAILED", errorMessage: msg, completedAt: new Date() },
+            });
+            return;
+          }
           const navResult = await navigateToDeductionSection(
             siradigPage,
             job.invoice.fiscalYear,

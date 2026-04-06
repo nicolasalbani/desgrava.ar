@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { processJob } from "@/lib/automation/job-processor";
+import { isCreditNoteType } from "@/lib/automation/deduction-mapper";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 import { isFiscalYearReadOnly } from "@/lib/fiscal-year";
 
@@ -433,6 +434,18 @@ export async function POST(req: NextRequest) {
       });
       if (!invoice) {
         return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 });
+      }
+
+      // Prevent submitting credit notes — SiRADIG treats them as negative amounts,
+      // causing "Monto Total calculado debe ser mayor a cero" when submitted standalone.
+      if (isCreditNoteType(invoice.invoiceType)) {
+        return NextResponse.json(
+          {
+            error:
+              "Las notas de crédito no se pueden enviar a SiRADIG como deducciones independientes. El monto ya fue descontado del comprobante original.",
+          },
+          { status: 400 },
+        );
       }
 
       // Prevent submitting education invoices without a linked dependent

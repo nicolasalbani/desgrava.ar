@@ -4,21 +4,45 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendNewTicketEmail } from "@/lib/email";
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+export async function GET(req: NextRequest) {
+  // Admin mode: CRON_SECRET returns all OPEN tickets (for scheduled bug fix agent)
+  const authHeader = req.headers.get("authorization");
+  const isAdmin = authHeader === `Bearer ${process.env.CRON_SECRET}` && process.env.CRON_SECRET;
+
+  if (!isAdmin) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const tickets = await prisma.supportTicket.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        status: true,
+        subject: true,
+        description: true,
+        resolution: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return NextResponse.json(tickets);
   }
 
+  // Admin: return all OPEN tickets with conversationLog for AI classification
   const tickets = await prisma.supportTicket.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
+    where: { status: "OPEN" },
+    orderBy: { createdAt: "asc" },
     select: {
       id: true,
       status: true,
       subject: true,
       description: true,
-      resolution: true,
+      conversationLog: true,
+      automationJobId: true,
       createdAt: true,
       updatedAt: true,
     },

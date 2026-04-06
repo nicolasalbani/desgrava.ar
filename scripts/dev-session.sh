@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 # Dev Session Launcher
 # Starts: npm run dev, cloudflared tunnel, and Claude Code remote session
-# Outputs both URLs and copies them to clipboard
-# Claude Code auto-restarts if the session drops
+# - Dev server logs are written to logs/dev-server.log (tail -f to follow)
+# - Claude Code remote-control runs in the foreground for local interaction
+# - Claude Code auto-restarts if the session drops
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+LOG_DIR="$PROJECT_DIR/logs"
+DEV_LOG="$LOG_DIR/dev-server.log"
 
 PIDS=()
 SHUTTING_DOWN=false
@@ -31,9 +37,13 @@ for cmd in cloudflared claude; do
   fi
 done
 
-# 1. Start dev server
+# Ensure logs directory exists
+mkdir -p "$LOG_DIR"
+
+# 1. Start dev server with accessible logs
 echo "Starting dev server on port 3000..."
-npm run dev &>/dev/null &
+echo "--- Dev server started at $(date) ---" >> "$DEV_LOG"
+npm run dev >> "$DEV_LOG" 2>&1 &
 PIDS+=($!)
 
 echo "Waiting for dev server..."
@@ -43,11 +53,12 @@ for i in $(seq 1 60); do
   fi
   if [ "$i" -eq 60 ]; then
     echo "Error: Dev server did not start within 60s." >&2
+    echo "Check logs: $DEV_LOG"
     exit 1
   fi
   sleep 1
 done
-echo "Dev server ready."
+echo "Dev server ready. Logs: $DEV_LOG"
 
 # 2. Start cloudflared tunnel
 TUNNEL_URL="https://dev.desgrava.ar"
@@ -73,76 +84,45 @@ done
 rm -f "$CLOUDFLARED_LOG"
 echo "Tunnel ready: $TUNNEL_URL"
 
-# 3. Start Claude Code remote control session with auto-restart
-start_claude_remote() {
-  local log=$(mktemp)
-  claude remote-control --name "desgrava.ar dev session" >"$log" 2>&1 &
-  local pid=$!
-  PIDS+=($pid)
+# 3. Start Claude Code remote-control (foreground with auto-restart)
+#    Runs in the foreground so you can interact locally.
+#    Press 'w' to toggle worktree mode, Ctrl+C to stop everything.
 
-  # Wait for session URL
-  local url=""
-  for i in $(seq 1 60); do
-    url=$(grep -o 'https://[^ ]*' "$log" 2>/dev/null | head -1 || true)
-    if [ -n "$url" ]; then
-      break
-    fi
-    if [ "$i" -eq 60 ]; then
-      echo "Error: Could not get Claude Code session URL within 60s." >&2
-      echo "Debug output:"
-      cat "$log" >&2
-      rm -f "$log"
-      return 1
-    fi
-    sleep 1
-  done
-  rm -f "$log"
-
-  CLAUDE_URL="$url"
-  CLAUDE_PID=$pid
-}
-
-claude_watchdog() {
-  while true; do
-    wait "$CLAUDE_PID" 2>/dev/null || true
-    if [ "$SHUTTING_DOWN" = true ]; then
-      return
-    fi
-    echo ""
-    echo "Claude Code session ended. Restarting in 5s..."
-    sleep 5
-    if [ "$SHUTTING_DOWN" = true ]; then
-      return
-    fi
-    echo "Restarting Claude Code remote control..."
-    start_claude_remote || continue
-    echo ""
-    echo "  New Claude Code URL: $CLAUDE_URL"
-    printf "%s\n%s" "$TUNNEL_URL" "$CLAUDE_URL" | pbcopy
-    echo "  (copied to clipboard)"
-  done
-}
-
+echo ""
 echo "Starting Claude Code remote control session..."
-start_claude_remote
-
-# 4. Output results
 echo ""
 echo "========================================="
 echo "  Dev Session Ready"
 echo "========================================="
 echo ""
-echo "  Tunnel URL:       $TUNNEL_URL"
-echo "  Claude Code URL:  $CLAUDE_URL"
+echo "  Tunnel URL:   $TUNNEL_URL"
+echo "  Dev logs:     tail -f $DEV_LOG"
 echo ""
 echo "========================================="
-
-# 5. Copy to clipboard
-printf "%s\n%s" "$TUNNEL_URL" "$CLAUDE_URL" | pbcopy
-echo "Both URLs copied to clipboard."
-
-# Keep running with auto-restart watchdog
 echo ""
+
+printf "%s" "$TUNNEL_URL" | pbcopy
+echo "Tunnel URL copied to clipboard."
+echo ""
+echo "Claude Code remote-control is interactive."
 echo "Press Ctrl+C to stop all services."
-echo "Claude Code will auto-restart if the session drops."
-claude_watchdog
+echo ""
+
+# Run claude remote-control in the foreground with auto-restart
+while true; do
+  claude remote-control --name "desgrava.ar dev session"
+
+  if [ "$SHUTTING_DOWN" = true ]; then
+    break
+  fi
+
+  echo ""
+  echo "Claude Code session ended. Restarting in 5s..."
+  sleep 5
+
+  if [ "$SHUTTING_DOWN" = true ]; then
+    break
+  fi
+
+  echo "Restarting Claude Code remote control..."
+done

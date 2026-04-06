@@ -132,6 +132,36 @@ export async function sendTicketResolvedEmail(
   });
 }
 
+export async function sendBugFixPREmail(
+  ticketSubject: string,
+  ticketId: string,
+  prUrl: string,
+  fixSummary: string,
+): Promise<void> {
+  const supportEmail = process.env.SUPPORT_EMAIL;
+  if (!supportEmail) return;
+
+  await getResend().emails.send({
+    from: FROM_EMAIL,
+    to: supportEmail,
+    subject: `Fix listo para review: ${ticketSubject}`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
+        <h2 style="margin-bottom: 16px;">Bug fix listo para review</h2>
+        <p style="color: #555; line-height: 1.6;"><strong>Ticket:</strong> ${ticketId}</p>
+        <p style="color: #555; line-height: 1.6;"><strong>Asunto:</strong> ${ticketSubject}</p>
+        <div style="margin-top: 16px; padding: 16px; background: #f9f9f9; border-radius: 8px; color: #333; line-height: 1.6;">
+          <strong>Resumen del fix:</strong><br>
+          ${fixSummary.replace(/\n/g, "<br>")}
+        </div>
+        <a href="${prUrl}" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #000; color: #fff; text-decoration: none; border-radius: 8px;">
+          Ver Pull Request
+        </a>
+      </div>
+    `,
+  });
+}
+
 export async function sendPasswordResetEmail(email: string, token: string): Promise<void> {
   const url = `${getBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;
 

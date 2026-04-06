@@ -94,6 +94,17 @@ export function getAlquilerLinkId(ownsProperty: boolean): string {
 }
 
 /**
+ * Credit note invoice types cannot be submitted to SiRADIG as standalone deductions.
+ * SiRADIG treats them as negative amounts, causing "Monto Total calculado debe ser
+ * mayor a cero" validation errors when submitted without a corresponding positive invoice.
+ */
+const CREDIT_NOTE_TYPES = new Set(["NOTA_CREDITO_A", "NOTA_CREDITO_B", "NOTA_CREDITO_C"]);
+
+export function isCreditNoteType(invoiceType: string): boolean {
+  return CREDIT_NOTE_TYPES.has(invoiceType);
+}
+
+/**
  * Categories that use the "Detalle Mensual" form (SiRADIG v1.99+).
  * These forms have #mesDesde as a hidden input instead of a visible select.
  * Period is set via "Agregar Mes Individual" (#btn_alta_mes) dialog,

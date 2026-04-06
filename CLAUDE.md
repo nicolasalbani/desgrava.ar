@@ -101,6 +101,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `rate-limit` — in-memory rate limiter (5 tests)
 - `subscription/` — plans constants, access control logic (22 tests)
 - `soporte/` — system prompt content, tool definitions (incl. job type labels, failed automation lookup), types (22 tests)
+- `email` — sendBugFixPREmail function (4 tests)
 - `fiscal-year` — fiscal year read-only cutoff logic, available years (18 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
@@ -124,6 +125,7 @@ Custom skills in `.claude/skills/`:
 - `/implement-loop <task>` — Autonomous loop: code until lint+format+build+test all pass (max 10 iterations). For ARCA/SiRADIG automation tasks, includes a live-testing loop: run job → check logs → observe with `agent-browser` → fix → retry.
 - `/arca-assisted-navigation <flow>` — Record a live ARCA/SiRADIG browsing session, then generate Playwright automation code, tests, and docs. Auto-triggers when working on automation tasks.
 - `/write-spec <description>` — Generate a feature spec grounded in the current project state. Reads `specs/_template.md`, understands architecture, asks clarifying questions, and writes to `specs/`.
+- `/fix-ticket [--env dev|prod]` — Scheduled bug fix agent: fetches open support tickets, classifies bugs via AI, fixes them with `/fix-bug`, creates `fix/<ticket-id>` branches and PRs, updates ticket status to `IN_PROGRESS`, and emails the developer.
 
 ## Acceptance Criteria
 
@@ -131,4 +133,4 @@ Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_te
 
 ## Environment Variables
 
-`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for Railway cron endpoint auth), `MERCADOPAGO_ACCESS_TOKEN` (MercadoPago API key for subscriptions), `MERCADOPAGO_WEBHOOK_SECRET` (webhook signature validation), `SUPPORT_EMAIL` (email for new ticket notifications), `SUPPORT_WHATSAPP` (WhatsApp number for escalation, e.g. 5491112345678).
+`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for Railway cron endpoint auth), `MERCADOPAGO_ACCESS_TOKEN` (MercadoPago API key for subscriptions), `MERCADOPAGO_WEBHOOK_SECRET` (webhook signature validation), `SUPPORT_EMAIL` (email for new ticket notifications + bug fix PR notifications), `SUPPORT_WHATSAPP` (WhatsApp number for escalation, e.g. 5491112345678), `PROD_API_URL` (production API base URL for fix-ticket agent), `PROD_CRON_SECRET` (production CRON_SECRET for fix-ticket agent).
