@@ -472,6 +472,16 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Prevent submitting invoices for read-only fiscal years (after March 31st cutoff)
+      if (isFiscalYearReadOnly(invoice.fiscalYear)) {
+        return NextResponse.json(
+          {
+            error: `El período fiscal ${invoice.fiscalYear} ya no está disponible en SiRADIG`,
+          },
+          { status: 400 },
+        );
+      }
+
       // Prevent submitting invoices for future months
       const now = new Date();
       const currentYear = now.getFullYear();
