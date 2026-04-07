@@ -68,22 +68,6 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     "No deducible: el comprobante NO corresponde a ninguna categoría de deducción del Impuesto a las Ganancias. Incluye compras de supermercado, combustible, restaurantes, indumentaria personal, electrónica de uso personal, servicios públicos (luz, gas, agua), suscripciones de entretenimiento (Netflix, Spotify), transporte, y cualquier otro gasto de consumo personal que no sea deducible según la normativa vigente. Usá esta categoría cuando el proveedor o servicio claramente no encaja en ninguna deducción permitida.",
 };
 
-const SYSTEM_PROMPT = `Sos un asistente experto en impuestos argentinos, específicamente en el Impuesto a las Ganancias y el sistema SiRADIG (formulario F.572 Web) de ARCA (ex-AFIP).
-
-Tu tarea es clasificar el texto de una factura o comprobante en la categoría de deducción correcta del SiRADIG.
-
-Las categorías disponibles son:
-
-${ALL_DEDUCTION_CATEGORIES.map((cat) => `- ${cat}: ${CATEGORY_DESCRIPTIONS[cat]}`).join("\n\n")}
-
-INSTRUCCIONES:
-- Analizá el texto del comprobante y determiná a qué categoría de deducción corresponde.
-- Basate en el tipo de servicio o bien que describe la factura, el rubro del proveedor, y cualquier otro dato relevante.
-- Respondé ÚNICAMENTE con el identificador exacto de la categoría (por ejemplo: CUOTAS_MEDICO_ASISTENCIALES).
-- Si el comprobante claramente no corresponde a ninguna deducción fiscal (supermercado, combustible, restaurante, consumo personal, etc.), respondé NO_DEDUCIBLE.
-- Si el comprobante podría ser deducible pero no podés determinar la categoría exacta con certeza, respondé NO_DEDUCIBLE. El usuario podrá reclasificarlo manualmente.
-- No incluyas explicaciones, solo el identificador.`;
-
 /**
  * Keyword-based pre-classification rules.
  * Checked before calling OpenAI to save cost and ensure deterministic results.
@@ -92,17 +76,52 @@ const KEYWORD_RULES: { pattern: RegExp; category: string }[] = [
   { pattern: /\balquiler\b/i, category: "ALQUILER_VIVIENDA" },
 ];
 
-export function classifyCategoryByKeywords(text: string): string | null {
+export function classifyCategoryByKeywords(
+  text: string,
+  excludeCategories?: string[],
+): string | null {
   for (const rule of KEYWORD_RULES) {
+    if (excludeCategories?.includes(rule.category)) continue;
     if (rule.pattern.test(text)) return rule.category;
   }
   return null;
 }
 
-export async function classifyCategory(invoiceText: string): Promise<string> {
+export async function classifyCategory(
+  invoiceText: string,
+  excludeCategories?: string[],
+): Promise<string> {
   // Fast keyword-based classification before calling OpenAI
-  const keywordMatch = classifyCategoryByKeywords(invoiceText);
+  const keywordMatch = classifyCategoryByKeywords(invoiceText, excludeCategories);
   if (keywordMatch) return keywordMatch;
+
+  const categories = excludeCategories?.length
+    ? ALL_DEDUCTION_CATEGORIES.filter((c) => !excludeCategories.includes(c))
+    : ALL_DEDUCTION_CATEGORIES;
+
+  const categoryList = categories
+    .map((cat) => `- ${cat}: ${CATEGORY_DESCRIPTIONS[cat]}`)
+    .join("\n\n");
+
+  const exclusionNote = excludeCategories?.length
+    ? `\n- NO clasifiques como: ${excludeCategories.join(", ")}. Esas categorías fueron descartadas para este comprobante.`
+    : "";
+
+  const systemPrompt = `Sos un asistente experto en impuestos argentinos, específicamente en el Impuesto a las Ganancias y el sistema SiRADIG (formulario F.572 Web) de ARCA (ex-AFIP).
+
+Tu tarea es clasificar el texto de una factura o comprobante en la categoría de deducción correcta del SiRADIG.
+
+Las categorías disponibles son:
+
+${categoryList}
+
+INSTRUCCIONES:
+- Analizá el texto del comprobante y determiná a qué categoría de deducción corresponde.
+- Basate en el tipo de servicio o bien que describe la factura, el rubro del proveedor, y cualquier otro dato relevante.
+- Respondé ÚNICAMENTE con el identificador exacto de la categoría (por ejemplo: CUOTAS_MEDICO_ASISTENCIALES).
+- Si el comprobante claramente no corresponde a ninguna deducción fiscal (supermercado, combustible, restaurante, consumo personal, etc.), respondé NO_DEDUCIBLE.
+- Si el comprobante podría ser deducible pero no podés determinar la categoría exacta con certeza, respondé NO_DEDUCIBLE. El usuario podrá reclasificarlo manualmente.
+- No incluyas explicaciones, solo el identificador.${exclusionNote}`;
 
   try {
     const response = await getOpenAI().chat.completions.create({
@@ -110,7 +129,7 @@ export async function classifyCategory(invoiceText: string): Promise<string> {
       temperature: 0,
       max_tokens: 50,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         {
           role: "user",
           content: `Texto del comprobante:\n\n${invoiceText.substring(0, 3000)}`,
@@ -120,7 +139,7 @@ export async function classifyCategory(invoiceText: string): Promise<string> {
 
     const result = response.choices[0]?.message?.content?.trim() ?? "";
 
-    if ((ALL_DEDUCTION_CATEGORIES as readonly string[]).includes(result)) {
+    if ((categories as readonly string[]).includes(result)) {
       // OTRAS_DEDUCCIONES is unreliable from automatic classification —
       // treat as NO_DEDUCIBLE so the user can reclassify manually.
       if (result === "OTRAS_DEDUCCIONES") return "NO_DEDUCIBLE";

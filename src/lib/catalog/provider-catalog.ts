@@ -2,6 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { classifyCategory } from "@/lib/ocr/category-classifier";
 import type { DeductionCategory, CatalogSource } from "@/generated/prisma/client";
 
+/**
+ * Minimum invoice amount (ARS) to accept an AI classification of ALQUILER_VIVIENDA.
+ * Below this threshold, the provider is likely not a housing landlord (e.g., equipment
+ * rental, party venues) and the classification is retried excluding rent.
+ */
+export const RENT_AMOUNT_THRESHOLD = 100_000;
+
 export interface ResolveCategoryInput {
   cuit: string;
   providerName?: string;
@@ -61,6 +68,7 @@ const NON_DEDUCTIBLE_KEYWORDS = [
   "mercadolibre",
   "mercado libre",
   "fiestas",
+  "maquinaria",
   "convenciones",
   "eventos",
 ];
@@ -98,7 +106,8 @@ export async function resolveCategory(input: ResolveCategoryInput): Promise<stri
 
   // 2. PDF-based classification
   if (input.pdfText && input.pdfText.length > 20) {
-    const category = await classifyCategory(input.pdfText);
+    let category = await classifyCategory(input.pdfText);
+    category = await reclassifyIfRentBelowThreshold(category, input.amount, input.pdfText);
     await writeCatalogEntry(cuit, input.providerName ?? null, category, "AI_PDF");
     return category;
   }
@@ -107,7 +116,8 @@ export async function resolveCategory(input: ResolveCategoryInput): Promise<stri
   const webInfo = (await lookupCuit360(cuit)) ?? (await lookupCuitOnline(cuit));
   if (webInfo) {
     const classificationText = buildClassificationText(input, webInfo);
-    const category = await classifyCategory(classificationText);
+    let category = await classifyCategory(classificationText);
+    category = await reclassifyIfRentBelowThreshold(category, input.amount, classificationText);
     await writeCatalogEntry(
       cuit,
       webInfo.razonSocial || input.providerName || null,
@@ -119,7 +129,8 @@ export async function resolveCategory(input: ResolveCategoryInput): Promise<stri
 
   // 4. Fallback: classify from invoice metadata alone
   const fallbackText = buildClassificationText(input, null);
-  const category = await classifyCategory(fallbackText);
+  let category = await classifyCategory(fallbackText);
+  category = await reclassifyIfRentBelowThreshold(category, input.amount, fallbackText);
   await writeCatalogEntry(cuit, input.providerName || null, category, "AI_INVOICE");
   return category;
 }
@@ -318,6 +329,24 @@ export function parseCuitOnlineActivities(html: string): string[] {
   }
 
   return actividades;
+}
+
+// ── Rent threshold re-classification ────────────────────────
+
+/**
+ * If the classification is ALQUILER_VIVIENDA but the invoice amount is below
+ * the rent threshold, re-classify excluding rent. Returns the original
+ * category unchanged when the threshold is met or amount is unavailable.
+ */
+async function reclassifyIfRentBelowThreshold(
+  category: string,
+  amount: number | undefined,
+  classificationText: string,
+): Promise<string> {
+  if (category === "ALQUILER_VIVIENDA" && amount != null && amount < RENT_AMOUNT_THRESHOLD) {
+    return classifyCategory(classificationText, ["ALQUILER_VIVIENDA"]);
+  }
+  return category;
 }
 
 // ── Helpers ─────────────────────────────────────────────────
