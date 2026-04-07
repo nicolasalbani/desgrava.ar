@@ -280,11 +280,14 @@ export function OnboardingStepSubmit({ activeJobId, onComplete }: Props) {
                 <p className="text-muted-foreground truncate text-xs">{label}</p>
                 <p className="text-muted-foreground truncate text-xs">
                   {inv.invoiceDate
-                    ? new Date(inv.invoiceDate).toLocaleDateString("es-AR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      })
+                    ? new Date(inv.invoiceDate.slice(0, 10) + "T00:00:00").toLocaleDateString(
+                        "es-AR",
+                        {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        },
+                      )
                     : "Sin fecha"}
                 </p>
               </div>
