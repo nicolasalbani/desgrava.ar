@@ -20,6 +20,7 @@ export async function GET() {
     activeSubmitInvoiceJob,
     invoiceCount,
     completedSubmitJob,
+    employerCount,
   ] = await Promise.all([
     prisma.arcaCredential.findUnique({
       where: { userId },
@@ -67,6 +68,9 @@ export async function GET() {
       where: { userId, jobType: "SUBMIT_INVOICE", status: "COMPLETED" },
       select: { id: true },
     }),
+    prisma.employer.count({
+      where: { userId, fiscalYear },
+    }),
   ]);
 
   // Derive the step the user should be on.
@@ -94,5 +98,6 @@ export async function GET() {
     activeSubmitInvoiceJobId: activeSubmitInvoiceJob?.id ?? null,
     deducibleInvoiceCount: invoiceCount,
     hasCompletedSubmission: !!completedSubmitJob,
+    hasEmployers: employerCount > 0,
   });
 }

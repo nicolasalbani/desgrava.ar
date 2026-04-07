@@ -10,13 +10,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const year = Number(req.nextUrl.searchParams.get("year"));
+  const searchParams = req.nextUrl.searchParams;
+  const year = Number(searchParams.get("year"));
   if (!year) {
     return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
   }
 
+  const countOnly = searchParams.get("count") === "true";
+  const where = { userId: session.user.id, fiscalYear: year };
+
+  if (countOnly) {
+    const count = await prisma.employer.count({ where });
+    return NextResponse.json({ count });
+  }
+
   const employers = await prisma.employer.findMany({
-    where: { userId: session.user.id, fiscalYear: year },
+    where,
     orderBy: { createdAt: "asc" },
   });
 

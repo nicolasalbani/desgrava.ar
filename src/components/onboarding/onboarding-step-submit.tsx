@@ -27,6 +27,7 @@ interface InvoiceOption {
   providerCuit: string;
   amount: string;
   deductionCategory: string;
+  invoiceDate: string | null;
 }
 
 export function OnboardingStepSubmit({ activeJobId, onComplete }: Props) {
@@ -76,12 +77,14 @@ export function OnboardingStepSubmit({ activeJobId, onComplete }: Props) {
             providerCuit: string;
             amount: string;
             deductionCategory: string;
+            invoiceDate: string | null;
           }) => ({
             id: inv.id,
             providerName: inv.providerName,
             providerCuit: inv.providerCuit,
             amount: inv.amount,
             deductionCategory: inv.deductionCategory,
+            invoiceDate: inv.invoiceDate,
           }),
         );
         setInvoices(items);
@@ -275,6 +278,15 @@ export function OnboardingStepSubmit({ activeJobId, onComplete }: Props) {
                   {inv.providerName || inv.providerCuit}
                 </p>
                 <p className="text-muted-foreground truncate text-xs">{label}</p>
+                <p className="text-muted-foreground truncate text-xs">
+                  {inv.invoiceDate
+                    ? new Date(inv.invoiceDate).toLocaleDateString("es-AR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })
+                    : "Sin fecha"}
+                </p>
               </div>
               <span className="text-sm font-medium tabular-nums">{formatAmount(inv.amount)}</span>
             </button>

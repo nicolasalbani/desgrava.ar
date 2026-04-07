@@ -20,6 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AttentionBadge } from "@/components/shared/attention-badge";
 import { useAttentionCounts } from "@/contexts/attention-counts";
 import { useDomesticWorkerCount } from "@/contexts/domestic-worker-count";
+import { useEmployerCount } from "@/contexts/employer-count";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 const navItems = [
@@ -41,6 +42,7 @@ export function DashboardSidebar() {
   const pathname = usePathname();
   const { facturas, recibos } = useAttentionCounts();
   const { hasWorkers, loading: workersLoading } = useDomesticWorkerCount();
+  const { hasEmployers, loading: employersLoading } = useEmployerCount();
 
   const badgeCounts: Record<string, number> = {
     "/facturas": facturas,
@@ -63,7 +65,13 @@ export function DashboardSidebar() {
               pathname === item.href ||
               (item.href !== "/dashboard" && pathname.startsWith(item.href));
             const badgeCount = badgeCounts[item.href];
-            const isDisabled = item.href === "/recibos" && !workersLoading && !hasWorkers;
+            const isDisabledRecibos = item.href === "/recibos" && !workersLoading && !hasWorkers;
+            const isDisabledFacturas =
+              item.href === "/facturas" && !employersLoading && !hasEmployers;
+            const isDisabled = isDisabledRecibos || isDisabledFacturas;
+            const disabledTooltip = isDisabledRecibos
+              ? "Primero registrá trabajadores a cargo en Perfil impositivo"
+              : "Primero importá tu perfil impositivo con al menos un empleador";
 
             if (isDisabled) {
               return (
@@ -75,9 +83,7 @@ export function DashboardSidebar() {
                         {item.label}
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="right">
-                      Primero registrá trabajadores a cargo en Perfil impositivo
-                    </TooltipContent>
+                    <TooltipContent side="right">{disabledTooltip}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               );

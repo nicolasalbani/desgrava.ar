@@ -18,7 +18,7 @@ const ONBOARDING_PROFILE_STEPS: StepDefinition[] = [
 
 interface Props {
   pullProfileJobId: string | null;
-  onComplete: () => void;
+  onComplete: (hasEmployers: boolean) => void;
 }
 
 interface ProfileSummary {
@@ -163,7 +163,7 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
   // Auto-advance when profile pull completes (with or without data)
   useEffect(() => {
     if (jobStatus === "COMPLETED" && summary) {
-      const timer = setTimeout(() => onComplete(), 1500);
+      const timer = setTimeout(() => onComplete(summary.employers > 0), 1500);
       return () => clearTimeout(timer);
     }
   }, [jobStatus, summary, onComplete]);
@@ -249,7 +249,7 @@ export function OnboardingStepProfile({ pullProfileJobId, onComplete }: Props) {
               )}
               Reintentar
             </Button>
-            <Button className="flex-1" onClick={onComplete}>
+            <Button className="flex-1" onClick={() => onComplete(false)}>
               <SkipForward className="mr-2 h-4 w-4" />
               Omitir
             </Button>
