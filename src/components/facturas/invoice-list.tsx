@@ -758,7 +758,9 @@ export function InvoiceList({
                         <span className="text-muted-foreground/50 text-xs">·</span>
                         <span className="text-muted-foreground shrink-0 text-xs">
                           {inv.invoiceDate
-                            ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
+                            ? new Date(
+                                inv.invoiceDate.slice(0, 10) + "T00:00:00",
+                              ).toLocaleDateString("es-AR")
                             : `${inv.fiscalMonth}/${inv.fiscalYear}`}
                         </span>
                       </div>
@@ -1214,7 +1216,9 @@ export function InvoiceList({
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm">
                             {inv.invoiceDate
-                              ? new Date(inv.invoiceDate).toLocaleDateString("es-AR")
+                              ? new Date(
+                                  inv.invoiceDate.slice(0, 10) + "T00:00:00",
+                                ).toLocaleDateString("es-AR")
                               : "-"}
                           </TableCell>
                           <TableCell className="text-right text-sm font-medium tabular-nums">

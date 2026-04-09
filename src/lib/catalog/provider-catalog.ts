@@ -2,6 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { classifyCategory } from "@/lib/ocr/category-classifier";
 import type { DeductionCategory, CatalogSource } from "@/generated/prisma/client";
 
+/**
+ * Minimum invoice amount (ARS) to accept an AI classification of ALQUILER_VIVIENDA.
+ * Below this threshold, the provider is likely not a housing landlord (e.g., equipment
+ * rental, party venues) and the classification is retried excluding rent.
+ */
+export const RENT_AMOUNT_THRESHOLD = 100_000;
+
 export interface ResolveCategoryInput {
   cuit: string;
   providerName?: string;
@@ -61,6 +68,7 @@ const NON_DEDUCTIBLE_KEYWORDS = [
   "mercadolibre",
   "mercado libre",
   "fiestas",
+  "maquinaria",
   "convenciones",
   "eventos",
 ];
@@ -98,7 +106,8 @@ export async function resolveCategory(input: ResolveCategoryInput): Promise<stri
 
   // 2. PDF-based classification
   if (input.pdfText && input.pdfText.length > 20) {
-    const category = await classifyCategory(input.pdfText);
+    let category = await classifyCategory(input.pdfText);
+    category = await reclassifyIfRentBelowThreshold(category, input.amount, input.pdfText);
     await writeCatalogEntry(cuit, input.providerName ?? null, category, "AI_PDF");
     return category;
   }
@@ -107,7 +116,8 @@ export async function resolveCategory(input: ResolveCategoryInput): Promise<stri
   const webInfo = (await lookupCuit360(cuit)) ?? (await lookupCuitOnline(cuit));
   if (webInfo) {
     const classificationText = buildClassificationText(input, webInfo);
-    const category = await classifyCategory(classificationText);
+    let category = await classifyCategory(classificationText);
+    category = await reclassifyIfRentBelowThreshold(category, input.amount, classificationText);
     await writeCatalogEntry(
       cuit,
       webInfo.razonSocial || input.providerName || null,
@@ -119,7 +129,8 @@ export async function resolveCategory(input: ResolveCategoryInput): Promise<stri
 
   // 4. Fallback: classify from invoice metadata alone
   const fallbackText = buildClassificationText(input, null);
-  const category = await classifyCategory(fallbackText);
+  let category = await classifyCategory(fallbackText);
+  category = await reclassifyIfRentBelowThreshold(category, input.amount, fallbackText);
   await writeCatalogEntry(cuit, input.providerName || null, category, "AI_INVOICE");
   return category;
 }
@@ -188,10 +199,16 @@ export async function lookupCuit360(cuit: string): Promise<WebLookupResult | nul
  */
 export function parseBusinessInfo(html: string): WebLookupResult | null {
   // Extract razon social from <title>
-  // Title format: "CUIT 30-12345678-9 - RAZON SOCIAL | Sistemas360"
-  // The CUIT part has format XX-XXXXXXXX-X, so we skip past the last "- " before the name
-  const titleMatch = html.match(/<title>CUIT\s+[\d-]+\s+-\s+(.+?)\s*\|/i);
-  const razonSocial = titleMatch?.[1]?.trim() || null;
+  // New format: "Buscador de CUIT – RAZON SOCIAL (CUIT 30-12345678-9)"
+  // Old format: "CUIT 30-12345678-9 - RAZON SOCIAL | Sistemas360"
+  let razonSocial: string | null = null;
+  const newTitleMatch = html.match(/<title>Buscador de CUIT\s+[–—-]\s+(.+?)\s*\(CUIT\s+[\d-]+\)/i);
+  if (newTitleMatch) {
+    razonSocial = newTitleMatch[1]?.trim() || null;
+  } else {
+    const oldTitleMatch = html.match(/<title>CUIT\s+[\d-]+\s+-\s+(.+?)\s*\|/i);
+    razonSocial = oldTitleMatch?.[1]?.trim() || null;
+  }
 
   // Extract activities from the list items in the "Actividades" section
   // The page uses <li> tags for each activity description
@@ -274,13 +291,24 @@ export function parseCuitOnlineSearch(
   const linkMatch = html.match(linkRegex);
   const detailSlug = linkMatch?.[1] ?? null;
 
-  // Extract business name from the link text or page content
-  // The search result has: <a href="detalle/...">BUSINESS NAME</a>
+  // Extract business name from the link's title attribute or inner text
+  // The search result has: <a href="detalle/..." title="Ver detalles de NAME" class="denominacion">NAME</a>
   let razonSocial: string | null = null;
   if (linkMatch) {
-    const nameRegex = new RegExp(`detalle/${cuit}/[\\w-]+\\.html[^>]*>\\s*([^<]+)`, "i");
-    const nameMatch = html.match(nameRegex);
-    razonSocial = nameMatch?.[1]?.trim() || null;
+    // Try title attribute first: title="Ver detalles de BUSINESS NAME"
+    const titleRegex = new RegExp(
+      `detalle/${cuit}/[\\w-]+\\.html[^>]*title="Ver detalles de\\s+([^"]+)"`,
+      "i",
+    );
+    const titleMatch = html.match(titleRegex);
+    razonSocial = titleMatch?.[1]?.trim() || null;
+
+    // Fallback: inner text after closing >
+    if (!razonSocial) {
+      const nameRegex = new RegExp(`detalle/${cuit}/[\\w-]+\\.html[^>]*>\\s*([^<]+)`, "i");
+      const nameMatch = html.match(nameRegex);
+      razonSocial = nameMatch?.[1]?.trim() || null;
+    }
   }
 
   if (!razonSocial && !detailSlug) return null;
@@ -318,6 +346,24 @@ export function parseCuitOnlineActivities(html: string): string[] {
   }
 
   return actividades;
+}
+
+// ── Rent threshold re-classification ────────────────────────
+
+/**
+ * If the classification is ALQUILER_VIVIENDA but the invoice amount is below
+ * the rent threshold, re-classify excluding rent. Returns the original
+ * category unchanged when the threshold is met or amount is unavailable.
+ */
+async function reclassifyIfRentBelowThreshold(
+  category: string,
+  amount: number | undefined,
+  classificationText: string,
+): Promise<string> {
+  if (category === "ALQUILER_VIVIENDA" && amount != null && amount < RENT_AMOUNT_THRESHOLD) {
+    return classifyCategory(classificationText, ["ALQUILER_VIVIENDA"]);
+  }
+  return category;
 }
 
 // ── Helpers ─────────────────────────────────────────────────

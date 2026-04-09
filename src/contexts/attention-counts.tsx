@@ -6,6 +6,7 @@ import { useFiscalYear } from "@/contexts/fiscal-year";
 interface AttentionCountsContextType {
   facturas: number;
   recibos: number;
+  perfil: number;
   /** Call after a local mutation that changes attention state */
   invalidate: () => void;
 }
@@ -13,6 +14,7 @@ interface AttentionCountsContextType {
 const AttentionCountsContext = createContext<AttentionCountsContextType>({
   facturas: 0,
   recibos: 0,
+  perfil: 0,
   invalidate: () => {},
 });
 
@@ -20,6 +22,7 @@ export function AttentionCountsProvider({ children }: { children: React.ReactNod
   const { fiscalYear } = useFiscalYear();
   const [facturas, setFacturas] = useState(0);
   const [recibos, setRecibos] = useState(0);
+  const [perfil, setPerfil] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectDelayRef = useRef(1000);
@@ -40,6 +43,7 @@ export function AttentionCountsProvider({ children }: { children: React.ReactNod
         const data = await res.json();
         setFacturas(data.facturas);
         setRecibos(data.recibos);
+        setPerfil(data.perfil);
       }
     } catch {
       // Silently fail, SSE will pick up
@@ -102,7 +106,7 @@ export function AttentionCountsProvider({ children }: { children: React.ReactNod
   }, [fetchCounts]);
 
   return (
-    <AttentionCountsContext.Provider value={{ facturas, recibos, invalidate }}>
+    <AttentionCountsContext.Provider value={{ facturas, recibos, perfil, invalidate }}>
       {children}
     </AttentionCountsContext.Provider>
   );

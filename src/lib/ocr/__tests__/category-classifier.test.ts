@@ -28,6 +28,22 @@ describe("classifyCategoryByKeywords", () => {
     expect(classifyCategoryByKeywords("Cuota medicina prepaga")).toBeNull();
     expect(classifyCategoryByKeywords("")).toBeNull();
   });
+
+  it("skips excluded categories", () => {
+    expect(classifyCategoryByKeywords("Alquiler departamento", ["ALQUILER_VIVIENDA"])).toBeNull();
+  });
+
+  it("still matches non-excluded categories", () => {
+    expect(classifyCategoryByKeywords("Alquiler departamento", ["GASTOS_MEDICOS"])).toBe(
+      "ALQUILER_VIVIENDA",
+    );
+  });
+
+  it("works with undefined excludeCategories", () => {
+    expect(classifyCategoryByKeywords("Alquiler departamento", undefined)).toBe(
+      "ALQUILER_VIVIENDA",
+    );
+  });
 });
 
 // Integration test with the real PDF fixture

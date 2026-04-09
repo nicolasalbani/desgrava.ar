@@ -20,6 +20,8 @@ interface OnboardingState {
   activeSubmitInvoiceJobId: string | null;
   deducibleInvoiceCount: number;
   hasCompletedSubmission: boolean;
+  hasEmployers: boolean;
+  activePushEmployersJobId: string | null;
 }
 
 const STEP_LABELS = [
@@ -42,12 +44,25 @@ export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
       .then((r) => r.json())
       .then((data: OnboardingState) => {
         setState(data);
-        // Resume at correct step, capped at 4
-        setCurrentStep(Math.min(data.step, 4));
+        const resumeStep = Math.min(data.step, 4);
+        // If we'd resume at step 3 or 4 but user has no employers,
+        // go back to step 2 if there's an active push job (user was adding employer),
+        // otherwise auto-complete
+        if (resumeStep >= 3 && !data.hasEmployers) {
+          if (data.activePushEmployersJobId) {
+            setCurrentStep(2);
+            setState(data);
+            return;
+          }
+          completeOnboarding();
+          return;
+        }
+        setCurrentStep(resumeStep);
         if (data.activePullProfileJobId) {
           setPullProfileJobId(data.activePullProfileJobId);
         }
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const completeOnboarding = useCallback(async () => {
@@ -141,14 +156,21 @@ export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
           {currentStep === 2 && (
             <OnboardingStepProfile
               pullProfileJobId={pullProfileJobId}
-              onComplete={() => advanceToStep(3)}
+              activePushEmployersJobId={state.activePushEmployersJobId}
+              onComplete={(hasEmployers) => {
+                if (hasEmployers) {
+                  advanceToStep(3);
+                } else {
+                  completeOnboarding();
+                }
+              }}
             />
           )}
           {currentStep === 3 && (
             <OnboardingStepInvoices
               activeJobId={state.activePullComprobantesJobId}
               onComplete={(hasDeducible) => {
-                if (hasDeducible) {
+                if (hasDeducible && state.hasEmployers) {
                   advanceToStep(4);
                 } else {
                   completeOnboarding();

@@ -158,7 +158,17 @@ export async function navigateToSiradigMainMenu(
       .catch(() => false);
 
     if (hasPeriodSelect) {
-      await periodSelect.selectOption(String(fiscalYear));
+      // Verify the requested fiscal year is available in the dropdown
+      const options = await periodSelect.locator("option").allTextContents();
+      const yearStr = String(fiscalYear);
+      const yearAvailable = options.some((opt) => opt.trim() === yearStr);
+      if (!yearAvailable) {
+        return {
+          success: false,
+          error: `El período fiscal ${fiscalYear} no está disponible en SiRADIG. Períodos disponibles: ${options.filter((o) => o.trim()).join(", ")}`,
+        };
+      }
+      await periodSelect.selectOption(yearStr);
 
       log("Haciendo click en Continuar...");
       const continueBtn = page.getByText("Continuar").first();
@@ -265,7 +275,17 @@ export async function navigateToDeductionSection(
       .catch(() => false);
 
     if (hasPeriodSelect) {
-      await periodSelect.selectOption(String(fiscalYear));
+      // Verify the requested fiscal year is available in the dropdown
+      const options = await periodSelect.locator("option").allTextContents();
+      const yearStr = String(fiscalYear);
+      const yearAvailable = options.some((opt) => opt.trim() === yearStr);
+      if (!yearAvailable) {
+        return {
+          success: false,
+          error: `El período fiscal ${fiscalYear} no está disponible en SiRADIG. Períodos disponibles: ${options.filter((o) => o.trim()).join(", ")}`,
+        };
+      }
+      await periodSelect.selectOption(yearStr);
 
       await capture(
         await page.screenshot({ fullPage: true }),

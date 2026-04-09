@@ -12,6 +12,7 @@ const ONBOARDING_PULL_STEPS: StepDefinition[] = [
   { key: "siradig", label: "Abriendo SiRADIG" },
   { key: "siradig_extract", label: "Extrayendo comprobantes deducidos" },
   { key: "download", label: "Extrayendo comprobantes deducibles" },
+  { key: "classify", label: "Clasificando proveedores" },
 ];
 
 interface Props {

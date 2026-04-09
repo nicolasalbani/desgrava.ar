@@ -19,9 +19,61 @@ Parse the `--env` flag from arguments. Valid values: `dev` (default) or `prod`.
 Resolve the API base URL and auth secret based on the environment:
 
 - **dev**: `http://localhost:3000` + `CRON_SECRET` env var
-- **prod**: `PROD_API_URL` env var + `PROD_CRON_SECRET` env var
+- **prod**: `PROD_API_URL` env var + `PROD_CRON_SECRET` env var + `PROD_DATABASE_URL` env var (read-only connection string for pg_dump)
 
 If the required env vars are missing for the selected environment, stop and report the error.
+
+## Phase 0: Sync Prod Database (prod only)
+
+When running with `--env prod`, import the production database into the local dev database so the agent has full access to automation jobs, invoices, receipts, and all related data — matching the dev experience exactly.
+
+### Step 0.1: Dump prod database
+
+```bash
+pg_dump "$PROD_DATABASE_URL" \
+  --no-owner --no-acl --clean --if-exists \
+  --format=custom \
+  -f /tmp/prod_dump.pgdump
+```
+
+If this fails (connection refused, auth error, missing `PROD_DATABASE_URL`), stop and report — the agent cannot work without prod data.
+
+### Step 0.2: Restore into local dev database
+
+```bash
+pg_restore --no-owner --no-acl --clean --if-exists \
+  -d "$DATABASE_URL" \
+  /tmp/prod_dump.pgdump
+```
+
+Warnings about "does not exist" during `--clean` are expected and safe to ignore. Errors during restore are not — stop and report.
+
+### Step 0.3: Sync Prisma migration history
+
+The prod database schema is fully up-to-date but its `_prisma_migrations` table may not list all local migrations. Mark all migrations as applied so `prisma migrate deploy` won't try to re-run them:
+
+```bash
+for migration_dir in prisma/migrations/[0-9]*/; do
+  migration_name=$(basename "$migration_dir")
+  npx prisma migrate resolve --applied "$migration_name" 2>/dev/null
+done
+```
+
+### Step 0.4: Regenerate Prisma client (if needed)
+
+```bash
+npx prisma generate
+```
+
+### Step 0.5: Cleanup
+
+```bash
+rm -f /tmp/prod_dump.pgdump
+```
+
+After this phase, all subsequent phases use the local `DATABASE_URL` as usual — but now it contains production data.
+
+**Skip this phase entirely when running with `--env dev`.**
 
 ## Phase 1: Fetch Open Tickets
 

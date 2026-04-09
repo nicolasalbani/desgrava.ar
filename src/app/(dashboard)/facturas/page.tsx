@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, Suspense, type ElementType } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Upload, PenLine, Mail, Copy, Check, X, Download } from "lucide-react";
+import { Upload, PenLine, Mail, Copy, Check, X, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,6 +18,7 @@ import { ImportArcaDialog } from "@/components/facturas/import-arca-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
+import { useEmployerCount } from "@/contexts/employer-count";
 
 // ── Expanding icon button ────────────────────────────────────────
 
@@ -200,6 +201,7 @@ function FacturasInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const readOnly = useFiscalYearReadOnly();
+  const { hasEmployers, loading: employersLoading } = useEmployerCount();
   const hadZeroInvoices = useRef(false);
   const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -243,6 +245,24 @@ function FacturasInner() {
     if (key === "upload") openUpload();
     else if (key === "email") openEmail();
     else openManual();
+  }
+
+  if (!employersLoading && !hasEmployers) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-4">
+        <div className="text-center">
+          <FileText className="text-muted-foreground/40 mx-auto mb-4 h-12 w-12" />
+          <h2 className="text-lg font-semibold">Sin empleadores registrados</h2>
+          <p className="text-muted-foreground mt-1 max-w-sm text-sm">
+            Para cargar comprobantes deducibles necesitás tener al menos un empleador en tu perfil
+            impositivo.
+          </p>
+          <Button variant="outline" className="mt-4" onClick={() => router.push("/perfil")}>
+            Ir a Perfil impositivo
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

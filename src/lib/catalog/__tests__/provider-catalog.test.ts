@@ -9,7 +9,14 @@ import {
 // ── parseBusinessInfo ────────────────────────────────────────
 
 describe("parseBusinessInfo", () => {
-  it("extracts razon social from title tag", () => {
+  it("extracts razon social from new title format", () => {
+    const html = `<html><head><title>Buscador de CUIT – MAYCAR SOCIEDAD ANONIMA (CUIT 30-61286533-3)</title></head><body></body></html>`;
+    const result = parseBusinessInfo(html);
+    expect(result).not.toBeNull();
+    expect(result!.razonSocial).toBe("MAYCAR SOCIEDAD ANONIMA");
+  });
+
+  it("extracts razon social from old title format", () => {
     const html = `<html><head><title>CUIT 30-61286533-3 - MAYCAR SOCIEDAD ANONIMA | Sistemas360</title></head><body></body></html>`;
     const result = parseBusinessInfo(html);
     expect(result).not.toBeNull();
@@ -57,7 +64,7 @@ describe("parseBusinessInfo", () => {
   });
 
   it("returns result with only razon social when no activities", () => {
-    const html = `<html><head><title>CUIT 30-12345678-9 - EMPRESA TEST SA | Sistemas360</title></head><body><p>No data</p></body></html>`;
+    const html = `<html><head><title>Buscador de CUIT – EMPRESA TEST SA (CUIT 30-12345678-9)</title></head><body><p>No data</p></body></html>`;
     const result = parseBusinessInfo(html);
     expect(result).not.toBeNull();
     expect(result!.razonSocial).toBe("EMPRESA TEST SA");
@@ -79,7 +86,7 @@ describe("parseBusinessInfo", () => {
 
   it("handles activities with HTML tags inside li", () => {
     const html = `
-      <html><head><title>CUIT 30-12345678-9 - TEST SA | Sistemas360</title></head>
+      <html><head><title>Buscador de CUIT – TEST SA (CUIT 30-12345678-9)</title></head>
       <body>
         <li><span>SERVICIOS RELACIONADOS CON LA SALUD HUMANA N.C.P.</span></li>
       </body></html>
@@ -91,7 +98,7 @@ describe("parseBusinessInfo", () => {
   it("handles real-world HTML structure from sistemas360", () => {
     const html = `
       <html>
-      <head><title>CUIT 30-71568605-4 - MELI LOG SRL | Sistemas360</title></head>
+      <head><title>Buscador de CUIT – MELI LOG SRL (CUIT 30-71568605-4)</title></head>
       <body>
         <h6>Datos de Régimen General</h6>
         <p>Actividades:</p>
@@ -135,6 +142,21 @@ describe("parseCuitOnlineSearch", () => {
     expect(result).not.toBeNull();
     expect(result!.detailSlug).toBe("meli-log-srl");
     expect(result!.razonSocial).toBe("MELI LOG SRL");
+  });
+
+  it("extracts razon social from title attribute when inner text is absent", () => {
+    const html = `<a href="detalle/30545758314/subterraneos-de-buenos-aires-sociedad-del-estado.html" title="Ver detalles de SUBTERRANEOS DE BUENOS AIRES SOCIEDAD DEL ESTADO" class="denominacion"></a>`;
+    const result = parseCuitOnlineSearch(html, "30545758314");
+    expect(result).not.toBeNull();
+    expect(result!.detailSlug).toBe("subterraneos-de-buenos-aires-sociedad-del-estado");
+    expect(result!.razonSocial).toBe("SUBTERRANEOS DE BUENOS AIRES SOCIEDAD DEL ESTADO");
+  });
+
+  it("prefers title attribute over inner text", () => {
+    const html = `<a href="detalle/30545758314/subterraneos-de-buenos-aires-sociedad-del-estado.html" title="Ver detalles de SUBTERRANEOS DE BUENOS AIRES SOCIEDAD DEL ESTADO" class="denominacion">SUBTERRANEOS DE BUENOS AIRES SOCIEDAD DEL ESTADO</a>`;
+    const result = parseCuitOnlineSearch(html, "30545758314");
+    expect(result).not.toBeNull();
+    expect(result!.razonSocial).toBe("SUBTERRANEOS DE BUENOS AIRES SOCIEDAD DEL ESTADO");
   });
 });
 

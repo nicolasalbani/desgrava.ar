@@ -93,7 +93,7 @@ export const ARCA_SELECTORS = {
       tabLink: "#tab_principal_empleadores",
       tableRows: "tr[data-id-reg]",
       editButton: ".act_editar",
-      nuevoEmpleadorBtn: "button:has-text('Nuevo Empleador')",
+      nuevoEmpleadorBtn: "#btn_agregar_empleador",
       // Form fields
       formEmpleadorSelect: "#idEmpleadores",
       formCuit: "#cuit",
