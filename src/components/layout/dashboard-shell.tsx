@@ -33,11 +33,14 @@ export function DashboardShell({
     setShowDashboard(true);
   }
 
+  // Force providers to remount after onboarding so they refetch fresh counts
+  const providerKey = onboardingCompleted ? "ready" : "onboarding";
+
   return (
     <FiscalYearProvider>
-      <AttentionCountsProvider>
-        <DomesticWorkerCountProvider>
-          <EmployerCountProvider>
+      <AttentionCountsProvider key={providerKey}>
+        <DomesticWorkerCountProvider key={providerKey}>
+          <EmployerCountProvider key={providerKey}>
             {!onboardingCompleted && <GuidedOnboarding onComplete={handleOnboardingComplete} />}
             <div
               className={cn(

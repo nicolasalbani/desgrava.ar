@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/check-db.mjs && npx prisma migrate deploy && NODE_OPTIONS='--disable-warning=DEP0169' next dev",
+    "dev:fresh": "node scripts/check-db.mjs && npx prisma migrate reset --force && NODE_OPTIONS='--disable-warning=DEP0169' next dev",
     "postinstall": "prisma generate",
     "build": "next build",
     "start": "next start",

@@ -50,6 +50,14 @@ import type { ScreenshotMeta } from "./artifact-manager";
 
 export type LogCallback = (jobId: string, message: string) => void;
 
+/**
+ * Set a value on a SiRADIG form field and trigger its jQuery change handler.
+ * SiRADIG uses jQuery event delegation — native dispatchEvent("change") doesn't work.
+ */
+async function jqValAndTrigger(page: Page, selector: string, value: string): Promise<void> {
+  await page.evaluate(`jQuery("${selector}").val("${value}").trigger("change")`);
+}
+
 // In-memory log storage for SSE streaming
 const jobLogs = new Map<string, string[]>();
 const jobStatuses = new Map<string, string>();
@@ -756,63 +764,136 @@ async function processPushEmployers(
   await siradigPage.waitForLoadState("networkidle");
   await siradigPage.waitForTimeout(2000);
 
-  // Check if employer already exists by CUIT
-  const rows = siradigPage.locator(sel.tableRows);
-  const rowCount = await rows.count();
-  let existingRowIndex = -1;
-  const cuitDigits = employer.cuit.replace(/-/g, "");
+  await onScreenshot(
+    await siradigPage.screenshot({ fullPage: true }),
+    "employer-section",
+    "Seccion de Empleadores",
+  );
 
-  for (let i = 0; i < rowCount; i++) {
-    const rowText = (await rows.nth(i).textContent()) ?? "";
-    if (rowText.includes(cuitDigits)) {
-      existingRowIndex = i;
-      break;
+  // SiRADIG may navigate directly to the form (when no employers exist)
+  // or to the employer list. Detect which page we're on.
+  const alreadyOnForm = (await siradigPage.locator(sel.formEmpleadorSelect).count()) > 0;
+  let isNewEmployer = true;
+
+  if (alreadyOnForm) {
+    // Already on the employer form — no need to click "Nuevo Empleador"
+    await appendLogFn(jobId, "Formulario de empleador detectado, completando...", onLog);
+
+    // Select "Otro (ingresar)" via jQuery (native dispatchEvent doesn't trigger SiRADIG's jQuery handlers)
+    const cuitDigits = employer.cuit.replace(/-/g, "");
+    await jqValAndTrigger(siradigPage, sel.formEmpleadorSelect, "99");
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(1000);
+
+    // Fill CUIT and trigger AJAX lookup
+    await jqValAndTrigger(siradigPage, sel.formCuit, cuitDigits);
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(2000);
+  } else {
+    // On the employer list — check for existing or create new
+    const rows = siradigPage.locator(sel.tableRows);
+    const rowCount = await rows.count();
+    let existingRowIndex = -1;
+    const cuitDigits = employer.cuit.replace(/-/g, "");
+
+    for (let i = 0; i < rowCount; i++) {
+      const rowText = (await rows.nth(i).textContent()) ?? "";
+      if (rowText.includes(cuitDigits)) {
+        existingRowIndex = i;
+        break;
+      }
+    }
+
+    if (existingRowIndex >= 0) {
+      // Edit existing employer
+      isNewEmployer = false;
+      await appendLogFn(jobId, "Empleador existente encontrado, editando...", onLog);
+      const editBtn = rows.nth(existingRowIndex).locator(sel.editButton);
+      await editBtn.click();
+      await siradigPage.waitForLoadState("networkidle");
+      await siradigPage.waitForTimeout(1500);
+    } else {
+      // Create new employer
+      await appendLogFn(jobId, "Creando nuevo empleador...", onLog);
+      const nuevoBtn = siradigPage.locator(sel.nuevoEmpleadorBtn);
+      await nuevoBtn.waitFor({ state: "visible", timeout: 15000 });
+      await nuevoBtn.click();
+      await siradigPage.waitForLoadState("networkidle");
+      await siradigPage.waitForTimeout(1500);
+
+      // Select "Otro (ingresar)" via jQuery
+      await jqValAndTrigger(siradigPage, sel.formEmpleadorSelect, "99");
+      await siradigPage.waitForLoadState("networkidle");
+      await siradigPage.waitForTimeout(1000);
+
+      // Fill CUIT and trigger AJAX lookup
+      await jqValAndTrigger(siradigPage, sel.formCuit, cuitDigits);
+      await siradigPage.waitForLoadState("networkidle");
+      await siradigPage.waitForTimeout(2000);
     }
   }
 
-  if (existingRowIndex >= 0) {
-    // Edit existing employer
-    await appendLogFn(jobId, "Empleador existente encontrado, editando...", onLog);
-    const editBtn = rows.nth(existingRowIndex).locator(sel.editButton);
-    await editBtn.click();
-    await siradigPage.waitForLoadState("networkidle");
-    await siradigPage.waitForTimeout(1500);
-  } else {
-    // Create new employer
-    await appendLogFn(jobId, "Creando nuevo empleador...", onLog);
-    const nuevoBtn = siradigPage.locator(sel.nuevoEmpleadorBtn);
-    await nuevoBtn.click();
-    await siradigPage.waitForLoadState("networkidle");
-    await siradigPage.waitForTimeout(1500);
-
-    // Select "Otro (ingresar)" from the dropdown
-    await siradigPage.selectOption(sel.formEmpleadorSelect, "99");
-    await siradigPage.waitForTimeout(1000);
-
-    // Fill CUIT
-    await siradigPage.fill(sel.formCuit, cuitDigits);
-    // Trigger AJAX lookup for razonSocial
-    await siradigPage.locator(sel.formCuit).dispatchEvent("change");
-    await siradigPage.waitForTimeout(2000);
-  }
-
-  // Fill form fields
-  await siradigPage.fill(sel.formFechaInicio, employer.fechaInicio);
-  // Dismiss datepicker if it appears
+  // Fill date fields via jQuery (SiRADIG uses datepicker events, not native change)
+  await jqValAndTrigger(siradigPage, sel.formFechaInicio, employer.fechaInicio);
   await siradigPage.evaluate(() => {
     const dp = document.getElementById("ui-datepicker-div");
     if (dp) dp.style.display = "none";
   });
 
   if (employer.fechaFin) {
-    await siradigPage.fill(sel.formFechaFin, employer.fechaFin);
+    await jqValAndTrigger(siradigPage, sel.formFechaFin, employer.fechaFin);
     await siradigPage.evaluate(() => {
       const dp = document.getElementById("ui-datepicker-div");
       if (dp) dp.style.display = "none";
     });
   }
+  await siradigPage.waitForTimeout(500);
 
-  await siradigPage.selectOption(sel.formAgenteRetencion, employer.agenteRetencion ? "S" : "N");
+  // Set agente de retención — must use jQuery trigger so SiRADIG toggles monthly amounts visibility
+  const agenteVal = employer.agenteRetencion ? "S" : "N";
+  await jqValAndTrigger(siradigPage, sel.formAgenteRetencion, agenteVal);
+  await siradigPage.waitForTimeout(500);
+
+  // Monthly salary details are only required when agenteRetencion = N
+  // When S, SiRADIG hides the section and doesn't require it
+  if (!employer.agenteRetencion) {
+    await appendLogFn(jobId, "Agregando detalle de importes mensuales...", onLog);
+    const altaLink = siradigPage.locator("#btn_alta_importes");
+    await altaLink.waitFor({ state: "visible", timeout: 15000 });
+    await altaLink.click();
+    await siradigPage.waitForTimeout(1500);
+
+    // Determine which month to use based on fechaInicio (use the start month)
+    const startMonth = parseInt(employer.fechaInicio.split("/")[1], 10); // DD/MM/YYYY → MM
+    const monthSelect = siradigPage.locator(".ui-dialog-content select").first();
+    await monthSelect.selectOption({ index: startMonth - 1 }); // 0-indexed
+    await siradigPage.waitForTimeout(500);
+
+    // Fill required fields: remuneración bruta (1.00), SAC (0.00), and mandatory deductions (0.00)
+    await siradigPage.evaluate(() => {
+      const ids = [
+        "ing_imp_gan_brutas",
+        "sac",
+        "ing_ap_obra_soc",
+        "ing_ap_sindical",
+        "ing_ap_seg_soc",
+      ];
+      const vals = ["1.00", "0.00", "0.00", "0.00", "0.00"];
+      for (let i = 0; i < ids.length; i++) {
+        const el = document.getElementById(ids[i]) as HTMLInputElement;
+        if (el) {
+          el.value = vals[i];
+          el.dispatchEvent(new Event("change"));
+        }
+      }
+    });
+
+    // Click "Agregar" in the monthly amounts dialog (use last visible to avoid session timeout dialog)
+    const agregarBtn = siradigPage.getByRole("button", { name: "Agregar" }).last();
+    await agregarBtn.click();
+    await siradigPage.waitForLoadState("networkidle");
+    await siradigPage.waitForTimeout(1500);
+  }
 
   await onScreenshot(
     await siradigPage.screenshot({ fullPage: true }),
@@ -851,7 +932,7 @@ async function processPushEmployers(
     "Empleador guardado",
   );
 
-  const action = existingRowIndex >= 0 ? "actualizado" : "creado";
+  const action = isNewEmployer ? "creado" : "actualizado";
   await appendLogFn(jobId, `Empleador ${action} exitosamente`, onLog);
 
   setJobStatus(jobId, "COMPLETED");
@@ -862,8 +943,8 @@ async function processPushEmployers(
       completedAt: new Date(),
       resultData: JSON.parse(
         JSON.stringify({
-          created: existingRowIndex < 0 ? 1 : 0,
-          updated: existingRowIndex >= 0 ? 1 : 0,
+          created: isNewEmployer ? 1 : 0,
+          updated: isNewEmployer ? 0 : 1,
         }),
       ),
     },

@@ -199,10 +199,16 @@ export async function lookupCuit360(cuit: string): Promise<WebLookupResult | nul
  */
 export function parseBusinessInfo(html: string): WebLookupResult | null {
   // Extract razon social from <title>
-  // Title format: "CUIT 30-12345678-9 - RAZON SOCIAL | Sistemas360"
-  // The CUIT part has format XX-XXXXXXXX-X, so we skip past the last "- " before the name
-  const titleMatch = html.match(/<title>CUIT\s+[\d-]+\s+-\s+(.+?)\s*\|/i);
-  const razonSocial = titleMatch?.[1]?.trim() || null;
+  // New format: "Buscador de CUIT – RAZON SOCIAL (CUIT 30-12345678-9)"
+  // Old format: "CUIT 30-12345678-9 - RAZON SOCIAL | Sistemas360"
+  let razonSocial: string | null = null;
+  const newTitleMatch = html.match(/<title>Buscador de CUIT\s+[–—-]\s+(.+?)\s*\(CUIT\s+[\d-]+\)/i);
+  if (newTitleMatch) {
+    razonSocial = newTitleMatch[1]?.trim() || null;
+  } else {
+    const oldTitleMatch = html.match(/<title>CUIT\s+[\d-]+\s+-\s+(.+?)\s*\|/i);
+    razonSocial = oldTitleMatch?.[1]?.trim() || null;
+  }
 
   // Extract activities from the list items in the "Actividades" section
   // The page uses <li> tags for each activity description
@@ -285,13 +291,24 @@ export function parseCuitOnlineSearch(
   const linkMatch = html.match(linkRegex);
   const detailSlug = linkMatch?.[1] ?? null;
 
-  // Extract business name from the link text or page content
-  // The search result has: <a href="detalle/...">BUSINESS NAME</a>
+  // Extract business name from the link's title attribute or inner text
+  // The search result has: <a href="detalle/..." title="Ver detalles de NAME" class="denominacion">NAME</a>
   let razonSocial: string | null = null;
   if (linkMatch) {
-    const nameRegex = new RegExp(`detalle/${cuit}/[\\w-]+\\.html[^>]*>\\s*([^<]+)`, "i");
-    const nameMatch = html.match(nameRegex);
-    razonSocial = nameMatch?.[1]?.trim() || null;
+    // Try title attribute first: title="Ver detalles de BUSINESS NAME"
+    const titleRegex = new RegExp(
+      `detalle/${cuit}/[\\w-]+\\.html[^>]*title="Ver detalles de\\s+([^"]+)"`,
+      "i",
+    );
+    const titleMatch = html.match(titleRegex);
+    razonSocial = titleMatch?.[1]?.trim() || null;
+
+    // Fallback: inner text after closing >
+    if (!razonSocial) {
+      const nameRegex = new RegExp(`detalle/${cuit}/[\\w-]+\\.html[^>]*>\\s*([^<]+)`, "i");
+      const nameMatch = html.match(nameRegex);
+      razonSocial = nameMatch?.[1]?.trim() || null;
+    }
   }
 
   if (!razonSocial && !detailSlug) return null;

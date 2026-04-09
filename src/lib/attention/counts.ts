@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 export interface AttentionCounts {
   facturas: number;
   recibos: number;
+  perfil: number;
 }
 
 /**
@@ -25,7 +26,7 @@ export async function getAttentionCounts(
   const yearFilter = fiscalYear ? `AND i."fiscalYear" = ${fiscalYear}` : "";
   const yearFilterR = fiscalYear ? `AND r."fiscalYear" = ${fiscalYear}` : "";
 
-  const [facturasResult, recibosResult] = await Promise.all([
+  const [facturasResult, recibosResult, personalDataResult, employerResult] = await Promise.all([
     prisma.$queryRawUnsafe<[{ count: bigint }]>(
       `
       SELECT COUNT(*) as count
@@ -89,10 +90,23 @@ export async function getAttentionCounts(
       `,
       userId,
     ),
+    prisma.$queryRawUnsafe<[{ count: bigint }]>(
+      `SELECT COUNT(*) as count FROM "PersonalData" WHERE "userId" = $1 ${fiscalYear ? `AND "fiscalYear" = ${fiscalYear}` : ""}`,
+      userId,
+    ),
+    prisma.$queryRawUnsafe<[{ count: bigint }]>(
+      `SELECT COUNT(*) as count FROM "Employer" WHERE "userId" = $1 ${fiscalYear ? `AND "fiscalYear" = ${fiscalYear}` : ""}`,
+      userId,
+    ),
   ]);
+
+  let perfil = 0;
+  if (Number(personalDataResult[0].count) === 0) perfil++;
+  if (Number(employerResult[0].count) === 0) perfil++;
 
   return {
     facturas: Number(facturasResult[0].count),
     recibos: Number(recibosResult[0].count),
+    perfil,
   };
 }

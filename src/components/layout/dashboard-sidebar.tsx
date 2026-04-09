@@ -34,17 +34,19 @@ const navItems = [
 ];
 
 const badgeHrefs: Record<string, string> = {
+  "/perfil": "/perfil",
   "/facturas": "/facturas?filter=attention",
   "/recibos": "/recibos?filter=attention",
 };
 
 export function DashboardSidebar() {
   const pathname = usePathname();
-  const { facturas, recibos } = useAttentionCounts();
+  const { facturas, recibos, perfil } = useAttentionCounts();
   const { hasWorkers, loading: workersLoading } = useDomesticWorkerCount();
   const { hasEmployers, loading: employersLoading } = useEmployerCount();
 
   const badgeCounts: Record<string, number> = {
+    "/perfil": perfil,
     "/facturas": facturas,
     "/recibos": recibos,
   };

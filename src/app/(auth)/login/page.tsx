@@ -298,6 +298,37 @@ function LoginForm() {
             Al continuar, aceptas que tus datos se usan unicamente para gestionar tus deducciones
             impositivas.
           </p>
+
+          {process.env.NEXT_PUBLIC_DEV_LOGIN === "true" && (
+            <Button
+              variant="outline"
+              className="w-full border-dashed border-amber-500/50 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400"
+              size="lg"
+              onClick={async () => {
+                setError("");
+                setLoading(true);
+                try {
+                  const res = await fetch("/api/auth/dev-account", { method: "POST" });
+                  if (!res.ok) throw new Error();
+                  const { email: devEmail, password: devPassword } = await res.json();
+                  const result = await signIn("credentials", {
+                    email: devEmail,
+                    password: devPassword,
+                    redirect: false,
+                  });
+                  if (result?.error) throw new Error();
+                  window.location.href = "/dashboard";
+                } catch {
+                  setError("Error al crear cuenta dev");
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Dev: crear cuenta rápida
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>

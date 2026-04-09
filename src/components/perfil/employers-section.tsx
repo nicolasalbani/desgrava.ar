@@ -51,6 +51,18 @@ interface Employer {
   createdAt: string;
 }
 
+// ─── Date helpers (YYYY-MM-DD ↔ DD/MM/YYYY) ─────────────────
+
+function dmyToIso(dmy: string): string {
+  const [d, m, y] = dmy.split("/");
+  return `${y}-${m}-${d}`;
+}
+
+function isoToDmy(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
 // ─── Form Schema ─────────────────────────────────────────────
 
 const employerSchema = z.object({
@@ -74,14 +86,18 @@ function EmployerFormDialog({
   editing,
   fiscalYear,
   onSaved,
+  hasAgenteRetencion,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: Employer | null;
   fiscalYear: number;
   onSaved: (employer: Employer) => void;
+  hasAgenteRetencion: boolean;
 }) {
   const [saving, setSaving] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupDone, setLookupDone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<EmployerFormData>({
     cuit: "",
@@ -90,6 +106,7 @@ function EmployerFormDialog({
     fechaFin: "",
     agenteRetencion: false,
   });
+  const lookupAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -97,22 +114,57 @@ function EmployerFormDialog({
         setForm({
           cuit: editing.cuit,
           razonSocial: editing.razonSocial,
-          fechaInicio: editing.fechaInicio,
-          fechaFin: editing.fechaFin ?? "",
+          fechaInicio: editing.fechaInicio ? dmyToIso(editing.fechaInicio) : "",
+          fechaFin: editing.fechaFin ? dmyToIso(editing.fechaFin) : "",
           agenteRetencion: editing.agenteRetencion,
         });
+        setLookupDone(true);
       } else {
         setForm({
           cuit: "",
           razonSocial: "",
           fechaInicio: "",
           fechaFin: "",
-          agenteRetencion: false,
+          agenteRetencion: !hasAgenteRetencion,
         });
+        setLookupDone(false);
       }
       setErrors({});
     }
   }, [open, editing]);
+
+  // Auto-lookup razón social when CUIT has 11 digits (only for new employers)
+  useEffect(() => {
+    if (editing) return;
+    if (form.cuit.length !== 11) {
+      setLookupDone(false);
+      setForm((f) => ({ ...f, razonSocial: "" }));
+      return;
+    }
+
+    lookupAbortRef.current?.abort();
+    const controller = new AbortController();
+    lookupAbortRef.current = controller;
+
+    setLookingUp(true);
+    fetch(`/api/cuit-lookup?cuit=${form.cuit}`, { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setForm((f) => ({ ...f, razonSocial: data.razonSocial ?? "" }));
+          setLookupDone(true);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLookupDone(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLookingUp(false);
+      });
+
+    return () => controller.abort();
+     
+  }, [form.cuit, editing]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -136,7 +188,12 @@ function EmployerFormDialog({
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...result.data, fiscalYear }),
+        body: JSON.stringify({
+          ...result.data,
+          fechaInicio: isoToDmy(result.data.fechaInicio),
+          fechaFin: result.data.fechaFin ? isoToDmy(result.data.fechaFin) : undefined,
+          fiscalYear,
+        }),
       });
       if (!res.ok) throw new Error();
       const json = await res.json();
@@ -177,14 +234,36 @@ function EmployerFormDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="razonSocial">Razón Social</Label>
-            <Input
-              id="razonSocial"
-              placeholder="Nombre del empleador"
-              value={form.razonSocial}
-              onChange={(e) => setForm((f) => ({ ...f, razonSocial: e.target.value }))}
-              disabled={saving}
-            />
+            <div className="relative">
+              <Input
+                id="razonSocial"
+                placeholder={
+                  lookingUp
+                    ? "Buscando..."
+                    : editing
+                      ? "Nombre del empleador"
+                      : "Se completa automáticamente con el CUIT"
+                }
+                value={form.razonSocial}
+                readOnly={!editing}
+                className={!editing ? "bg-muted" : ""}
+                disabled={saving}
+                onChange={
+                  editing
+                    ? (e) => setForm((f) => ({ ...f, razonSocial: e.target.value }))
+                    : undefined
+                }
+              />
+              {lookingUp && (
+                <Loader2 className="text-muted-foreground absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 animate-spin" />
+              )}
+            </div>
             {errors.razonSocial && <p className="text-xs text-red-500">{errors.razonSocial}</p>}
+            {!editing && lookupDone && !form.razonSocial && form.cuit.length === 11 && (
+              <p className="text-muted-foreground text-xs">
+                No se encontró la razón social. Verificá el CUIT.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -192,7 +271,7 @@ function EmployerFormDialog({
               <Label htmlFor="fechaInicio">Fecha inicio</Label>
               <Input
                 id="fechaInicio"
-                placeholder="DD/MM/YYYY"
+                type="date"
                 value={form.fechaInicio}
                 onChange={(e) => setForm((f) => ({ ...f, fechaInicio: e.target.value }))}
                 disabled={saving}
@@ -203,7 +282,7 @@ function EmployerFormDialog({
               <Label htmlFor="fechaFin">Fecha fin</Label>
               <Input
                 id="fechaFin"
-                placeholder="DD/MM/YYYY"
+                type="date"
                 value={form.fechaFin}
                 onChange={(e) => setForm((f) => ({ ...f, fechaFin: e.target.value }))}
                 disabled={saving}
@@ -731,6 +810,7 @@ export function EmployersSection({
         editing={editing}
         fiscalYear={fiscalYear}
         onSaved={handleSaved}
+        hasAgenteRetencion={employers.some((e) => e.agenteRetencion)}
       />
 
       {/* Delete confirmation */}

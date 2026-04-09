@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   let closed = false;
   let lastFacturas = -1;
   let lastRecibos = -1;
+  let lastPerfil = -1;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -54,9 +55,14 @@ export async function GET(req: NextRequest) {
             fiscalYear ? parseInt(fiscalYear) : undefined,
           );
 
-          if (counts.facturas !== lastFacturas || counts.recibos !== lastRecibos) {
+          if (
+            counts.facturas !== lastFacturas ||
+            counts.recibos !== lastRecibos ||
+            counts.perfil !== lastPerfil
+          ) {
             lastFacturas = counts.facturas;
             lastRecibos = counts.recibos;
+            lastPerfil = counts.perfil;
             enqueue(JSON.stringify(counts));
           }
         } catch {
