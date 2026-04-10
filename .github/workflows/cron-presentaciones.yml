@@ -1,0 +1,19 @@
+name: "Cron: Presentaciones"
+
+on:
+  schedule:
+    # Daily at 08:00 UTC (05:00 Argentina time)
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    name: Trigger presentaciones cron
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST to /api/cron/presentaciones
+        run: |
+          curl -sf -X POST \
+            "${{ secrets.PROD_API_URL }}/api/cron/presentaciones" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"

@@ -1,0 +1,19 @@
+name: "Cron: Subscription Reminders"
+
+on:
+  schedule:
+    # Daily at 09:00 UTC (06:00 Argentina time)
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    name: Trigger subscription reminders cron
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST to /api/cron/subscription-reminders
+        run: |
+          curl -sf -X POST \
+            "${{ secrets.PROD_API_URL }}/api/cron/subscription-reminders" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"

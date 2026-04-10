@@ -33,7 +33,7 @@ try {
   process.exit(1);
 }
 
-// Only manage local postgres
+// Only manage local postgres — skip for remote databases (Railway, Fly.io, etc.)
 if (host !== "localhost" && host !== "127.0.0.1") {
   await checkReachable(host, port);
   process.exit(0);
