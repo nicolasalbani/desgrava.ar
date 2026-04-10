@@ -225,16 +225,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let existingNoDeducible: { id: string } | null = null;
     if (parsed.data.invoiceNumber) {
       const duplicate = await prisma.invoice.findFirst({
         where: { userId: session.user.id, invoiceNumber: parsed.data.invoiceNumber },
-        select: { id: true },
+        select: { id: true, deductionCategory: true },
       });
       if (duplicate) {
-        return NextResponse.json(
-          { error: "Ya existe un comprobante con ese número" },
-          { status: 409 },
-        );
+        // Allow overwriting NO_DEDUCIBLE invoices — the user is reclassifying
+        if (duplicate.deductionCategory === "NO_DEDUCIBLE") {
+          existingNoDeducible = duplicate;
+        } else {
+          return NextResponse.json(
+            { error: "Ya existe un comprobante con ese número" },
+            { status: 409 },
+          );
+        }
       }
     }
 
@@ -258,23 +264,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        userId: session.user.id,
-        ...parsed.data,
-        amount: new Prisma.Decimal(parsed.data.amount),
-        familyDependentId,
-        source: fileBase64 ? "PDF" : "MANUAL",
-        ...(fileBase64
-          ? {
-              fileData: Buffer.from(fileBase64, "base64"),
-              fileMimeType: fileMimeType || "application/octet-stream",
-              originalFilename: originalFilename || null,
-            }
-          : {}),
-      },
-    });
+    const invoiceData = {
+      ...parsed.data,
+      amount: new Prisma.Decimal(parsed.data.amount),
+      familyDependentId,
+      source: fileBase64 ? ("PDF" as const) : ("MANUAL" as const),
+      ...(fileBase64
+        ? {
+            fileData: Buffer.from(fileBase64, "base64"),
+            fileMimeType: fileMimeType || "application/octet-stream",
+            originalFilename: originalFilename || null,
+          }
+        : {}),
+    };
 
+    // Overwrite existing NO_DEDUCIBLE invoice, or create new
+    const invoice = existingNoDeducible
+      ? await prisma.invoice.update({
+          where: { id: existingNoDeducible.id },
+          data: invoiceData,
+        })
+      : await prisma.invoice.create({
+          data: { userId: session.user.id, ...invoiceData },
+        });
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {
     console.error("Error creating invoice:", error);
