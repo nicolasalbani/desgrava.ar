@@ -106,13 +106,20 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 **Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
 
-## CI/CD
+## CI/CD & Deployment
 
-**GitHub Actions** (`.github/workflows/ci.yml`) runs on push/PR to main:
+**Hosting**: Fly.io in the `gru` (São Paulo) region. Config in `fly.toml`. VM: `performance-1x` (2GB RAM) for Playwright/Chromium automation.
 
-1. **lint-and-format** — ESLint + Prettier check
-2. **build** — Next.js production build (depends on lint)
-3. **test** — Vitest (runs in parallel with build)
+**GitHub Actions** workflows:
+
+- **CI** (`.github/workflows/ci.yml`) — runs on push/PR to main: lint, format check, build, test
+- **Deploy** (`.github/workflows/deploy.yml`) — runs on push to main after CI passes: `flyctl deploy --remote-only`. Requires `FLY_API_TOKEN` GitHub secret.
+- **Cron: Presentaciones** (`.github/workflows/cron-presentaciones.yml`) — daily at 08:00 UTC, POSTs to `/api/cron/presentaciones`
+- **Cron: Subscription Reminders** (`.github/workflows/cron-subscription-reminders.yml`) — daily at 09:00 UTC, POSTs to `/api/cron/subscription-reminders`
+
+Cron workflows require `PROD_API_URL` and `CRON_SECRET` GitHub secrets.
+
+**Health check**: `/api/health` returns `{ status: "ok" }` — used by Fly.io HTTP checks.
 
 **Pre-commit hooks** (husky + lint-staged): Prettier + ESLint auto-fix on staged `.ts/.tsx` files.
 
@@ -133,4 +140,4 @@ Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_te
 
 ## Environment Variables
 
-`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for Railway cron endpoint auth), `MERCADOPAGO_ACCESS_TOKEN` (MercadoPago API key for subscriptions), `MERCADOPAGO_WEBHOOK_SECRET` (webhook signature validation), `SUPPORT_EMAIL` (email for new ticket notifications + bug fix PR notifications), `SUPPORT_WHATSAPP` (WhatsApp number for escalation, e.g. 5491112345678), `PROD_API_URL` (production API base URL for fix-ticket agent), `PROD_CRON_SECRET` (production CRON_SECRET for fix-ticket agent), `PROD_DATABASE_URL` (read-only prod DB connection string for fix-ticket agent to sync prod data locally).
+`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for cron endpoint auth), `MERCADOPAGO_ACCESS_TOKEN` (MercadoPago API key for subscriptions), `MERCADOPAGO_WEBHOOK_SECRET` (webhook signature validation), `SUPPORT_EMAIL` (email for new ticket notifications + bug fix PR notifications), `SUPPORT_WHATSAPP` (WhatsApp number for escalation, e.g. 5491112345678), `PROD_API_URL` (production API base URL for fix-ticket agent + cron workflows), `PROD_CRON_SECRET` (production CRON_SECRET for fix-ticket agent), `PROD_DATABASE_URL` (read-only prod DB connection string for fix-ticket agent to sync prod data locally), `FLY_API_TOKEN` (GitHub Actions secret for Fly.io deploys).
