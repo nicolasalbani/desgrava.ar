@@ -139,7 +139,9 @@ export function InvoiceForm({
   const lockedYear = isNew && contextFiscalYear !== null ? contextFiscalYear : null;
   const [saving, setSaving] = useState(false);
   const [classifying, setClassifying] = useState(false);
+  const [lookingUpName, setLookingUpName] = useState(false);
   const lastLookedUpCuit = useRef("");
+  const lastLookedUpNameCuit = useRef("");
 
   const [familyDependentId, setFamilyDependentId] = useState<string>(
     defaultValues?.familyDependentId ?? "",
@@ -223,11 +225,38 @@ export function InvoiceForm({
     [form, invoiceRawText],
   );
 
+  const fetchProviderName = useCallback(
+    async (rawCuit: string) => {
+      const cuit = rawCuit.replace(/-/g, "");
+      if (cuit.length !== 11 || !validateCuit(cuit) || cuit === lastLookedUpNameCuit.current)
+        return;
+      lastLookedUpNameCuit.current = cuit;
+
+      setLookingUpName(true);
+      try {
+        const res = await fetch(`/api/cuit-lookup?cuit=${cuit}`);
+        if (!res.ok) return;
+        const { razonSocial } = await res.json();
+        if (razonSocial) {
+          form.setValue("providerName", razonSocial, { shouldValidate: true });
+        } else {
+          form.setValue("providerName", "", { shouldValidate: false });
+        }
+      } catch {
+        // silently ignore — lookup is best-effort
+      } finally {
+        setLookingUpName(false);
+      }
+    },
+    [form],
+  );
+
   useEffect(() => {
     if (defaultValues?.providerCuit) {
       fetchLastCategory(defaultValues.providerCuit);
+      fetchProviderName(defaultValues.providerCuit);
     }
-  }, [defaultValues?.providerCuit, fetchLastCategory]);
+  }, [defaultValues?.providerCuit, fetchLastCategory, fetchProviderName]);
 
   async function onSubmit(data: FormData) {
     setSaving(true);
@@ -291,6 +320,7 @@ export function InvoiceForm({
     const formatted = formatCuit(e.target.value);
     form.setValue("providerCuit", formatted, { shouldValidate: true });
     fetchLastCategory(formatted);
+    fetchProviderName(formatted);
   }
 
   const fromFile = !!fileData;
@@ -371,12 +401,18 @@ export function InvoiceForm({
 
         <div className="space-y-2">
           <Label htmlFor="providerName">Nombre del proveedor</Label>
-          <Input
-            id="providerName"
-            placeholder="Ej: OSDE, Galeno"
-            className={missingGlow(watchedProviderName)}
-            {...form.register("providerName")}
-          />
+          <div className="relative">
+            <Input
+              id="providerName"
+              placeholder={lookingUpName ? "Buscando..." : "Se completa con el CUIT"}
+              className={cn(missingGlow(watchedProviderName), "read-only:bg-muted/30")}
+              readOnly
+              {...form.register("providerName")}
+            />
+            {lookingUpName && (
+              <Loader2 className="text-muted-foreground absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 animate-spin" />
+            )}
+          </div>
           {form.formState.errors.providerName && (
             <p className="text-destructive text-sm">{form.formState.errors.providerName.message}</p>
           )}
