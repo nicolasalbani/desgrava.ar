@@ -6,11 +6,7 @@ import { Send, Check } from "lucide-react";
 import { StepProgress } from "@/components/shared/step-progress";
 import type { StepDefinition } from "@/lib/automation/job-steps";
 
-const ONBOARDING_SUBMIT_STEPS: StepDefinition[] = [
-  { key: "login", label: "Iniciando sesión en ARCA" },
-  { key: "siradig", label: "Abriendo SiRADIG" },
-  { key: "fill", label: "Cargando deducción" },
-];
+const ONBOARDING_SUBMIT_STEPS: StepDefinition[] = [{ key: "fill", label: "Cargando deducción" }];
 import { CATEGORY_LABELS } from "@/lib/simulador/deduction-rules";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";

@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getJobScreenshots, getJobVideoFilenames } from "@/lib/automation/job-processor";
-import { listScreenshotsFromDisk, listVideosFromDisk } from "@/lib/automation/artifact-manager";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {
@@ -34,27 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
     return NextResponse.json({ error: "Job no encontrado" }, { status: 404 });
   }
 
-  // Return screenshots: prefer in-memory, fall back to disk
-  let screenshotsMeta = getJobScreenshots(jobId);
-  if (screenshotsMeta.length === 0) {
-    screenshotsMeta = await listScreenshotsFromDisk(jobId);
-  }
-  const screenshots = screenshotsMeta.map((s) => ({
-    step: s.step,
-    name: s.name,
-    label: s.label,
-    timestamp: s.timestamp,
-    url: `/api/automatizacion/${jobId}/artifacts/${s.name}`,
-  }));
-
-  // Return video URLs if available
-  let videoFiles = getJobVideoFilenames(jobId);
-  if (videoFiles.length === 0) {
-    videoFiles = await listVideosFromDisk(jobId);
-  }
-  const videoUrls = videoFiles.map((f) => `/api/automatizacion/${jobId}/artifacts/${f}`);
-
-  return NextResponse.json({ job, screenshots, videoUrls });
+  return NextResponse.json({ job });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ jobId: string }> }) {

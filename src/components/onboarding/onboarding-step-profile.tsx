@@ -40,8 +40,6 @@ import { toast } from "sonner";
 import { useEmployerCount } from "@/contexts/employer-count";
 
 const ONBOARDING_PROFILE_STEPS: StepDefinition[] = [
-  { key: "login", label: "Iniciando sesión en ARCA" },
-  { key: "siradig", label: "Abriendo SiRADIG" },
   { key: "datos_personales", label: "Extrayendo datos personales" },
   { key: "empleadores", label: "Extrayendo empleadores" },
   { key: "cargas_familia", label: "Extrayendo cargas de familia" },

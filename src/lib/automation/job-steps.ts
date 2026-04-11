@@ -40,6 +40,8 @@ export const JOB_TYPE_STEPS: Record<string, StepDefinition[]> = {
     { key: "fill", label: "Cargando deducciones" },
     { key: "done", label: "Listo" },
   ],
+  // Note: BULK_SUBMIT is defined for DB enum compatibility but not actively used.
+  // Multiple invoices are submitted as individual SUBMIT_INVOICE jobs.
   PULL_DOMESTIC_WORKERS: [
     { key: "login", label: "Iniciando sesión en ARCA" },
     { key: "download", label: "Descargando personal doméstico" },

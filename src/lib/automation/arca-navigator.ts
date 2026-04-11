@@ -7,35 +7,47 @@ export interface LoginResult {
   hasCaptcha?: boolean;
 }
 
-export type ScreenshotCallback = (buffer: Buffer, slug: string, label: string) => Promise<void>;
-
 export async function loginToArca(
   page: Page,
   cuit: string,
   clave: string,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<LoginResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.login;
 
   try {
+    // Check if there's an existing valid session by navigating to the portal.
+    // If the session is alive (cookies from a previous job in the same context),
+    // the portal loads directly. If not, it redirects to the login page.
+    log("Verificando sesion existente...");
+    const portalUrl = "https://portalcf.cloud.afip.gob.ar/portal/app/";
+    await page.goto(portalUrl, { waitUntil: "domcontentloaded", timeout: 15_000 });
+    await page.waitForLoadState("load").catch(() => {});
+
+    const portalCheckUrl = page.url();
+    if (portalCheckUrl.includes("portalcf.cloud.afip.gob.ar/portal/app")) {
+      // Check if the search bar is present (portal is actually loaded, not redirecting)
+      const searchBar = page.locator(ARCA_SELECTORS.portal.searchService);
+      const isLoggedIn = await searchBar
+        .waitFor({ state: "visible", timeout: 3_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (isLoggedIn) {
+        log("Sesion ARCA existente reutilizada");
+        return { success: true };
+      }
+    }
+
+    // No valid session — perform full login
     log("Navegando a la pagina de login de ARCA...");
     await page.goto(sel.url, { waitUntil: "domcontentloaded" });
     log(`URL cargada: ${page.url()}`);
     await page.locator(sel.cuitInput).waitFor({ state: "visible", timeout: 30_000 });
 
-    await capture(await page.screenshot({ fullPage: true }), "login-page", "Pagina de login ARCA");
-
     // Check for CAPTCHA
     const captcha = await page.$(sel.captchaContainer);
     if (captcha) {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "captcha-detected",
-        "CAPTCHA detectado",
-      );
       log("CAPTCHA detectado. Se requiere intervencion manual.");
       return { success: false, error: "CAPTCHA detectado", hasCaptcha: true };
     }
@@ -49,8 +61,6 @@ export async function loginToArca(
     log("Esperando campo de clave fiscal...");
     await page.locator(sel.claveInput).waitFor({ state: "visible", timeout: 30_000 });
     log(`URL despues de CUIT: ${page.url()}`);
-
-    await capture(await page.screenshot({ fullPage: true }), "after-cuit", "CUIT ingresado");
 
     // Enter password
     log("Ingresando clave fiscal...");
@@ -73,7 +83,6 @@ export async function loginToArca(
     const errorEl = await page.$(sel.errorMessage);
     if (errorEl) {
       const errorText = await errorEl.textContent();
-      await capture(await page.screenshot({ fullPage: true }), "login-error", "Error de login");
       log(`Error de login: ${errorText}`);
       return {
         success: false,
@@ -84,23 +93,15 @@ export async function loginToArca(
     // Verify we're logged in (URL should change from login page)
     const currentUrl = page.url();
     if (currentUrl.includes("login")) {
-      await capture(await page.screenshot({ fullPage: true }), "login-stuck", "Login atascado");
       log(`Login fallido: sigue en la pagina de login (${currentUrl})`);
       return { success: false, error: "Login fallido" };
     }
-
-    await capture(await page.screenshot({ fullPage: true }), "login-success", "Login exitoso");
 
     log("Login exitoso en ARCA");
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error durante login: ${msg} | URL: ${page.url()}`);
-    try {
-      await capture(await page.screenshot({ fullPage: true }), "login-crash", "Error fatal login");
-    } catch {
-      /* screenshot may fail too */
-    }
     return { success: false, error: msg };
   }
 }
@@ -167,36 +168,19 @@ export async function searchAndOpenService(
 export async function navigateToSiradig(
   page: Page,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<Page | null> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
 
   try {
     const siradigPage = await searchAndOpenService(page, "SiRADIG", "SiRADIG - Trabajador", log);
     await siradigPage.waitForLoadState("domcontentloaded");
     log(`SiRADIG URL: ${siradigPage.url()}`);
 
-    await capture(
-      await siradigPage.screenshot({ fullPage: true }),
-      "siradig-loaded",
-      "SiRADIG cargado",
-    );
-
     log("SiRADIG cargado correctamente (nueva pestaña)");
     return siradigPage;
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error navegando a SiRADIG: ${msg} | URL: ${page.url()}`);
-    try {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "siradig-error",
-        "Error navegando a SiRADIG",
-      );
-    } catch {
-      /* screenshot may fail too */
-    }
     return null;
   }
 }

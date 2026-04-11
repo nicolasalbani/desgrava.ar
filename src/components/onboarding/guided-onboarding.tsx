@@ -170,7 +170,10 @@ export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
             <OnboardingStepInvoices
               activeJobId={state.activePullComprobantesJobId}
               onComplete={(hasDeducible) => {
-                if (hasDeducible && state.hasEmployers) {
+                // No need to re-check hasEmployers here — step 2 already verified
+                // employers exist before advancing to step 3. The initial `state`
+                // is stale (loaded on mount before PULL_PROFILE ran).
+                if (hasDeducible) {
                   advanceToStep(4);
                 } else {
                   completeOnboarding();

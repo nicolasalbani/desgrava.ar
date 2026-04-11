@@ -2,7 +2,7 @@ import type { Page } from "playwright";
 import { inflateRawSync } from "zlib";
 import { readFileSync } from "fs";
 import { ARCA_SELECTORS } from "./selectors";
-import { searchAndOpenService, type ScreenshotCallback } from "./arca-navigator";
+import { searchAndOpenService } from "./arca-navigator";
 
 export interface MisComprobantesResult {
   success: boolean;
@@ -35,10 +35,8 @@ export async function navigateToMisComprobantes(
   page: Page,
   fiscalYear: number,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<MisComprobantesResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.misComprobantes;
 
   try {
@@ -55,12 +53,6 @@ export async function navigateToMisComprobantes(
     await misCompPage.waitForLoadState("networkidle", { timeout: 30_000 });
     log(`Mis Comprobantes cargado: ${misCompPage.url()}`);
 
-    await capture(
-      await misCompPage.screenshot({ fullPage: true }),
-      "mis-comprobantes-loaded",
-      "Servicio Mis Comprobantes",
-    );
-
     // Step 3: Click "Comprobantes Recibidos"
     log("Navegando a Comprobantes Recibidos...");
     await misCompPage.waitForSelector(sel.comprobantesRecibidosBtn, {
@@ -68,12 +60,6 @@ export async function navigateToMisComprobantes(
     });
     await misCompPage.click(sel.comprobantesRecibidosBtn);
     await misCompPage.waitForLoadState("networkidle", { timeout: 30_000 });
-
-    await capture(
-      await misCompPage.screenshot({ fullPage: true }),
-      "comprobantes-recibidos",
-      "Comprobantes Recibidos",
-    );
 
     // Step 4: Set date range via jQuery daterangepicker API
     log(`Configurando rango de fechas para el año ${fiscalYear}...`);
@@ -108,12 +94,6 @@ export async function navigateToMisComprobantes(
       .catch(() => {});
     await misCompPage.waitForTimeout(2000);
 
-    await capture(
-      await misCompPage.screenshot({ fullPage: true }),
-      "search-results",
-      "Resultados de busqueda",
-    );
-
     // Check for no results
     const noResults = await misCompPage.$(sel.noResultsMessage);
     if (noResults) {
@@ -147,11 +127,6 @@ export async function navigateToMisComprobantes(
     }, sel.historialRows as string);
 
     if (!idConsulta) {
-      await capture(
-        await misCompPage.screenshot({ fullPage: true }),
-        "no-id-consulta",
-        "No se pudo obtener el ID de consulta",
-      );
       await misCompPage.close();
       return {
         success: false,
@@ -184,12 +159,6 @@ export async function navigateToMisComprobantes(
     const csvContent = extractCsvFromZip(readFileSync(zipPath));
     log(`CSV descargado: ${csvContent.length} caracteres`);
 
-    await capture(
-      await misCompPage.screenshot({ fullPage: true }),
-      "csv-exported",
-      "CSV exportado exitosamente",
-    );
-
     // Close the Mis Comprobantes tab
     await misCompPage.close();
 
@@ -197,15 +166,6 @@ export async function navigateToMisComprobantes(
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error en Mis Comprobantes: ${msg} | URL: ${page.url()}`);
-    try {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "mis-comprobantes-error",
-        "Error en Mis Comprobantes",
-      );
-    } catch {
-      /* screenshot may fail too */
-    }
     return { success: false, error: msg };
   }
 }

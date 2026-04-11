@@ -8,8 +8,6 @@ import type { StepDefinition } from "@/lib/automation/job-steps";
 import { toast } from "sonner";
 
 const ONBOARDING_PULL_STEPS: StepDefinition[] = [
-  { key: "login", label: "Iniciando sesión en ARCA" },
-  { key: "siradig", label: "Abriendo SiRADIG" },
   { key: "siradig_extract", label: "Extrayendo comprobantes deducidos" },
   { key: "download", label: "Extrayendo comprobantes deducibles" },
   { key: "classify", label: "Clasificando proveedores" },
@@ -85,18 +83,23 @@ export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
   }
 
   // Check deducible count after completion — include already-submitted invoices
-  // so step 4 is never skipped (the user must experience the full onboarding)
+  // so step 4 is never skipped (the user must experience the full onboarding).
+  // Default to true on any error so step 4 is always shown.
   async function handleContinue() {
     const fiscalYear = new Date().getFullYear();
     try {
       const res = await fetch(
         `/api/facturas?fiscalYear=${fiscalYear}&pageSize=1&excludeNoDeducible=true`,
       );
+      if (!res.ok) {
+        onComplete(true);
+        return;
+      }
       const data = await res.json();
       onComplete((data.pagination?.totalCount ?? 0) > 0);
     } catch {
-      // Fallback: use result if available
-      onComplete((result?.deducible ?? 0) > 0);
+      // On network error, always show step 4 — skipping is worse
+      onComplete(true);
     }
   }
 

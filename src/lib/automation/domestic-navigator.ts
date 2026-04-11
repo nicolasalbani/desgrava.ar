@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { searchAndOpenService, type ScreenshotCallback } from "./arca-navigator";
+import { searchAndOpenService } from "./arca-navigator";
 
 export interface DomesticWorkerData {
   cuil: string;
@@ -114,9 +114,8 @@ async function openServiceViaPortal(portalPage: Page, onLog: (msg: string) => vo
 export async function pullDomesticWorkersOnly(
   page: Page,
   onLog: (msg: string) => void,
-  onScreenshot: ScreenshotCallback,
 ): Promise<DomesticWorkerData[]> {
-  const result = await pullDomesticInternal(page, null, onLog, onScreenshot);
+  const result = await pullDomesticInternal(page, null, onLog);
   return result.workers;
 }
 
@@ -134,7 +133,6 @@ export async function pullDomesticReceipts(
   workerCuils: string[],
   fiscalYear: number,
   onLog: (msg: string) => void,
-  onScreenshot: ScreenshotCallback,
 ): Promise<DomesticReceiptData[]> {
   const receipts: DomesticReceiptData[] = [];
 
@@ -144,12 +142,6 @@ export async function pullDomesticReceipts(
   }
 
   const servicePage = await openServiceViaPortal(page, onLog);
-
-  await onScreenshot(
-    await servicePage.screenshot({ fullPage: true }),
-    "domestic-home",
-    "Pagina principal Personal de Casas Particulares",
-  );
 
   const homeUrl = servicePage.url();
 
@@ -197,12 +189,6 @@ export async function pullDomesticReceipts(
 
     const workerPageUrl = servicePage.url();
 
-    await onScreenshot(
-      await servicePage.screenshot({ fullPage: true }),
-      `worker-${rawCuil}-pagos`,
-      `Pagos y recibos de ${cuilMatches[i][1]}`,
-    );
-
     const workerReceipts = await extractReceiptsFromTable(
       servicePage,
       rawCuil,
@@ -232,7 +218,6 @@ export async function pullDomesticReceipts(
       cuilSet,
       fiscalYear,
       onLog,
-      onScreenshot,
     );
     receipts.push(...historicReceipts);
   }
@@ -252,7 +237,6 @@ async function navigateToHistoricWorkersList(
   servicePage: Page,
   homeUrl: string,
   onLog: (msg: string) => void,
-  onScreenshot: ScreenshotCallback,
 ): Promise<{ entries: { cuil: string; href: string }[]; historicUrl: string } | null> {
   // Ensure we're on the home page first
   if (servicePage.url() !== homeUrl) {
@@ -268,12 +252,6 @@ async function navigateToHistoricWorkersList(
   await historicLink.click();
   await servicePage.waitForLoadState("networkidle");
   const historicUrl = servicePage.url();
-
-  await onScreenshot(
-    await servicePage.screenshot({ fullPage: true }),
-    "historic-workers",
-    "Trabajadores historicos",
-  );
 
   const entries = await servicePage.evaluate(() => {
     const body = document.body.textContent || "";
@@ -304,11 +282,10 @@ async function pullHistoricWorkerData(
   servicePage: Page,
   homeUrl: string,
   onLog: (msg: string) => void,
-  onScreenshot: ScreenshotCallback,
 ): Promise<DomesticWorkerData[]> {
   const workers: DomesticWorkerData[] = [];
 
-  const result = await navigateToHistoricWorkersList(servicePage, homeUrl, onLog, onScreenshot);
+  const result = await navigateToHistoricWorkersList(servicePage, homeUrl, onLog);
   if (!result) return workers;
 
   const { entries, historicUrl } = result;
@@ -323,12 +300,6 @@ async function pullHistoricWorkerData(
       await servicePage.goto(historicUrl, { waitUntil: "networkidle" });
       continue;
     }
-
-    await onScreenshot(
-      await servicePage.screenshot({ fullPage: true }),
-      `historic-worker-${hw.cuil}-details`,
-      `Datos del trabajador historico ${hw.cuil}`,
-    );
 
     const detailText = await servicePage.locator("body").innerText();
     const worker = extractWorkerFromDetailPage(detailText);
@@ -364,11 +335,10 @@ async function pullHistoricWorkerReceipts(
   cuilSet: Set<string>,
   fiscalYear: number,
   onLog: (msg: string) => void,
-  onScreenshot: ScreenshotCallback,
 ): Promise<DomesticReceiptData[]> {
   const receipts: DomesticReceiptData[] = [];
 
-  const result = await navigateToHistoricWorkersList(servicePage, homeUrl, onLog, onScreenshot);
+  const result = await navigateToHistoricWorkersList(servicePage, homeUrl, onLog);
   if (!result) return receipts;
 
   const { entries: historicWorkers, historicUrl } = result;
@@ -388,12 +358,6 @@ async function pullHistoricWorkerReceipts(
     }
 
     const workerPageUrl = servicePage.url();
-
-    await onScreenshot(
-      await servicePage.screenshot({ fullPage: true }),
-      `historic-worker-${hw.cuil}-pagos`,
-      `Pagos y recibos de trabajador historico ${hw.cuil}`,
-    );
 
     const workerReceipts = await extractReceiptsFromTable(
       servicePage,
@@ -437,19 +401,12 @@ async function pullDomesticInternal(
   page: Page,
   fiscalYear: number | null,
   onLog: (msg: string) => void,
-  onScreenshot: ScreenshotCallback,
 ): Promise<PullDomesticResult> {
   const workers: DomesticWorkerData[] = [];
   const receipts: DomesticReceiptData[] = [];
 
   // Open the service via the portal click (establishes SSO session)
   const servicePage = await openServiceViaPortal(page, onLog);
-
-  await onScreenshot(
-    await servicePage.screenshot({ fullPage: true }),
-    "domestic-home",
-    "Pagina principal Personal de Casas Particulares",
-  );
 
   // Save the home URL — this is the service URL WITH the session, we can navigate to it
   const homeUrl = servicePage.url();
@@ -490,12 +447,6 @@ async function pullDomesticInternal(
 
     const workerDetailUrl = servicePage.url();
 
-    await onScreenshot(
-      await servicePage.screenshot({ fullPage: true }),
-      `worker-${i + 1}-details`,
-      `Datos del trabajador ${i + 1}`,
-    );
-
     // Extract worker data
     const detailText = await servicePage.locator("body").innerText();
     const worker = extractWorkerFromDetailPage(detailText);
@@ -529,7 +480,7 @@ async function pullDomesticInternal(
   const activeCount = workers.length;
 
   // Also pull historical workers (condicion: "Baja") from "VER TRABAJADORES HISTÓRICOS"
-  const historicWorkers = await pullHistoricWorkerData(servicePage, homeUrl, onLog, onScreenshot);
+  const historicWorkers = await pullHistoricWorkerData(servicePage, homeUrl, onLog);
   workers.push(...historicWorkers);
 
   const historicCount = historicWorkers.length;

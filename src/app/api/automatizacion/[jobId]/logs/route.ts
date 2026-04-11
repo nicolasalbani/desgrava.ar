@@ -2,13 +2,7 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  getJobLogs,
-  getJobStatus,
-  getJobStep,
-  getJobScreenshots,
-  getJobVideoFilenames,
-} from "@/lib/automation/job-processor";
+import { getJobLogs, getJobStatus, getJobStep } from "@/lib/automation/job-processor";
 
 const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED"];
 
@@ -42,7 +36,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
 
   const encoder = new TextEncoder();
   let lastLogIndex = 0;
-  let lastScreenshotIndex = 0;
   let lastSentStatus = "";
   let lastSentStep = "";
   let closed = false;
@@ -78,24 +71,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
           lastLogIndex++;
         }
 
-        // Send new screenshot metadata
-        const screenshots = getJobScreenshots(jobId);
-        while (lastScreenshotIndex < screenshots.length) {
-          const meta = screenshots[lastScreenshotIndex];
-          enqueue(
-            JSON.stringify({
-              screenshot: {
-                step: meta.step,
-                name: meta.name,
-                label: meta.label,
-                timestamp: meta.timestamp,
-                url: `/api/automatizacion/${jobId}/artifacts/${meta.name}`,
-              },
-            }),
-          );
-          lastScreenshotIndex++;
-        }
-
         // Send step changes
         const currentStep = getJobStep(jobId);
         if (currentStep && currentStep !== lastSentStep) {
@@ -117,7 +92,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
         closeStream();
       });
 
-      // Poll for new logs, screenshots, and status
+      // Poll for new logs and status
       const interval = setInterval(async () => {
         if (closed) {
           clearInterval(interval);
@@ -150,18 +125,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ jobI
         if (status && TERMINAL_STATUSES.includes(status)) {
           sendUpdates(); // Final flush
 
-          const videoFilenames = getJobVideoFilenames(jobId);
-          const terminalData: Record<string, unknown> = {
-            done: true,
-            status,
-          };
-          if (videoFilenames.length > 0) {
-            terminalData.videoUrls = videoFilenames.map(
-              (f) => `/api/automatizacion/${jobId}/artifacts/${f}`,
-            );
-          }
-
-          enqueue(JSON.stringify(terminalData));
+          enqueue(JSON.stringify({ done: true, status }));
           clearInterval(interval);
           closeStream();
         }

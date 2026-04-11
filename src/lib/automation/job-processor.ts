@@ -2,7 +2,13 @@ import type { Page } from "playwright";
 import { prismaDirectClient as prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { decrypt } from "@/lib/crypto/encryption";
-import { getContext, releaseContext, enqueueJob } from "./browser-pool";
+import {
+  getContext,
+  releaseContext,
+  scheduleContextRelease,
+  cancelContextRelease,
+  enqueueJob,
+} from "./browser-pool";
 import { loginToArca, navigateToSiradig } from "./arca-navigator";
 import {
   navigateToDeductionSection,
@@ -39,14 +45,6 @@ import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } fro
 import { isCreditNoteType } from "./deduction-mapper";
 import { ARCA_SELECTORS } from "./selectors";
 import { resolveCategory } from "@/lib/catalog/provider-catalog";
-import {
-  saveScreenshot,
-  ensureVideoDir,
-  finalizeVideo,
-  getJobScreenshots,
-  clearJobArtifacts,
-} from "./artifact-manager";
-import type { ScreenshotMeta } from "./artifact-manager";
 
 export type LogCallback = (jobId: string, message: string) => void;
 
@@ -62,11 +60,6 @@ async function jqValAndTrigger(page: Page, selector: string, value: string): Pro
 const jobLogs = new Map<string, string[]>();
 const jobStatuses = new Map<string, string>();
 const jobSteps = new Map<string, string>();
-const jobVideoReady = new Map<string, string[]>();
-
-export { getJobScreenshots };
-export type { ScreenshotMeta };
-
 export function getJobLogs(jobId: string): string[] {
   return jobLogs.get(jobId) ?? [];
 }
@@ -79,16 +72,10 @@ export function getJobStep(jobId: string): string | undefined {
   return jobSteps.get(jobId);
 }
 
-export function getJobVideoFilenames(jobId: string): string[] {
-  return jobVideoReady.get(jobId) ?? [];
-}
-
 export function clearJobLogs(jobId: string): void {
   jobLogs.delete(jobId);
   jobStatuses.delete(jobId);
   jobSteps.delete(jobId);
-  jobVideoReady.delete(jobId);
-  clearJobArtifacts(jobId);
 }
 
 function setJobStatus(jobId: string, status: string) {
@@ -136,52 +123,50 @@ async function upsertFamilyDependents(
   fiscalYear: number,
   dependents: SiradigFamilyDependent[],
 ): Promise<{ created: number; updated: number }> {
-  let created = 0;
-  let updated = 0;
+  const validDeps = dependents.filter((dep) => dep.numeroDoc && dep.numeroDoc.trim());
 
-  for (const dep of dependents) {
-    // Skip entries with no document number (phantom/empty table rows)
-    if (!dep.numeroDoc || !dep.numeroDoc.trim()) {
-      continue;
-    }
-
-    const existing = await prisma.familyDependent.findFirst({
-      where: { userId, fiscalYear, numeroDoc: dep.numeroDoc },
-    });
-
-    const data = {
-      tipoDoc: dep.tipoDoc,
-      numeroDoc: dep.numeroDoc,
-      apellido: dep.apellido,
-      nombre: dep.nombre,
-      fechaNacimiento: dep.fechaNacimiento || null,
-      parentesco: dep.parentesco,
-      fechaUnion: dep.fechaUnion || null,
-      porcentajeDed: dep.porcentajeDed || null,
-      cuitOtroDed: dep.cuitOtroDed || null,
-      familiaCargo: dep.familiaCargo,
-      residente: dep.residente,
-      tieneIngresos: dep.tieneIngresos,
-      montoIngresos: dep.montoIngresos ? dep.montoIngresos : null,
-      mesDesde: dep.mesDesde,
-      mesHasta: dep.mesHasta,
-      proximosPeriodos: dep.proximosPeriodos,
-    };
-
-    if (existing) {
-      await prisma.familyDependent.update({
-        where: { id: existing.id },
-        data,
+  const results = await Promise.all(
+    validDeps.map(async (dep) => {
+      const existing = await prisma.familyDependent.findFirst({
+        where: { userId, fiscalYear, numeroDoc: dep.numeroDoc },
       });
-      updated++;
-    } else {
-      await prisma.familyDependent.create({
-        data: { ...data, userId, fiscalYear },
-      });
-      created++;
-    }
-  }
 
+      const data = {
+        tipoDoc: dep.tipoDoc,
+        numeroDoc: dep.numeroDoc,
+        apellido: dep.apellido,
+        nombre: dep.nombre,
+        fechaNacimiento: dep.fechaNacimiento || null,
+        parentesco: dep.parentesco,
+        fechaUnion: dep.fechaUnion || null,
+        porcentajeDed: dep.porcentajeDed || null,
+        cuitOtroDed: dep.cuitOtroDed || null,
+        familiaCargo: dep.familiaCargo,
+        residente: dep.residente,
+        tieneIngresos: dep.tieneIngresos,
+        montoIngresos: dep.montoIngresos ? dep.montoIngresos : null,
+        mesDesde: dep.mesDesde,
+        mesHasta: dep.mesHasta,
+        proximosPeriodos: dep.proximosPeriodos,
+      };
+
+      if (existing) {
+        await prisma.familyDependent.update({
+          where: { id: existing.id },
+          data,
+        });
+        return "updated" as const;
+      } else {
+        await prisma.familyDependent.create({
+          data: { ...data, userId, fiscalYear },
+        });
+        return "created" as const;
+      }
+    }),
+  );
+
+  const created = results.filter((r) => r === "created").length;
+  const updated = results.filter((r) => r === "updated").length;
   return { created, updated };
 }
 
@@ -194,17 +179,13 @@ async function processPullFamilyDependents(
   job: { userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
 
   // Navigate to "Carga de Formulario" and expand cargas de familia
-  const navResult = await navigateToDeductionSection(
-    siradigPage,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const navResult = await navigateToDeductionSection(siradigPage, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!navResult.success) {
@@ -217,10 +198,8 @@ async function processPullFamilyDependents(
   }
 
   // Expand the cargas de familia accordion
-  const cfNavResult = await navigateToCargasFamilia(
-    siradigPage,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const cfNavResult = await navigateToCargasFamilia(siradigPage, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!cfNavResult.success) {
@@ -233,10 +212,8 @@ async function processPullFamilyDependents(
   }
 
   // Extract all family dependents
-  const extractResult = await extractCargasFamilia(
-    siradigPage,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const extractResult = await extractCargasFamilia(siradigPage, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!extractResult.success) {
@@ -286,7 +263,6 @@ async function processPushFamilyDependents(
   job: { userId: string; fiscalYear?: number | null; familyDependentId?: string | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
@@ -332,11 +308,8 @@ async function processPushFamilyDependents(
   );
 
   // Navigate to "Carga de Formulario" and expand deductions
-  const navResult = await navigateToDeductionSection(
-    siradigPage,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const navResult = await navigateToDeductionSection(siradigPage, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!navResult.success) {
@@ -349,10 +322,8 @@ async function processPushFamilyDependents(
   }
 
   // Expand the cargas de familia accordion
-  const cfNavResult = await navigateToCargasFamilia(
-    siradigPage,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const cfNavResult = await navigateToCargasFamilia(siradigPage, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!cfNavResult.success) {
@@ -385,11 +356,8 @@ async function processPushFamilyDependents(
   }));
 
   // Push to SiRADIG
-  const pushResult = await pushCargasFamilia(
-    siradigPage,
-    siradigDependents,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const pushResult = await pushCargasFamilia(siradigPage, siradigDependents, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   const resultData = JSON.parse(
@@ -442,16 +410,12 @@ async function processPullPersonalData(
   job: { userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
 
-  const navResult = await navigateToSiradigMainMenu(
-    siradigPage,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const navResult = await navigateToSiradigMainMenu(siradigPage, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!navResult.success) {
@@ -473,25 +437,31 @@ async function processPullPersonalData(
   await siradigPage.waitForLoadState("networkidle");
   await siradigPage.waitForTimeout(1500);
 
-  await onScreenshot(
-    await siradigPage.screenshot({ fullPage: true }),
-    "datos-personales",
-    "Datos Personales",
-  );
-
   // Extract all fields
   const readField = (selector: string) =>
     siradigPage.$eval(selector, (el) => (el as HTMLInputElement).value).catch(() => "");
 
-  const apellido = await readField(sel.formApellido);
-  const nombre = await readField(sel.formNombre);
-  const dirCalle = await readField(sel.formDirCalle);
-  const dirNro = await readField(sel.formDirNro);
-  const dirPiso = await readField(sel.formDirPiso);
-  const dirDpto = await readField(sel.formDirDpto);
-  const descProvincia = await readField(sel.formDescProvincia);
-  const localidad = await readField(sel.formLocalidad);
-  const codPostal = await readField(sel.formCodPostal);
+  const [
+    apellido,
+    nombre,
+    dirCalle,
+    dirNro,
+    dirPiso,
+    dirDpto,
+    descProvincia,
+    localidad,
+    codPostal,
+  ] = await Promise.all([
+    readField(sel.formApellido),
+    readField(sel.formNombre),
+    readField(sel.formDirCalle),
+    readField(sel.formDirNro),
+    readField(sel.formDirPiso),
+    readField(sel.formDirDpto),
+    readField(sel.formDescProvincia),
+    readField(sel.formLocalidad),
+    readField(sel.formCodPostal),
+  ]);
 
   await appendLogFn(jobId, `Datos extraidos: ${apellido} ${nombre}, ${dirCalle} ${dirNro}`, onLog);
 
@@ -548,17 +518,13 @@ async function processPullEmployers(
   job: { userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
 
   // Navigate through SiRADIG person/year selection to reach the main menu
-  const navResult = await navigateToSiradigMainMenu(
-    siradigPage,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const navResult = await navigateToSiradigMainMenu(siradigPage, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!navResult.success) {
@@ -580,12 +546,6 @@ async function processPullEmployers(
   await empTab.click();
   await siradigPage.waitForLoadState("networkidle");
   await siradigPage.waitForTimeout(2000);
-
-  await onScreenshot(
-    await siradigPage.screenshot({ fullPage: true }),
-    "employers-section",
-    "Seccion de empleadores",
-  );
 
   // Extract employer rows
   const rows = siradigPage.locator(sel.tableRows);
@@ -637,12 +597,6 @@ async function processPullEmployers(
       });
       await appendLogFn(jobId, `Empleador ${i + 1}: ${razonSocial} (${cuit})`, onLog);
     }
-
-    await onScreenshot(
-      await siradigPage.screenshot({ fullPage: true }),
-      `employer-${i}`,
-      `Empleador: ${razonSocial}`,
-    );
 
     // Go back to list
     const volverBtn = siradigPage.locator(sel.formVolverBtn).first();
@@ -702,7 +656,6 @@ async function processPushEmployers(
   job: { userId: string; fiscalYear?: number | null; employerId?: string | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ): Promise<void> {
   if (!job.employerId) {
@@ -737,11 +690,8 @@ async function processPushEmployers(
   await appendLogFn(jobId, `Exportando: ${employer.razonSocial} (${employer.cuit})`, onLog);
 
   // Navigate through SiRADIG person/year selection
-  const navResult = await navigateToSiradigMainMenu(
-    siradigPage,
-    employer.fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const navResult = await navigateToSiradigMainMenu(siradigPage, employer.fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!navResult.success) {
@@ -763,12 +713,6 @@ async function processPushEmployers(
   await empTab.click();
   await siradigPage.waitForLoadState("networkidle");
   await siradigPage.waitForTimeout(2000);
-
-  await onScreenshot(
-    await siradigPage.screenshot({ fullPage: true }),
-    "employer-section",
-    "Seccion de Empleadores",
-  );
 
   // SiRADIG may navigate directly to the form (when no employers exist)
   // or to the employer list. Detect which page we're on.
@@ -895,12 +839,6 @@ async function processPushEmployers(
     await siradigPage.waitForTimeout(1500);
   }
 
-  await onScreenshot(
-    await siradigPage.screenshot({ fullPage: true }),
-    "employer-form-filled",
-    "Formulario completado",
-  );
-
   // Save
   await appendLogFn(jobId, "Guardando empleador...", onLog);
   const guardarBtn = siradigPage.locator(sel.formGuardarBtn).first();
@@ -913,11 +851,6 @@ async function processPushEmployers(
   if (errorEl) {
     const errorText = (await errorEl.textContent())?.trim() ?? "Error desconocido";
     await appendLogFn(jobId, `Error al guardar: ${errorText}`, onLog);
-    await onScreenshot(
-      await siradigPage.screenshot({ fullPage: true }),
-      "employer-save-error",
-      "Error al guardar",
-    );
     setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
@@ -925,12 +858,6 @@ async function processPushEmployers(
     });
     return;
   }
-
-  await onScreenshot(
-    await siradigPage.screenshot({ fullPage: true }),
-    "employer-saved",
-    "Empleador guardado",
-  );
 
   const action = isNewEmployer ? "creado" : "actualizado";
   await appendLogFn(jobId, `Empleador ${action} exitosamente`, onLog);
@@ -961,18 +888,13 @@ async function processPullDomesticWorkers(
   job: { userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
 
   await appendLogFn(jobId, "Iniciando importacion de trabajadores domesticos...", onLog);
 
-  const workers = await pullDomesticWorkersOnly(
-    page,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
-  );
+  const workers = await pullDomesticWorkersOnly(page, (msg) => appendLogFn(jobId, msg, onLog));
 
   await appendStep(jobId, "save", onLog);
   let workersCreated = 0;
@@ -1055,7 +977,6 @@ async function processPullProfile(
   job: { userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
@@ -1063,11 +984,8 @@ async function processPullProfile(
   let hasFailure = false;
 
   // ── Step 1: Navigate to SiRADIG main menu (person + year + draft) ──
-  const navResult = await navigateToSiradigMainMenu(
-    siradigPage,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const navResult = await navigateToSiradigMainMenu(siradigPage, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!navResult.success) {
@@ -1095,24 +1013,30 @@ async function processPullProfile(
     await siradigPage.waitForLoadState("networkidle");
     await siradigPage.waitForTimeout(1500);
 
-    await onScreenshot(
-      await siradigPage.screenshot({ fullPage: true }),
-      "datos-personales",
-      "Datos Personales",
-    );
-
     const readField = (selector: string) =>
       siradigPage.$eval(selector, (el) => (el as HTMLInputElement).value).catch(() => "");
 
-    const apellido = await readField(sel.formApellido);
-    const nombre = await readField(sel.formNombre);
-    const dirCalle = await readField(sel.formDirCalle);
-    const dirNro = await readField(sel.formDirNro);
-    const dirPiso = await readField(sel.formDirPiso);
-    const dirDpto = await readField(sel.formDirDpto);
-    const descProvincia = await readField(sel.formDescProvincia);
-    const localidad = await readField(sel.formLocalidad);
-    const codPostal = await readField(sel.formCodPostal);
+    const [
+      apellido,
+      nombre,
+      dirCalle,
+      dirNro,
+      dirPiso,
+      dirDpto,
+      descProvincia,
+      localidad,
+      codPostal,
+    ] = await Promise.all([
+      readField(sel.formApellido),
+      readField(sel.formNombre),
+      readField(sel.formDirCalle),
+      readField(sel.formDirNro),
+      readField(sel.formDirPiso),
+      readField(sel.formDirDpto),
+      readField(sel.formDescProvincia),
+      readField(sel.formLocalidad),
+      readField(sel.formCodPostal),
+    ]);
 
     await prisma.personalData.upsert({
       where: { userId_fiscalYear: { userId: job.userId, fiscalYear } },
@@ -1169,12 +1093,6 @@ async function processPullProfile(
     await siradigPage.waitForLoadState("networkidle");
     await siradigPage.waitForTimeout(2000);
 
-    await onScreenshot(
-      await siradigPage.screenshot({ fullPage: true }),
-      "employers-section",
-      "Seccion de empleadores",
-    );
-
     const rows = siradigPage.locator(sel.tableRows);
     const rowCount = await rows.count();
 
@@ -1197,21 +1115,18 @@ async function processPullProfile(
       await siradigPage.waitForLoadState("networkidle");
       await siradigPage.waitForTimeout(1500);
 
-      const cuit = await siradigPage
-        .$eval(sel.formCuit, (el) => (el as HTMLInputElement).value)
-        .catch(() => "");
-      const razonSocial = await siradigPage
-        .$eval(sel.formRazonSocial, (el) => (el as HTMLInputElement).value)
-        .catch(() => "");
-      const fechaInicio = await siradigPage
-        .$eval(sel.formFechaInicio, (el) => (el as HTMLInputElement).value)
-        .catch(() => "");
-      const fechaFin = await siradigPage
-        .$eval(sel.formFechaFin, (el) => (el as HTMLInputElement).value)
-        .catch(() => "");
-      const agenteVal = await siradigPage
-        .$eval(sel.formAgenteRetencion, (el) => (el as HTMLSelectElement).value)
-        .catch(() => "N");
+      const readEmpField = (s: string) =>
+        siradigPage.$eval(s, (el) => (el as HTMLInputElement).value).catch(() => "");
+
+      const [cuit, razonSocial, fechaInicio, fechaFin, agenteVal] = await Promise.all([
+        readEmpField(sel.formCuit),
+        readEmpField(sel.formRazonSocial),
+        readEmpField(sel.formFechaInicio),
+        readEmpField(sel.formFechaFin),
+        siradigPage
+          .$eval(sel.formAgenteRetencion, (el) => (el as HTMLSelectElement).value)
+          .catch(() => "N"),
+      ]);
 
       if (cuit) {
         employers.push({
@@ -1230,32 +1145,33 @@ async function processPullProfile(
       await siradigPage.waitForTimeout(1500);
     }
 
-    // Upsert employers
-    let empCreated = 0;
-    let empUpdated = 0;
-
-    for (const emp of employers) {
-      const existing = await prisma.employer.findFirst({
-        where: { userId: job.userId, fiscalYear, cuit: emp.cuit },
-      });
-
-      const data = {
-        razonSocial: emp.razonSocial,
-        fechaInicio: emp.fechaInicio,
-        fechaFin: emp.fechaFin || null,
-        agenteRetencion: emp.agenteRetencion,
-      };
-
-      if (existing) {
-        await prisma.employer.update({ where: { id: existing.id }, data });
-        empUpdated++;
-      } else {
-        await prisma.employer.create({
-          data: { ...data, userId: job.userId, fiscalYear, cuit: emp.cuit },
+    // Upsert employers in parallel
+    const empResults = await Promise.all(
+      employers.map(async (emp) => {
+        const existing = await prisma.employer.findFirst({
+          where: { userId: job.userId, fiscalYear, cuit: emp.cuit },
         });
-        empCreated++;
-      }
-    }
+
+        const data = {
+          razonSocial: emp.razonSocial,
+          fechaInicio: emp.fechaInicio,
+          fechaFin: emp.fechaFin || null,
+          agenteRetencion: emp.agenteRetencion,
+        };
+
+        if (existing) {
+          await prisma.employer.update({ where: { id: existing.id }, data });
+          return "updated" as const;
+        } else {
+          await prisma.employer.create({
+            data: { ...data, userId: job.userId, fiscalYear, cuit: emp.cuit },
+          });
+          return "created" as const;
+        }
+      }),
+    );
+    const empCreated = empResults.filter((r) => r === "created").length;
+    const empUpdated = empResults.filter((r) => r === "updated").length;
 
     await appendLogFn(
       jobId,
@@ -1277,20 +1193,16 @@ async function processPullProfile(
   try {
     await appendLogFn(jobId, "Extrayendo cargas de familia...", onLog);
 
-    const cfNav = await navigateToCargasFamilia(
-      siradigPage,
-      (msg) => appendLogFn(jobId, msg, onLog),
-      onScreenshot,
+    const cfNav = await navigateToCargasFamilia(siradigPage, (msg) =>
+      appendLogFn(jobId, msg, onLog),
     );
 
     if (!cfNav.success) {
       throw new Error(cfNav.error || "No se pudo acceder a cargas de familia");
     }
 
-    const extractResult = await extractCargasFamilia(
-      siradigPage,
-      (msg) => appendLogFn(jobId, msg, onLog),
-      onScreenshot,
+    const extractResult = await extractCargasFamilia(siradigPage, (msg) =>
+      appendLogFn(jobId, msg, onLog),
     );
 
     if (!extractResult.success) {
@@ -1324,44 +1236,41 @@ async function processPullProfile(
     // Close SiRADIG tab and return to portal
     await siradigPage.close();
 
-    const workers = await pullDomesticWorkersOnly(
-      page,
-      (msg) => appendLogFn(jobId, msg, onLog),
-      onScreenshot,
-    );
+    const workers = await pullDomesticWorkersOnly(page, (msg) => appendLogFn(jobId, msg, onLog));
 
-    let workersCreated = 0;
-    let workersUpdated = 0;
-
-    for (const w of workers) {
-      const existing = await prisma.domesticWorker.findFirst({
-        where: { userId: job.userId, fiscalYear, cuil: w.cuil },
-      });
-
-      const workerData = {
-        apellidoNombre: w.apellidoNombre,
-        tipoTrabajo: w.tipoTrabajo,
-        domicilioLaboral: w.domicilioLaboral,
-        horasSemanales: w.horasSemanales,
-        condicion: w.condicion,
-        obraSocial: w.obraSocial,
-        fechaNacimiento: w.fechaNacimiento,
-        fechaIngreso: w.fechaIngreso,
-        modalidadPago: w.modalidadPago,
-        modalidadTrabajo: w.modalidadTrabajo,
-        remuneracionPactada: w.remuneracionPactada ? parseFloat(w.remuneracionPactada) : null,
-      };
-
-      if (existing) {
-        await prisma.domesticWorker.update({ where: { id: existing.id }, data: workerData });
-        workersUpdated++;
-      } else {
-        await prisma.domesticWorker.create({
-          data: { ...workerData, userId: job.userId, fiscalYear, cuil: w.cuil },
+    const workerResults = await Promise.all(
+      workers.map(async (w) => {
+        const existing = await prisma.domesticWorker.findFirst({
+          where: { userId: job.userId, fiscalYear, cuil: w.cuil },
         });
-        workersCreated++;
-      }
-    }
+
+        const workerData = {
+          apellidoNombre: w.apellidoNombre,
+          tipoTrabajo: w.tipoTrabajo,
+          domicilioLaboral: w.domicilioLaboral,
+          horasSemanales: w.horasSemanales,
+          condicion: w.condicion,
+          obraSocial: w.obraSocial,
+          fechaNacimiento: w.fechaNacimiento,
+          fechaIngreso: w.fechaIngreso,
+          modalidadPago: w.modalidadPago,
+          modalidadTrabajo: w.modalidadTrabajo,
+          remuneracionPactada: w.remuneracionPactada ? parseFloat(w.remuneracionPactada) : null,
+        };
+
+        if (existing) {
+          await prisma.domesticWorker.update({ where: { id: existing.id }, data: workerData });
+          return "updated" as const;
+        } else {
+          await prisma.domesticWorker.create({
+            data: { ...workerData, userId: job.userId, fiscalYear, cuil: w.cuil },
+          });
+          return "created" as const;
+        }
+      }),
+    );
+    const workersCreated = workerResults.filter((r) => r === "created").length;
+    const workersUpdated = workerResults.filter((r) => r === "updated").length;
 
     await appendLogFn(
       jobId,
@@ -1428,7 +1337,6 @@ async function processPullDomesticReceipts(
   job: { userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
@@ -1467,12 +1375,8 @@ async function processPullDomesticReceipts(
     onLog,
   );
 
-  const receiptsData = await pullDomesticReceipts(
-    page,
-    workerCuils,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const receiptsData = await pullDomesticReceipts(page, workerCuils, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   // Upsert receipts
@@ -1614,18 +1518,14 @@ async function processPullComprobantes(
   job: { userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
-  appendStepFn: typeof appendStep,
+  _appendStepFn: typeof appendStep,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
 
   // Navigate to Mis Comprobantes and export CSV
-  const result = await navigateToMisComprobantes(
-    page,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const result = await navigateToMisComprobantes(page, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!result.success) {
@@ -1825,7 +1725,7 @@ async function processPullComprobantes(
     try {
       const result = await prisma.invoice.createMany({ data: batch });
       imported += result.count;
-    } catch (err) {
+    } catch {
       // If batch fails, fall back to individual inserts to isolate errors
       for (const inv of batch) {
         try {
@@ -1894,7 +1794,6 @@ async function runSiradigExtractionPhase(
   job: { userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
   appendStepFn: typeof appendStep,
   mode: "invoices" | "domestic",
@@ -1904,11 +1803,7 @@ async function runSiradigExtractionPhase(
   await appendStepFn(jobId, "siradig", onLog);
   await appendLogFn(jobId, "Abriendo SiRADIG para leer deducciones existentes...", onLog);
 
-  const siradigPage = await navigateToSiradig(
-    arcaPage,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
-  );
+  const siradigPage = await navigateToSiradig(arcaPage, (msg) => appendLogFn(jobId, msg, onLog));
 
   if (!siradigPage) {
     const error = "No se pudo abrir SiRADIG";
@@ -1923,11 +1818,8 @@ async function runSiradigExtractionPhase(
 
   try {
     // Navigate to deductions section
-    const navResult = await navigateToDeductionSection(
-      siradigPage,
-      fiscalYear,
-      (msg) => appendLogFn(jobId, msg, onLog),
-      onScreenshot,
+    const navResult = await navigateToDeductionSection(siradigPage, fiscalYear, (msg) =>
+      appendLogFn(jobId, msg, onLog),
     );
 
     if (!navResult.success) {
@@ -1956,11 +1848,8 @@ async function runSiradigExtractionPhase(
           ])
         : new Set(["SERVICIO_DOMESTICO"]);
 
-    const entries = await extractSiradigDeductions(
-      siradigPage,
-      categories,
-      (msg) => appendLogFn(jobId, msg, onLog),
-      onScreenshot,
+    const entries = await extractSiradigDeductions(siradigPage, categories, (msg) =>
+      appendLogFn(jobId, msg, onLog),
     );
 
     if (entries.length === 0) {
@@ -2542,7 +2431,6 @@ async function processSubmitDomesticDeduction(
   job: { userId: string; fiscalYear?: number | null; resultData?: Prisma.JsonValue },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
@@ -2558,11 +2446,8 @@ async function processSubmitDomesticDeduction(
       : null;
 
   // Navigate to deductions section (person → period → draft → form → accordion)
-  const navResult = await navigateToDeductionSection(
-    siradigPage,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const navResult = await navigateToDeductionSection(siradigPage, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!navResult.success) {
@@ -2636,11 +2521,8 @@ async function processSubmitDomesticDeduction(
     };
 
     // Fill the form
-    const fillResult = await fillDomesticDeductionForm(
-      siradigPage,
-      deduction,
-      (msg) => appendLogFn(jobId, msg, onLog),
-      onScreenshot,
+    const fillResult = await fillDomesticDeductionForm(siradigPage, deduction, (msg) =>
+      appendLogFn(jobId, msg, onLog),
     );
 
     if (!fillResult.success) {
@@ -2659,11 +2541,7 @@ async function processSubmitDomesticDeduction(
     }
 
     // Click Guardar
-    const saveResult = await submitDeduction(
-      siradigPage,
-      (msg) => appendLogFn(jobId, msg, onLog),
-      onScreenshot,
-    );
+    const saveResult = await submitDeduction(siradigPage, (msg) => appendLogFn(jobId, msg, onLog));
 
     if (saveResult.success) {
       await appendLogFn(
@@ -2731,18 +2609,14 @@ async function processPullPresentaciones(
   job: { id: string; userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ) {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
 
   await appendLogFn(jobId, `Importando presentaciones para ${fiscalYear}...`, onLog);
 
-  const result = await pullPresentaciones(
-    siradigPage,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const result = await pullPresentaciones(siradigPage, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!result.success) {
@@ -2855,18 +2729,14 @@ async function processSubmitPresentacion(
   job: { id: string; userId: string; fiscalYear?: number | null },
   jobId: string,
   onLog: LogCallback | undefined,
-  onScreenshot: (buffer: Buffer, slug: string, label: string) => Promise<void>,
   appendLogFn: typeof appendLog,
 ) {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
 
   await appendLogFn(jobId, `Enviando presentacion para ${fiscalYear}...`, onLog);
 
-  const result = await submitPresentacion(
-    siradigPage,
-    fiscalYear,
-    (msg) => appendLogFn(jobId, msg, onLog),
-    onScreenshot,
+  const result = await submitPresentacion(siradigPage, fiscalYear, (msg) =>
+    appendLogFn(jobId, msg, onLog),
   );
 
   if (!result.success) {
@@ -2975,7 +2845,14 @@ function parseDateDDMMYYYY(dateStr: string): Date | null {
 }
 
 export async function processJob(jobId: string, onLog?: LogCallback): Promise<void> {
-  return enqueueJob(async () => {
+  // Load userId first so we can enqueue on the per-user queue
+  const jobMeta = await prisma.automationJob.findUnique({
+    where: { id: jobId },
+    select: { userId: true },
+  });
+  if (!jobMeta) throw new Error("Job no encontrado");
+
+  return enqueueJob(jobMeta.userId, async () => {
     const job = await prisma.automationJob.findUnique({
       where: { id: jobId },
       include: {
@@ -3008,35 +2885,24 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
       },
     });
 
-    // Screenshot step counter
-    let stepCounter = 0;
-
-    const onScreenshot = async (buffer: Buffer, slug: string, label: string) => {
-      stepCounter++;
-      await saveScreenshot(jobId, stepCounter, slug, label, buffer);
-      await appendLog(jobId, `Screenshot: ${label}`, onLog);
-    };
-
     try {
-      // Decrypt credentials
-      await appendStep(jobId, "login", onLog);
-      await appendLog(jobId, "Desencriptando credenciales...", onLog);
-      const clave = decrypt(credential.encryptedClave, credential.iv, credential.authTag);
+      // Cancel any pending deferred context release from a previous job,
+      // so the context stays alive and we can reuse the ARCA session.
+      cancelContextRelease(userId);
 
-      // Get browser context with video recording
+      // Decrypt credentials and initialize browser in parallel
+      await appendStep(jobId, "login", onLog);
       await appendLog(jobId, "Iniciando navegador...", onLog);
-      const videoDir = await ensureVideoDir(jobId);
-      const context = await getContext(userId, { recordVideoDir: videoDir });
+      const [clave, context] = await Promise.all([
+        Promise.resolve(decrypt(credential.encryptedClave, credential.iv, credential.authTag)),
+        getContext(userId),
+      ]);
       const page = await context.newPage();
 
       try {
         // Login to ARCA
-        const loginResult = await loginToArca(
-          page,
-          credential.cuit,
-          clave,
-          (msg) => appendLog(jobId, msg, onLog),
-          onScreenshot,
+        const loginResult = await loginToArca(page, credential.cuit, clave, (msg) =>
+          appendLog(jobId, msg, onLog),
         );
 
         if (!loginResult.success) {
@@ -3067,7 +2933,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               job,
               jobId,
               onLog,
-              onScreenshot,
               appendLog,
               appendStep,
               "invoices",
@@ -3088,22 +2953,14 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
           // Phase 2: Import from Mis Comprobantes CSV
           await appendStep(jobId, "download", onLog);
-          await processPullComprobantes(
-            page,
-            job,
-            jobId,
-            onLog,
-            onScreenshot,
-            appendLog,
-            appendStep,
-          );
+          await processPullComprobantes(page, job, jobId, onLog, appendLog, appendStep);
           return;
         }
 
         // ── PULL_DOMESTIC_WORKERS flow (workers only, no receipts) ──
         if (job.jobType === "PULL_DOMESTIC_WORKERS") {
           await appendStep(jobId, "download", onLog);
-          await processPullDomesticWorkers(page, job, jobId, onLog, onScreenshot, appendLog);
+          await processPullDomesticWorkers(page, job, jobId, onLog, appendLog);
           return;
         }
 
@@ -3116,7 +2973,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               job,
               jobId,
               onLog,
-              onScreenshot,
               appendLog,
               appendStep,
               "domestic",
@@ -3136,17 +2992,13 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
           // Phase 2: Import receipts from ARCA
           await appendStep(jobId, "download", onLog);
-          await processPullDomesticReceipts(page, job, jobId, onLog, onScreenshot, appendLog);
+          await processPullDomesticReceipts(page, job, jobId, onLog, appendLog);
           return;
         }
 
         // Navigate to SiRADIG (opens in a new tab)
         await appendStep(jobId, "siradig", onLog);
-        const siradigPage = await navigateToSiradig(
-          page,
-          (msg) => appendLog(jobId, msg, onLog),
-          onScreenshot,
-        );
+        const siradigPage = await navigateToSiradig(page, (msg) => appendLog(jobId, msg, onLog));
 
         if (!siradigPage) {
           setJobStatus(jobId, "FAILED");
@@ -3164,66 +3016,45 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         // ── PULL_FAMILY_DEPENDENTS flow ──
         if (job.jobType === "PULL_FAMILY_DEPENDENTS") {
           await appendStep(jobId, "extract", onLog);
-          await processPullFamilyDependents(
-            siradigPage,
-            job,
-            jobId,
-            onLog,
-            onScreenshot,
-            appendLog,
-          );
+          await processPullFamilyDependents(siradigPage, job, jobId, onLog, appendLog);
           return;
         }
 
         // ── PUSH_FAMILY_DEPENDENTS flow ──
         if (job.jobType === "PUSH_FAMILY_DEPENDENTS") {
           await appendStep(jobId, "upload", onLog);
-          await processPushFamilyDependents(
-            siradigPage,
-            job,
-            jobId,
-            onLog,
-            onScreenshot,
-            appendLog,
-          );
+          await processPushFamilyDependents(siradigPage, job, jobId, onLog, appendLog);
           return;
         }
 
         // ── PULL_PERSONAL_DATA flow ──
         if (job.jobType === "PULL_PERSONAL_DATA") {
-          await processPullPersonalData(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
+          await processPullPersonalData(siradigPage, job, jobId, onLog, appendLog);
           return;
         }
 
         // ── PULL_PROFILE compound flow ──
         if (job.jobType === "PULL_PROFILE") {
-          await processPullProfile(page, siradigPage, job, jobId, onLog, onScreenshot, appendLog);
+          await processPullProfile(page, siradigPage, job, jobId, onLog, appendLog);
           return;
         }
 
         // ── PULL_EMPLOYERS flow ──
         if (job.jobType === "PULL_EMPLOYERS") {
-          await processPullEmployers(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
+          await processPullEmployers(siradigPage, job, jobId, onLog, appendLog);
           return;
         }
 
         // ── PUSH_EMPLOYERS flow ──
         if (job.jobType === "PUSH_EMPLOYERS") {
-          await processPushEmployers(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
+          await processPushEmployers(siradigPage, job, jobId, onLog, appendLog);
           return;
         }
 
         // ── SUBMIT_DOMESTIC_DEDUCTION flow ──
         if (job.jobType === "SUBMIT_DOMESTIC_DEDUCTION") {
           await appendStep(jobId, "fill", onLog);
-          await processSubmitDomesticDeduction(
-            siradigPage,
-            job,
-            jobId,
-            onLog,
-            onScreenshot,
-            appendLog,
-          );
+          await processSubmitDomesticDeduction(siradigPage, job, jobId, onLog, appendLog);
           return;
         }
 
@@ -3234,7 +3065,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             siradigPage,
             job.fiscalYear ?? new Date().getFullYear(),
             (msg) => appendLog(jobId, msg, onLog),
-            onScreenshot,
           );
           if (!navResult.success) {
             setJobStatus(jobId, "FAILED");
@@ -3245,7 +3075,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             return;
           }
           await appendStep(jobId, "download", onLog);
-          await processPullPresentaciones(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
+          await processPullPresentaciones(siradigPage, job, jobId, onLog, appendLog);
           return;
         }
 
@@ -3256,7 +3086,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             siradigPage,
             job.fiscalYear ?? new Date().getFullYear(),
             (msg) => appendLog(jobId, msg, onLog),
-            onScreenshot,
           );
           if (!navResult.success) {
             setJobStatus(jobId, "FAILED");
@@ -3267,7 +3096,7 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             return;
           }
           await appendStep(jobId, "submit", onLog);
-          await processSubmitPresentacion(siradigPage, job, jobId, onLog, onScreenshot, appendLog);
+          await processSubmitPresentacion(siradigPage, job, jobId, onLog, appendLog);
           return;
         }
 
@@ -3291,7 +3120,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             siradigPage,
             job.invoice.fiscalYear,
             (msg) => appendLog(jobId, msg, onLog),
-            onScreenshot,
           );
 
           if (!navResult.success) {
@@ -3333,7 +3161,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
                 : undefined,
             },
             (msg) => appendLog(jobId, msg, onLog),
-            onScreenshot,
           );
 
           if (!fillResult.success) {
@@ -3350,10 +3177,8 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           }
 
           // Submit the deduction
-          const submitResult = await submitDeduction(
-            siradigPage,
-            (msg) => appendLog(jobId, msg, onLog),
-            onScreenshot,
+          const submitResult = await submitDeduction(siradigPage, (msg) =>
+            appendLog(jobId, msg, onLog),
           );
 
           setJobStatus(jobId, submitResult.success ? "COMPLETED" : "FAILED");
@@ -3374,7 +3199,12 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           }
         }
       } finally {
-        await page.close().catch(() => {});
+        // Close all pages in the context (main page + SiRADIG tab, etc.)
+        // so the next job starts with a clean context while reusing cookies.
+        const pages = page.context().pages();
+        for (const p of pages) {
+          await p.close().catch(() => {});
+        }
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error desconocido";
@@ -3389,17 +3219,14 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         },
       });
     } finally {
-      await releaseContext(userId);
-
-      // Finalize video after context is released (recording is done)
-      try {
-        const videoFilenames = await finalizeVideo(jobId);
-        if (videoFilenames.length > 0) {
-          jobVideoReady.set(jobId, videoFilenames);
-          await appendLog(jobId, "Grabacion de video disponible.", onLog);
-        }
-      } catch {
-        // Video finalization is best-effort
+      // On failure, release context immediately (session may be corrupted).
+      // On success, keep context alive for a while so the next job can reuse
+      // the ARCA session without re-authenticating (saves ~15s per job).
+      const finalStatus = getJobStatus(jobId);
+      if (finalStatus === "FAILED") {
+        await releaseContext(userId);
+      } else {
+        scheduleContextRelease(userId);
       }
     }
   });

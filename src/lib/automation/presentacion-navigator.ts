@@ -22,8 +22,6 @@
 import type { Page, Download } from "playwright";
 import { ARCA_SELECTORS } from "./selectors";
 
-type ScreenshotCallback = (buffer: Buffer, slug: string, label: string) => Promise<void>;
-
 interface PullResult {
   success: boolean;
   presentaciones: PresentacionData[];
@@ -56,10 +54,8 @@ export async function pullPresentaciones(
   page: Page,
   fiscalYear: number,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<PullResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
   const presentaciones: PresentacionData[] = [];
 
   try {
@@ -79,12 +75,6 @@ export async function pullPresentaciones(
     await consultaTab.click();
     await page.waitForLoadState("networkidle");
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "consulta-formularios",
-      "Consulta de Formularios Enviados",
-    );
-
     // Wait for the table to appear — it may not exist if there are no presentaciones
     const table = page.locator(SEL.formulariosTable);
     const tableVisible = await table.isVisible().catch(() => false);
@@ -95,11 +85,6 @@ export async function pullPresentaciones(
       } catch {
         // No table means no presentaciones for this period — this is a valid state
         log("No hay presentaciones enviadas para este periodo");
-        await capture(
-          await page.screenshot({ fullPage: true }),
-          "no-presentaciones",
-          "Sin presentaciones",
-        );
         return { success: true, presentaciones: [] };
       }
     }
@@ -181,12 +166,6 @@ export async function pullPresentaciones(
       });
     }
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "pull-complete",
-      "Importacion completada",
-    );
-
     return { success: true, presentaciones };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
@@ -203,10 +182,8 @@ export async function submitPresentacion(
   page: Page,
   fiscalYear: number,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<SubmitResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
 
   try {
     // Navigate to "Carga de Formulario" first (we start at the SiRADIG main menu)
@@ -222,12 +199,6 @@ export async function submitPresentacion(
     await vistaPrevia.waitFor({ state: "visible", timeout: 15000 });
     await vistaPrevia.click();
     await page.waitForLoadState("networkidle");
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "vista-previa",
-      "Vista Previa del formulario",
-    );
 
     // Download Borrador PDF via Imprimir Borrador
     log("Descargando borrador PDF...");
@@ -260,24 +231,12 @@ export async function submitPresentacion(
       log("No se pudo descargar el borrador PDF, continuando con el envio...");
     }
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "after-print",
-      "Despues de imprimir borrador",
-    );
-
     // Click Enviar al Empleador (opens jQuery UI confirmation dialog)
     log("Enviando al empleador...");
     const enviarBtn = page.locator(SEL.enviarEmpleador);
     await enviarBtn.waitFor({ state: "visible", timeout: 15000 });
     await enviarBtn.click();
     await page.waitForTimeout(1000);
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "enviar-empleador",
-      "Confirmacion de envio",
-    );
 
     // Confirm by clicking Generar Presentación in the dialog
     log("Confirmando: Generar Presentacion...");
@@ -286,12 +245,6 @@ export async function submitPresentacion(
     await generarBtn.click();
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(2000);
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "presentacion-generada",
-      "Presentacion generada",
-    );
 
     // Try to extract the presentación number and description from the page
     let numero: number | undefined;

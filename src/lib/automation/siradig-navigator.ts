@@ -14,7 +14,6 @@ import {
   getIndumentariaConceptoValue,
 } from "./deduction-mapper";
 import { ARCA_SELECTORS } from "./selectors";
-import type { ScreenshotCallback } from "./arca-navigator";
 
 /**
  * First-time SiRADIG users must confirm their personal data before
@@ -24,10 +23,8 @@ import type { ScreenshotCallback } from "./arca-navigator";
 async function confirmDatosPersonalesIfNeeded(
   page: Page,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<void> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.siradig;
 
   const cargaBtn = page.locator(ARCA_SELECTORS.siradigPresentaciones.cargaFormularioBtn);
@@ -45,24 +42,12 @@ async function confirmDatosPersonalesIfNeeded(
   await datosBtn.click();
   await page.waitForLoadState("networkidle");
 
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "datos-personales",
-    "Datos Personales (confirmacion)",
-  );
-
   // Click Guardar to confirm personal data
   log("Guardando Datos Personales...");
   const guardarBtn = page.locator(sel.datosPersonales.guardarBtn);
   await guardarBtn.waitFor({ state: "visible", timeout: 10_000 });
   await guardarBtn.click();
   await page.waitForLoadState("networkidle");
-
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "datos-personales-saved",
-    "Datos Personales guardados",
-  );
 
   // Return to main menu
   log("Volviendo al menu principal...");
@@ -100,7 +85,6 @@ export interface InvoiceData {
 export interface FillResult {
   success: boolean;
   error?: string;
-  screenshotBuffer?: Buffer;
 }
 
 /**
@@ -124,10 +108,8 @@ export async function navigateToSiradigMainMenu(
   page: Page,
   fiscalYear: number,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
 
   try {
     log(`Seleccionando persona a representar... (URL: ${page.url()})`);
@@ -138,12 +120,6 @@ export async function navigateToSiradigMainMenu(
     await personButton.click();
     await page.waitForLoadState("networkidle");
     log(`Persona seleccionada. URL: ${page.url()}`);
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "person-selected",
-      "Persona seleccionada",
-    );
 
     log(`Seleccionando periodo fiscal ${fiscalYear}...`);
 
@@ -181,12 +157,6 @@ export async function navigateToSiradigMainMenu(
       );
     }
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "after-continue",
-      "Pagina principal SiRADIG",
-    );
-
     // Dismiss the "Recordatorio - Formulario Borrador" modal if it appears
     try {
       const aceptarBtn = page.getByText("Aceptar", { exact: true }).first();
@@ -208,10 +178,8 @@ export async function navigateToSiradigMainMenu(
       log("Borrador existente detectado, continuando...");
     }
 
-    await capture(await page.screenshot({ fullPage: true }), "draft-menu", "Menu del borrador");
-
     // First-time users must confirm Datos Personales before other buttons enable
-    await confirmDatosPersonalesIfNeeded(page, onLog, onScreenshot);
+    await confirmDatosPersonalesIfNeeded(page, onLog);
 
     log("Navegacion al menu principal de SiRADIG completada");
     return { success: true };
@@ -237,10 +205,8 @@ export async function navigateToDeductionSection(
   page: Page,
   fiscalYear: number,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
 
   try {
     // Step 2: Select person to represent
@@ -254,12 +220,6 @@ export async function navigateToDeductionSection(
     await personButton.click();
     await page.waitForLoadState("networkidle");
     log(`Persona seleccionada. URL: ${page.url()}`);
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "person-selected",
-      "Persona seleccionada",
-    );
 
     // Step 3: Select fiscal period and click "Continuar"
     log(`Seleccionando periodo fiscal ${fiscalYear}...`);
@@ -287,12 +247,6 @@ export async function navigateToDeductionSection(
       }
       await periodSelect.selectOption(yearStr);
 
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "period-selected",
-        `Periodo ${fiscalYear} seleccionado`,
-      );
-
       // Click "Continuar"
       log("Haciendo click en Continuar...");
       const continueBtn = page.getByText("Continuar").first();
@@ -304,12 +258,6 @@ export async function navigateToDeductionSection(
         "Periodo fiscal ya seleccionado automaticamente (unico periodo disponible), continuando...",
       );
     }
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "after-continue",
-      "Pagina principal SiRADIG",
-    );
 
     // Dismiss the "Recordatorio - Formulario Borrador" modal if it appears
     try {
@@ -335,10 +283,8 @@ export async function navigateToDeductionSection(
       log("Borrador existente detectado, continuando...");
     }
 
-    await capture(await page.screenshot({ fullPage: true }), "draft-menu", "Menu del borrador");
-
     // First-time users must confirm Datos Personales before other buttons enable
-    await confirmDatosPersonalesIfNeeded(page, onLog, onScreenshot);
+    await confirmDatosPersonalesIfNeeded(page, onLog);
 
     // Step 5: Click "Carga de Formulario" (#btn_carga)
     // This button uses a jQuery click handler that navigates via
@@ -350,12 +296,6 @@ export async function navigateToDeductionSection(
     await page.waitForLoadState("networkidle");
     log(`Formulario cargado. URL: ${page.url()}`);
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "form-loaded",
-      "Formulario F572 Web cargado",
-    );
-
     // Step 6: Expand "3 - Deducciones y desgravaciones" accordion section
     log("Expandiendo seccion de Deducciones y desgravaciones...");
     const deductionsSection = page.getByText("Deducciones y desgravaciones").first();
@@ -364,26 +304,11 @@ export async function navigateToDeductionSection(
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(1000); // Wait for accordion animation
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "deductions-section",
-      "Seccion de deducciones expandida",
-    );
-
     log("Navegacion a seccion de deducciones completada");
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error navegando dentro de SiRADIG: ${msg} | URL: ${page.url()}`);
-    try {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "navigation-error",
-        "Error de navegacion en SiRADIG",
-      );
-    } catch {
-      /* screenshot may fail too */
-    }
     return { success: false, error: msg };
   }
 }
@@ -400,7 +325,6 @@ async function fillAlquilerLocatarioForm(
   page: Page,
   invoice: InvoiceData,
   log: (msg: string) => void,
-  capture: (buffer: Buffer, slug: string, label: string) => Promise<void>,
 ): Promise<void> {
   // Wait for form to be ready (CUIT + razonSocial already filled by the common flow)
   await page.waitForTimeout(500);
@@ -455,12 +379,6 @@ async function fillAlquilerLocatarioForm(
     await page.waitForTimeout(300);
   }
 
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "alquiler-header-filled",
-    "Datos del locador y contrato completados",
-  );
-
   // Open "Agregar Mes Individual" dialog — use jQuery trigger to open the dialog
   log("Agregando mes individual...");
   await page.evaluate(() => {
@@ -486,12 +404,6 @@ async function fillAlquilerLocatarioForm(
   await montoField.press("Tab"); // Tab to next field triggers blur → Monto Tope calculation
   await page.waitForTimeout(800);
 
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "alquiler-mes-dialog",
-    "Dialogo de mes individual completado",
-  );
-
   // Click "Agregar" in the mes dialog
   // Use filter({ has }) instead of `:visible` which is jQuery-only, not valid CSS for Playwright
   log("Confirmando mes individual...");
@@ -500,12 +412,6 @@ async function fillAlquilerLocatarioForm(
   await mesAgregarBtn.waitFor({ state: "visible", timeout: 5000 });
   await mesAgregarBtn.click();
   await page.waitForTimeout(1500);
-
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "alquiler-mes-added",
-    "Mes individual agregado",
-  );
 
   // Add comprobante — non-fatal: if this fails, we still proceed to Guardar
   try {
@@ -521,12 +427,6 @@ async function fillAlquilerLocatarioForm(
       await page.locator("#btn_alta_comprobante").click();
     }
     await page.waitForTimeout(1000);
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "alquiler-cmp-dialog",
-      "Dialogo de comprobante abierto",
-    );
 
     // Fill comprobante fields via jQuery to trigger form handlers
     if (invoice.invoiceDate) {
@@ -575,12 +475,6 @@ async function fillAlquilerLocatarioForm(
       (window as any).$("#cmpMontoFacturado").val(v).trigger("change");
     }, invoice.amount);
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "alquiler-cmp-filled",
-      "Comprobante completado",
-    );
-
     // Click "Agregar" in the comprobante dialog
     log("Agregando comprobante...");
     const cmpDialog = page
@@ -596,12 +490,6 @@ async function fillAlquilerLocatarioForm(
       `Advertencia: no se pudo agregar el comprobante (${err instanceof Error ? err.message : err}). Continuando con Guardar...`,
     );
   }
-
-  await capture(
-    await page.screenshot({ fullPage: true }),
-    "alquiler-form-done",
-    "Formulario de alquiler completado",
-  );
 }
 
 /**
@@ -613,7 +501,13 @@ async function fillAlquilerLocatarioForm(
  *
  * Returns true if an entry was deleted, false if no matching entry was found.
  */
-async function deleteExistingDeduction(
+/**
+ * Find an existing deduction row matching category+CUIT+month and click its edit button.
+ * Returns true if an existing entry was found and the edit form was opened.
+ * When true, the page navigates to the category-specific form with data pre-filled,
+ * and the caller should skip straight to adding a comprobante.
+ */
+async function editExistingDeduction(
   page: Page,
   categoryText: string,
   cuitDigits: string,
@@ -622,7 +516,8 @@ async function deleteExistingDeduction(
 ): Promise<boolean> {
   const categoryLower = categoryText.toLowerCase();
 
-  const deleteResult = await page.evaluate(
+  // Find the row index matching category+CUIT+month
+  const rowIndex = await page.evaluate(
     ({
       categoryLower,
       cuitDigits,
@@ -645,42 +540,57 @@ async function deleteExistingDeduction(
           const rowText = rows[r].textContent ?? "";
           const normalizedRow = rowText.replace(/-/g, "");
           if (normalizedRow.includes(cuitDigits) && rowText.includes(monthName)) {
-            // Found a match — delete it.
-            // SiRADIG deduction table rows use "div.act_eliminar" (not "div.eliminar")
-            // with an inner <span class="ui-icon ui-icon-close">.
-            // Event handlers are bound via jQuery, so use $.trigger("click").
-            const span = rows[r].querySelector("div.act_eliminar span");
-            if (!span) return { found: true, deleted: false, error: "No delete button found" };
-
-            // Override window.confirm to auto-accept the "¿Está seguro?" dialog
-            const origConfirm = window.confirm;
-            window.confirm = () => true;
-            try {
-              (window as any).$(span).trigger("click");
-            } finally {
-              window.confirm = origConfirm;
-            }
-            return { found: true, deleted: true };
+            return r;
           }
         }
       }
-      return { found: false, deleted: false };
+      return -1;
     },
     { categoryLower, cuitDigits, monthName },
   );
 
-  if (deleteResult.found && !deleteResult.deleted) {
-    log(`Deduccion existente encontrada pero no se pudo eliminar: ${deleteResult.error}`);
+  if (rowIndex === -1) return false;
+
+  // Navigate directly to the edit URL. SiRADIG's edit handler does:
+  //   document.location.href = $(table).data("urlEditar") + "?id=" + $(tr).data("idReg")
+  // We replicate this by reading the URL and ID from the DOM, then navigating directly.
+  // This is more reliable than triggering jQuery click events.
+  log("Deducción existente encontrada, editando para agregar comprobante...");
+  const editUrl = await page.evaluate(
+    ({ categoryLower, rowIndex }) => {
+      const fieldsets = document.querySelectorAll(
+        "#div_tabla_deducciones_agrupadas fieldset.grupo_deducciones",
+      );
+      for (let f = 0; f < fieldsets.length; f++) {
+        const legend = fieldsets[f].querySelector("legend");
+        const legendText = (legend?.textContent ?? "").toLowerCase();
+        if (!legendText.includes(categoryLower)) continue;
+
+        const rows = fieldsets[f].querySelectorAll("tbody tr");
+        const row = rows[rowIndex];
+        if (!row) return null;
+
+        const table = row.closest("table");
+        const urlEditar = (window as any).$(table).data("urlEditar");
+        const idReg = (window as any).$(row).data("idReg");
+        const tipoReg = (window as any).$(row).data("tipoReg");
+        if (!urlEditar || !idReg) return null;
+
+        return urlEditar + "?id=" + idReg + (tipoReg ? "&t=" + tipoReg : "");
+      }
+      return null;
+    },
+    { categoryLower, rowIndex },
+  );
+
+  if (!editUrl) {
+    log("No se pudo obtener la URL de edición");
     return false;
   }
 
-  if (deleteResult.deleted) {
-    // Wait for the table to update after deletion
-    await page.waitForTimeout(2000);
-    return true;
-  }
-
-  return false;
+  await page.goto(new URL(editUrl, page.url()).href, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  return true;
 }
 
 /**
@@ -704,10 +614,8 @@ export async function fillDeductionForm(
   page: Page,
   invoice: InvoiceData,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
 
   try {
     const categoryText = getSiradigCategoryText(invoice.deductionCategory);
@@ -730,37 +638,28 @@ export async function fillDeductionForm(
     const monthName = monthNames[invoice.fiscalMonth] || "";
 
     // Check for an existing entry in the deductions table matching
-    // category, CUIT, and period — if found, delete it before creating new.
-    // Structure: #div_tabla_deducciones_agrupadas > fieldset > legend (category)
-    //            > div > table > tbody > tr (CUIT | Denominación | Período | ...)
+    // category, CUIT, and period. If found, edit it to add a comprobante
+    // (SiRADIG stores one entry per category+CUIT+month with multiple comprobantes).
     log(
       `Buscando deduccion existente para ${categoryText} / CUIT ${invoice.providerCuit} / ${monthName}...`,
     );
-    const deleted = await deleteExistingDeduction(page, categoryText, cuitDigits, monthName, log);
-    if (deleted) {
-      log(
-        `Deducción existente eliminada para CUIT ${invoice.providerCuit}, periodo ${monthName}. Recreando...`,
-      );
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "existing-entry-deleted",
-        "Deduccion existente eliminada",
-      );
-    }
+    const editedExisting = await editExistingDeduction(
+      page,
+      categoryText,
+      cuitDigits,
+      monthName,
+      log,
+    );
 
-    {
+    // If we opened an existing entry for editing, skip straight to adding a comprobante.
+    // The page is already on the category-specific form with CUIT/period pre-filled.
+    if (!editedExisting) {
       // Step 7: Click "Agregar Deducciones y Desgravaciones" dropdown toggle
       log("Abriendo menu de tipos de deduccion...");
       const addDeductionToggle = page.locator("#btn_agregar_deducciones");
       await addDeductionToggle.waitFor({ state: "visible", timeout: 15000 });
       await addDeductionToggle.click();
       await page.waitForTimeout(1500); // Wait for slideDown animation
-
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "add-deduction-menu",
-        "Menu de tipos de deduccion abierto",
-      );
 
       // Step 8: Select the specific deduction category by its link ID
       // For ALQUILER_VIVIENDA, pick the right sub-category based on user ownership
@@ -797,12 +696,6 @@ export async function fillDeductionForm(
       }
       await page.waitForLoadState("networkidle");
 
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "category-selected",
-        `Categoria: ${categoryText}`,
-      );
-
       // Step 9: Fill CUIT (#numeroDoc) and wait for Denominación (#razonSocial)
       log(`Ingresando CUIT del proveedor: ${invoice.providerCuit}`);
       await page.fill("#numeroDoc", invoice.providerCuit);
@@ -822,12 +715,6 @@ export async function fillDeductionForm(
       } catch {
         log("No se pudo obtener la denominacion automaticamente");
       }
-
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "cuit-filled",
-        "CUIT ingresado y denominacion obtenida",
-      );
 
       // Indumentaria/Equipamiento-specific: select concept based on invoice data
       if (isIndumentariaTrabajoCategory(invoice.deductionCategory)) {
@@ -871,12 +758,6 @@ export async function fillDeductionForm(
         await mesDialog.locator(".ui-dialog-buttonset").getByText("Agregar").click();
         await page.waitForTimeout(1500);
         await dismissDialogOverlay(page);
-
-        await capture(
-          await page.screenshot({ fullPage: true }),
-          "month-detail-added",
-          `Detalle mensual agregado: ${monthName}`,
-        );
       } else if (invoice.deductionCategory !== "ALQUILER_VIVIENDA") {
         log(`Seleccionando periodo: ${monthName || monthValue}`);
         await page.selectOption("#mesDesde", monthValue);
@@ -925,11 +806,6 @@ export async function fillDeductionForm(
         }
 
         if (matchedRowIndex === -1) {
-          await capture(
-            await page.screenshot({ fullPage: true }),
-            "familiar-not-found",
-            "Familiar no encontrado en SiRADIG",
-          );
           return {
             success: false,
             error: `Familiar "${invoice.familyDependent.apellido} ${invoice.familyDependent.nombre}" no encontrado en la tabla de Cargas de Familia de SiRADIG`,
@@ -944,20 +820,13 @@ export async function fillDeductionForm(
         const dialogParent = page.locator("#dialog_seleccion_familiar").locator("..");
         await dialogParent.locator(".ui-dialog-buttonset button").first().click();
         await page.waitForTimeout(500);
-
-        await capture(
-          await page.screenshot({ fullPage: true }),
-          "familiar-selected",
-          "Familiar seleccionado",
-        );
       }
     }
 
     // ALQUILER_VIVIENDA uses a completely different form structure
     if (invoice.deductionCategory === "ALQUILER_VIVIENDA") {
-      await fillAlquilerLocatarioForm(page, invoice, log, capture);
-      const screenshotBuffer = await page.screenshot({ fullPage: true });
-      return { success: true, screenshotBuffer };
+      await fillAlquilerLocatarioForm(page, invoice, log);
+      return { success: true };
     }
 
     // Step 11: Click comprobante button to open the dialog
@@ -970,12 +839,6 @@ export async function fillDeductionForm(
     await altaBtn.waitFor({ state: "visible", timeout: 15000 });
     await altaBtn.click();
     await page.waitForTimeout(1000); // Wait for dialog animation
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "comprobante-dialog",
-      "Dialogo de alta de comprobante",
-    );
 
     // Step 12: Fill the comprobante dialog fields
 
@@ -1025,12 +888,6 @@ export async function fillDeductionForm(
       await page.fill("#cmpMontoReintegrado", "0");
     }
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "comprobante-filled",
-      "Comprobante completado",
-    );
-
     // Step 13: Click "Agregar" button in the comprobante dialog
     // Scope to the dialog containing #cmpMontoFacturado to avoid strict mode violations
     log("Agregando comprobante...");
@@ -1040,24 +897,11 @@ export async function fillDeductionForm(
     await page.waitForTimeout(1500); // Wait for dialog to close and table update
     await dismissDialogOverlay(page);
 
-    // Take final screenshot showing the form with the added comprobante
-    const screenshotBuffer = await page.screenshot({ fullPage: true });
-    await capture(screenshotBuffer, "form-filled", "Formulario completado");
-
     log("Formulario completado con comprobante agregado. Esperando confirmacion.");
-    return { success: true, screenshotBuffer };
+    return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error completando formulario: ${msg} | URL: ${page.url()}`);
-    try {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "form-error",
-        "Error al completar formulario",
-      );
-    } catch {
-      /* screenshot may fail too */
-    }
     return { success: false, error: msg };
   }
 }
@@ -1068,10 +912,8 @@ export async function fillDeductionForm(
 export async function submitDeduction(
   page: Page,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
 
   try {
     log("Guardando deduccion...");
@@ -1087,8 +929,6 @@ export async function submitDeduction(
     // so wait for the delayed request to fire and complete
     await page.waitForTimeout(500);
     await page.waitForLoadState("networkidle");
-
-    await capture(await page.screenshot({ fullPage: true }), "after-save", "Guardando deduccion");
 
     // Poll for either an error or success indicator (up to 8 seconds)
     // .formErrorContent appears for validation/server errors
@@ -1117,21 +957,18 @@ export async function submitDeduction(
         if (text?.trim()) messages.push(text.trim());
       }
       const errorMsg = messages.join(" | ") || "Error de validacion desconocido";
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "submission-error",
-        "Error al guardar",
-      );
+
+      // "comprobante ... duplicado" means the invoice is already in SiRADIG — treat as success
+      if (errorMsg.toLowerCase().includes("duplicado")) {
+        log(`Comprobante ya existe en SiRADIG: ${errorMsg}`);
+        return { success: true };
+      }
+
       log(`Error al guardar: ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
 
     if (outcome === "success") {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "submission-success",
-        "Deduccion guardada exitosamente",
-      );
       log("Deduccion guardada exitosamente");
       return { success: true };
     }
@@ -1152,11 +989,6 @@ export async function submitDeduction(
         .then((el) => el?.textContent())
         .catch(() => null);
       if (postConfirmError?.trim()) {
-        await capture(
-          await page.screenshot({ fullPage: true }),
-          "submission-error",
-          "Error al guardar",
-        );
         log(`Error al guardar: ${postConfirmError.trim()}`);
         return { success: false, error: postConfirmError.trim() };
       }
@@ -1164,27 +996,11 @@ export async function submitDeduction(
       // No confirmation dialog, continue
     }
 
-    // Take a screenshot of whatever state we're in
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "after-save-state",
-      "Estado despues de guardar",
-    );
-
     log("Deduccion procesada (sin confirmacion explicita)");
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error guardando deduccion: ${msg} | URL: ${page.url()}`);
-    try {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "submit-error",
-        "Error guardando deduccion",
-      );
-    } catch {
-      /* screenshot may fail too */
-    }
     return { success: false, error: msg };
   }
 }
@@ -1262,10 +1078,8 @@ export interface ExtractCargasFamiliaResult {
 export async function navigateToCargasFamilia(
   page: Page,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.siradig.cargasFamilia;
 
   try {
@@ -1280,12 +1094,6 @@ export async function navigateToCargasFamilia(
     await target.click();
     await page.waitForTimeout(1500); // accordion animation
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "cargas-familia-section",
-      "Seccion de cargas de familia expandida",
-    );
-
     // Verify the table container is visible
     const tableContainer = page.locator(sel.tableContainer);
     await tableContainer.waitFor({ state: "visible", timeout: 10000 });
@@ -1295,15 +1103,6 @@ export async function navigateToCargasFamilia(
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error abriendo seccion de cargas de familia: ${msg} | URL: ${page.url()}`);
-    try {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "cargas-familia-error",
-        "Error abriendo cargas de familia",
-      );
-    } catch {
-      /* screenshot may fail too */
-    }
     return { success: false, error: msg };
   }
 }
@@ -1318,10 +1117,8 @@ export async function navigateToCargasFamilia(
 export async function extractCargasFamilia(
   page: Page,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<ExtractCargasFamiliaResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.siradig.cargasFamilia;
 
   try {
@@ -1381,12 +1178,6 @@ export async function extractCargasFamilia(
         proximosPeriodos: await isChecked(sel.formProximosPeriodos),
       };
 
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        `carga-familia-${i + 1}`,
-        `Carga de familia ${i + 1}: ${data.apellido}, ${data.nombre}`,
-      );
-
       // Skip empty/phantom rows that have no document number
       if (!data.numeroDoc || !data.numeroDoc.trim()) {
         log(`Fila ${i + 1} sin numero de documento, saltando...`);
@@ -1422,26 +1213,11 @@ export async function extractCargasFamilia(
       await page.waitForTimeout(1000);
     }
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "cargas-familia-extracted",
-      `${dependents.length} cargas de familia extraidas`,
-    );
-
     log(`Extraccion completada: ${dependents.length} cargas de familia`);
     return { success: true, dependents };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error extrayendo cargas de familia: ${msg} | URL: ${page.url()}`);
-    try {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "extraction-error",
-        "Error extrayendo cargas de familia",
-      );
-    } catch {
-      /* screenshot may fail too */
-    }
     return { success: false, error: msg, dependents: [] };
   }
 }
@@ -1474,10 +1250,8 @@ export async function pushCargasFamilia(
   page: Page,
   dependents: SiradigFamilyDependent[],
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<PushCargasFamiliaResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.siradig.cargasFamilia;
 
   let created = 0;
@@ -1554,12 +1328,6 @@ export async function pushCargasFamilia(
       // Use page.evaluate with jQuery triggers for dropdowns (SiRADIG uses jQuery)
       await fillCargaFamiliaForm(page, dep, isUpdate, log);
 
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        `push-carga-${d + 1}`,
-        `${isUpdate ? "Actualizada" : "Creada"}: ${dep.apellido}, ${dep.nombre}`,
-      );
-
       // Step 4: Click "Guardar"
       log("Guardando...");
       const guardarBtn = page.locator("#btn_guardar");
@@ -1622,11 +1390,6 @@ export async function pushCargasFamilia(
           numeroDoc: dep.numeroDoc,
           error: displayError,
         });
-        await capture(
-          await page.screenshot({ fullPage: true }),
-          `push-error-${d + 1}`,
-          `Error guardando: ${dep.apellido}`,
-        );
         // Try to go back to the table to continue with next dependent
         const volverBtn = page.getByText("Volver", { exact: true }).first();
         await volverBtn.click().catch(() => {});
@@ -1663,12 +1426,6 @@ export async function pushCargasFamilia(
       }
     }
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      "push-completed",
-      `Exportacion completada: ${created} creadas, ${updated} actualizadas`,
-    );
-
     const failedSummary = failed.length > 0 ? `, ${failed.length} con errores` : "";
     log(`Exportacion completada: ${created} creadas, ${updated} actualizadas${failedSummary}`);
 
@@ -1683,15 +1440,6 @@ export async function pushCargasFamilia(
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error exportando cargas de familia: ${msg} | URL: ${page.url()}`);
-    try {
-      await capture(
-        await page.screenshot({ fullPage: true }),
-        "push-error",
-        "Error exportando cargas de familia",
-      );
-    } catch {
-      /* screenshot may fail too */
-    }
     return { success: false, error: msg, created, updated, failed };
   }
 }
@@ -1941,10 +1689,8 @@ export async function fillDomesticDeductionForm(
   page: Page,
   worker: DomesticWorkerDeduction,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<FillResult> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.siradigDomestico;
 
   try {
@@ -1997,31 +1743,14 @@ export async function fillDomesticDeductionForm(
     }
     await page.waitForTimeout(300);
 
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      `domestic-form-${worker.cuil}`,
-      `Formulario deduccion domestica - CUIL ${worker.cuil}`,
-    );
-
     // Add monthly payment details
     await addMonthlyDetails(page, worker.months, log);
-
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      `domestic-form-filled-${worker.cuil}`,
-      `Formulario domestico completo - CUIL ${worker.cuil}`,
-    );
 
     log("Formulario de deduccion domestica listo para guardar");
     return { success: true };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Error desconocido";
     log(`Error al completar formulario domestico: ${msg}`);
-    await capture(
-      await page.screenshot({ fullPage: true }),
-      `domestic-form-error-${worker.cuil}`,
-      `Error en formulario domestico - CUIL ${worker.cuil}`,
-    );
     return { success: false, error: msg };
   }
 }
@@ -2243,10 +1972,8 @@ export async function extractSiradigDeductions(
   page: Page,
   categories: Set<string>,
   onLog?: (msg: string) => void,
-  onScreenshot?: ScreenshotCallback,
 ): Promise<ExtractedEntry[]> {
   const log = onLog ?? (() => {});
-  const capture = onScreenshot ?? (async () => {});
   const sel = ARCA_SELECTORS.siradigEdit;
   const results: ExtractedEntry[] = [];
 
@@ -2329,12 +2056,6 @@ export async function extractSiradigDeductions(
         if (entry) {
           results.push(entry);
         }
-
-        await capture(
-          await page.screenshot({ fullPage: true }),
-          `extract-${category.toLowerCase()}-${r + 1}`,
-          `Extraída entrada ${r + 1} de ${legendText}`,
-        );
 
         // Click "Volver" to return to the list view
         const volverBtn = page.locator(sel.editVolverBtn);
