@@ -30,13 +30,23 @@ import { cn } from "@/lib/utils";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 
 function formatArgNumber(value: string): string {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) return "";
-  return Number(digits).toLocaleString("es-AR");
+  if (!value) return "";
+  const [intPart, decPart] = value.split(".");
+  const digits = intPart.replace(/\D/g, "");
+  if (!digits && decPart === undefined) return "";
+  const formatted = digits ? Number(digits).toLocaleString("es-AR") : "0";
+  if (decPart !== undefined) return formatted + "," + decPart;
+  return formatted;
 }
 
 function unformatArgNumber(value: string): string {
-  return value.replace(/\D/g, "");
+  const parts = value.split(",");
+  const intPart = parts[0].replace(/\./g, "").replace(/\D/g, "");
+  if (parts.length > 1) {
+    const decPart = parts[1].replace(/\D/g, "").slice(0, 2);
+    return intPart + "." + decPart;
+  }
+  return intPart;
 }
 
 const formSchema = z
@@ -58,7 +68,7 @@ const formSchema = z
       .min(1, "El monto es requerido")
       .refine(
         (val) => {
-          const num = parseFloat(unformatArgNumber(val));
+          const num = parseFloat(val);
           return !isNaN(num) && num > 0;
         },
         { message: "El monto debe ser mayor a 0" },
@@ -159,7 +169,7 @@ export function InvoiceForm({
       invoiceType: defaultValues?.invoiceType ?? "",
       invoiceNumber: defaultValues?.invoiceNumber ?? "",
       invoiceDate: defaultValues?.invoiceDate ?? "",
-      amount: defaultValues?.amount != null ? String(Math.round(defaultValues.amount)) : "",
+      amount: defaultValues?.amount != null ? String(defaultValues.amount) : "",
       fiscalYear: String(lockedYear ?? defaultValues?.fiscalYear ?? currentYear),
       fiscalMonth: String(defaultValues?.fiscalMonth ?? currentMonth),
       description: defaultValues?.description ?? "",
@@ -268,7 +278,7 @@ export function InvoiceForm({
         invoiceType: data.invoiceType,
         invoiceNumber: data.invoiceNumber || undefined,
         invoiceDate: data.invoiceDate || undefined,
-        amount: parseFloat(unformatArgNumber(data.amount)),
+        amount: parseFloat(data.amount),
         fiscalYear: parseInt(data.fiscalYear),
         fiscalMonth: parseInt(data.fiscalMonth),
         description: data.description,
@@ -447,8 +457,8 @@ export function InvoiceForm({
           <Input
             id="amount"
             type="text"
-            inputMode="numeric"
-            placeholder="200.000"
+            inputMode="decimal"
+            placeholder="200.000,50"
             className={missingGlow(watchedAmount)}
             value={formatArgNumber(watchedAmount)}
             onChange={(e) => {

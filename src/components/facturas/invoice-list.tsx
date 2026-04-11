@@ -1240,6 +1240,17 @@ export function InvoiceList({
                           </TableCell>
                           <TableCell>
                             <div className="flex justify-end gap-1">
+                              {inv.hasFile && (
+                                <Button variant="ghost" size="icon" asChild title="Ver comprobante">
+                                  <a
+                                    href={`/api/facturas/${inv.id}/file`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <FileDown className="h-4 w-4" />
+                                  </a>
+                                </Button>
+                              )}
                               {!isFuture && !isInFlight && !readOnly && (
                                 <Button
                                   variant="ghost"
@@ -1270,17 +1281,6 @@ export function InvoiceList({
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              {inv.hasFile && (
-                                <Button variant="ghost" size="icon" asChild title="Ver comprobante">
-                                  <a
-                                    href={`/api/facturas/${inv.id}/file`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    <FileDown className="h-4 w-4" />
-                                  </a>
-                                </Button>
-                              )}
                               <Button
                                 variant="ghost"
                                 size="icon"
