@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, Suspense, type ElementType } from "react";
+import { useState, useRef, useCallback, useEffect, Suspense, type ElementType } from "react";
 import { Download, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PresentacionesList } from "@/components/presentaciones/presentaciones-list";
@@ -45,6 +45,24 @@ function PresentacionesInner() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [activeImportJobId, setActiveImportJobId] = useState<string | null>(null);
+  const resumeCheckedRef = useRef(false);
+
+  // Check for an active PULL_PRESENTACIONES job on mount and auto-resume
+  useEffect(() => {
+    if (resumeCheckedRef.current) return;
+    resumeCheckedRef.current = true;
+
+    fetch("/api/automatizacion?activeJob=PULL_PRESENTACIONES")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.job) {
+          setActiveImportJobId(data.job.id);
+          setImportOpen(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleInitialLoad = useCallback((_count: number) => {
     if (!firstLoadDone.current) {
@@ -100,6 +118,7 @@ function PresentacionesInner() {
         open={importOpen}
         onOpenChange={setImportOpen}
         onImportComplete={handleImportComplete}
+        activeJobId={activeImportJobId}
       />
 
       <SubmitPresentacionDialog

@@ -8,7 +8,7 @@ import type { StepDefinition } from "@/lib/automation/job-steps";
 import { toast } from "sonner";
 
 const ONBOARDING_PULL_STEPS: StepDefinition[] = [
-  { key: "siradig_extract", label: "Extrayendo comprobantes deducidos" },
+  { key: "navigate_comprobantes", label: "Buscando comprobantes deducibles" },
   { key: "download", label: "Extrayendo comprobantes deducibles" },
   { key: "classify", label: "Clasificando proveedores" },
 ];
@@ -71,6 +71,7 @@ export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
         body: JSON.stringify({
           jobType: "PULL_COMPROBANTES",
           fiscalYear: new Date().getFullYear(),
+          skipSiradigExtraction: true,
         }),
       });
       if (!res.ok) throw new Error();

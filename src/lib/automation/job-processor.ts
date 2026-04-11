@@ -1519,7 +1519,7 @@ async function processPullComprobantes(
   jobId: string,
   onLog: LogCallback | undefined,
   appendLogFn: typeof appendLog,
-  _appendStepFn: typeof appendStep,
+  appendStepFn: typeof appendStep,
 ): Promise<void> {
   const fiscalYear = job.fiscalYear ?? new Date().getFullYear();
 
@@ -1536,6 +1536,9 @@ async function processPullComprobantes(
     });
     return;
   }
+
+  // Navigation done — advance to download/import step
+  await appendStepFn(jobId, "download", onLog);
 
   if (!result.csvContent || result.csvContent.trim() === "") {
     await appendLogFn(jobId, "No se encontraron comprobantes para importar", onLog);
@@ -2059,9 +2062,12 @@ async function upsertStandardDeduction(
 
       let invoiceId: string;
       if (existing) {
+        // SiRADIG data takes precedence — update category, amount, and all fields
         await prisma.invoice.update({
           where: { id: existing.id },
           data: {
+            deductionCategory:
+              entry.category as import("@/generated/prisma/client").DeductionCategory,
             amount: new Prisma.Decimal(amount),
             invoiceNumber,
             invoiceDate,
@@ -2104,21 +2110,36 @@ async function upsertStandardDeduction(
     // No comprobantes — create a single invoice from the entry's total
     const amount = parseFloat(parseSiradigAmount(entry.montoTotal)) || 0;
 
-    const existing = await prisma.invoice.findFirst({
-      where: {
-        userId,
-        providerCuit: cuit,
-        fiscalYear,
-        fiscalMonth: entry.periodoDesde,
-        deductionCategory: entry.category as import("@/generated/prisma/client").DeductionCategory,
-      },
-    });
+    // Match by CUIT+month+category first, fall back to CUIT+month (any category)
+    // so we can reclassify NO_DEDUCIBLE invoices from SiRADIG data
+    const existing =
+      (await prisma.invoice.findFirst({
+        where: {
+          userId,
+          providerCuit: cuit,
+          fiscalYear,
+          fiscalMonth: entry.periodoDesde,
+          deductionCategory:
+            entry.category as import("@/generated/prisma/client").DeductionCategory,
+        },
+      })) ??
+      (await prisma.invoice.findFirst({
+        where: {
+          userId,
+          providerCuit: cuit,
+          fiscalYear,
+          fiscalMonth: entry.periodoDesde,
+        },
+      }));
 
     let invoiceId: string;
     if (existing) {
+      // SiRADIG data takes precedence — update category, amount, and all fields
       await prisma.invoice.update({
         where: { id: existing.id },
         data: {
+          deductionCategory:
+            entry.category as import("@/generated/prisma/client").DeductionCategory,
           amount: new Prisma.Decimal(amount),
           providerName: entry.providerName || existing.providerName,
           siradiqStatus: "SUBMITTED",
@@ -2275,9 +2296,11 @@ async function upsertAlquilerDeduction(
 
       let invoiceId: string;
       if (existing) {
+        // SiRADIG data takes precedence — update category, amount, and all fields
         await prisma.invoice.update({
           where: { id: existing.id },
           data: {
+            deductionCategory: "ALQUILER_VIVIENDA",
             amount: new Prisma.Decimal(amount),
             invoiceNumber: invoiceNumber ?? existing.invoiceNumber,
             invoiceDate: invoiceDate ?? existing.invoiceDate,
@@ -2924,35 +2947,40 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
         // ── PULL_COMPROBANTES flow (SiRADIG extraction first, then ARCA import) ──
         if (job.jobType === "PULL_COMPROBANTES") {
+          const skipSiradig =
+            (job.resultData as { skipSiradigExtraction?: boolean } | null)
+              ?.skipSiradigExtraction === true;
+
           // Phase 1: Extract already-deducted entries from SiRADIG (best-effort).
-          // This may fail if the user has no employers or hasn't completed SiRADIG setup,
-          // but the import should still proceed.
-          try {
-            await runSiradigExtractionPhase(
-              page,
-              job,
-              jobId,
-              onLog,
-              appendLog,
-              appendStep,
-              "invoices",
-            );
-          } catch {
-            await appendLog(
-              jobId,
-              "No se pudieron leer deducciones de SiRADIG, continuando con la importacion...",
-              onLog,
-            );
-            // Reset job status — runSiradigExtractionPhase marks it FAILED before throwing
-            await prisma.automationJob.update({
-              where: { id: jobId },
-              data: { status: "RUNNING", errorMessage: null, completedAt: null },
-            });
-            setJobStatus(jobId, "RUNNING");
+          // Skipped during onboarding (skipSiradigExtraction=true) for speed.
+          if (!skipSiradig) {
+            try {
+              await runSiradigExtractionPhase(
+                page,
+                job,
+                jobId,
+                onLog,
+                appendLog,
+                appendStep,
+                "invoices",
+              );
+            } catch {
+              await appendLog(
+                jobId,
+                "No se pudieron leer deducciones de SiRADIG, continuando con la importacion...",
+                onLog,
+              );
+              // Reset job status — runSiradigExtractionPhase marks it FAILED before throwing
+              await prisma.automationJob.update({
+                where: { id: jobId },
+                data: { status: "RUNNING", errorMessage: null, completedAt: null },
+              });
+              setJobStatus(jobId, "RUNNING");
+            }
           }
 
           // Phase 2: Import from Mis Comprobantes CSV
-          await appendStep(jobId, "download", onLog);
+          await appendStep(jobId, "navigate_comprobantes", onLog);
           await processPullComprobantes(page, job, jobId, onLog, appendLog, appendStep);
           return;
         }

@@ -13,6 +13,7 @@ export const JOB_TYPE_STEPS: Record<string, StepDefinition[]> = {
     { key: "login", label: "Iniciando sesión en ARCA" },
     { key: "siradig", label: "Abriendo SiRADIG" },
     { key: "siradig_extract", label: "Extrayendo comprobantes deducidos" },
+    { key: "navigate_comprobantes", label: "Buscando comprobantes deducibles" },
     { key: "download", label: "Extrayendo comprobantes deducibles" },
     { key: "classify", label: "Clasificando proveedores" },
   ],

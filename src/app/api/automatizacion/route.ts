@@ -56,12 +56,16 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Optional: skip SiRADIG extraction phase (used during onboarding for speed)
+      const skipSiradigExtraction = body.skipSiradigExtraction === true;
+
       const job = await prisma.automationJob.create({
         data: {
           userId: session.user.id,
           jobType,
           fiscalYear,
           status: "PENDING",
+          ...(skipSiradigExtraction ? { resultData: { skipSiradigExtraction: true } } : {}),
         },
       });
 

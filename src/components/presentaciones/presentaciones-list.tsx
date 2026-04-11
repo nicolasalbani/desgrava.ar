@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -73,13 +73,31 @@ export function PresentacionesList({ onInitialLoad }: { onInitialLoad?: (count: 
     onInitialLoad,
   });
 
-  // Poll while any presentacion has in-flight jobs
+  // Poll while any presentacion has in-flight jobs,
+  // or while the list is empty (background import may be running after onboarding)
+  const emptyPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const hasInFlight = presentaciones.some(
       (p) => p.latestJob?.status === "PENDING" || p.latestJob?.status === "RUNNING",
     );
-    setShouldPoll(hasInFlight);
-  }, [presentaciones, setShouldPoll]);
+
+    if (hasInFlight) {
+      setShouldPoll(true);
+    } else if (!loading && presentaciones.length === 0 && !emptyPollRef.current) {
+      // Poll briefly when empty — background PULL_PRESENTACIONES may still be running
+      setShouldPoll(true);
+      emptyPollRef.current = setTimeout(() => {
+        setShouldPoll(false);
+        emptyPollRef.current = null;
+      }, 60_000); // Stop after 1 minute
+    } else if (presentaciones.length > 0) {
+      setShouldPoll(false);
+      if (emptyPollRef.current) {
+        clearTimeout(emptyPollRef.current);
+        emptyPollRef.current = null;
+      }
+    }
+  }, [presentaciones, loading, setShouldPoll]);
 
   if (loading) {
     return (
