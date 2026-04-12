@@ -48,7 +48,7 @@ export function DeadlineBanner() {
   }
 
   return (
-    <div className="border-border bg-background animate-in fade-in slide-in-from-top-1 flex items-center justify-between gap-4 border-b px-6 py-2 duration-700 ease-out">
+    <div className="border-border bg-background animate-in fade-in slide-in-from-top-1 flex shrink-0 items-center justify-between gap-4 border-b px-6 py-2 duration-700 ease-out">
       <div className="flex items-center gap-2">
         <span
           className={cn(

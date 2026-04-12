@@ -44,7 +44,7 @@ export function DashboardShell({
             {!onboardingCompleted && <GuidedOnboarding onComplete={handleOnboardingComplete} />}
             <div
               className={cn(
-                "flex h-screen overflow-hidden transition-opacity duration-700",
+                "flex h-dvh overflow-hidden transition-opacity duration-700",
                 !showDashboard && "pointer-events-none opacity-0",
               )}
             >

@@ -42,7 +42,7 @@ export function DashboardHeader() {
   const ThemeIcon = mounted ? (themeIcons[theme as keyof typeof themeIcons] ?? Monitor) : Monitor;
 
   return (
-    <header className="border-border bg-background flex items-center gap-4 border-b px-6 py-4">
+    <header className="border-border bg-background flex shrink-0 items-center gap-4 border-b px-6 py-4">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild className="md:hidden">
           <Button variant="ghost" size="icon">

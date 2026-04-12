@@ -46,7 +46,7 @@ export function SubscriptionBanner() {
   // Expired or past due — show subscribe banner
   if (!data.canWrite) {
     return (
-      <div className="border-border bg-background animate-in fade-in slide-in-from-top-1 flex items-center justify-between gap-4 border-b px-6 py-2 duration-700 ease-out">
+      <div className="border-border bg-background animate-in fade-in slide-in-from-top-1 flex shrink-0 items-center justify-between gap-4 border-b px-6 py-2 duration-700 ease-out">
         <div className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-rose-400/80" />
           <p className="text-muted-foreground text-xs">
@@ -71,7 +71,7 @@ export function SubscriptionBanner() {
 
     const isUrgent = daysLeft <= 3;
     return (
-      <div className="border-border bg-background animate-in fade-in slide-in-from-top-1 flex items-center justify-between gap-4 border-b px-6 py-2 duration-700 ease-out">
+      <div className="border-border bg-background animate-in fade-in slide-in-from-top-1 flex shrink-0 items-center justify-between gap-4 border-b px-6 py-2 duration-700 ease-out">
         <div className="flex items-center gap-2">
           <span
             className={cn(
@@ -108,7 +108,7 @@ export function SubscriptionBanner() {
   // Cancelled — show access end date
   if (data.status === "CANCELLED" && data.currentPeriodEnd) {
     return (
-      <div className="border-border bg-background animate-in fade-in slide-in-from-top-1 flex items-center justify-between gap-4 border-b px-6 py-2 duration-700 ease-out">
+      <div className="border-border bg-background animate-in fade-in slide-in-from-top-1 flex shrink-0 items-center justify-between gap-4 border-b px-6 py-2 duration-700 ease-out">
         <div className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/70" />
           <p className="text-muted-foreground text-xs">
