@@ -28,7 +28,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       razonSocial: body.razonSocial,
       fechaInicio: body.fechaInicio,
       fechaFin: body.fechaFin || null,
-      agenteRetencion: body.agenteRetencion ?? false,
+      agenteRetencion: true,
     },
   });
 

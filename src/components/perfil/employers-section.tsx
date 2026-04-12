@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+
 import {
   Dialog,
   DialogContent,
@@ -73,7 +73,6 @@ const employerSchema = z.object({
   razonSocial: z.string().min(1, "Requerido"),
   fechaInicio: z.string().min(1, "Requerido"),
   fechaFin: z.string().optional(),
-  agenteRetencion: z.boolean(),
 });
 
 type EmployerFormData = z.infer<typeof employerSchema>;
@@ -86,14 +85,12 @@ function EmployerFormDialog({
   editing,
   fiscalYear,
   onSaved,
-  hasAgenteRetencion,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: Employer | null;
   fiscalYear: number;
   onSaved: (employer: Employer) => void;
-  hasAgenteRetencion: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
@@ -104,7 +101,6 @@ function EmployerFormDialog({
     razonSocial: "",
     fechaInicio: "",
     fechaFin: "",
-    agenteRetencion: false,
   });
   const lookupAbortRef = useRef<AbortController | null>(null);
 
@@ -116,7 +112,6 @@ function EmployerFormDialog({
           razonSocial: editing.razonSocial,
           fechaInicio: editing.fechaInicio ? dmyToIso(editing.fechaInicio) : "",
           fechaFin: editing.fechaFin ? dmyToIso(editing.fechaFin) : "",
-          agenteRetencion: editing.agenteRetencion,
         });
         setLookupDone(true);
       } else {
@@ -125,7 +120,6 @@ function EmployerFormDialog({
           razonSocial: "",
           fechaInicio: "",
           fechaFin: "",
-          agenteRetencion: !hasAgenteRetencion,
         });
         setLookupDone(false);
       }
@@ -287,16 +281,6 @@ function EmployerFormDialog({
                 disabled={saving}
               />
             </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="agenteRetencion">Agente de retención</Label>
-            <Switch
-              id="agenteRetencion"
-              checked={form.agenteRetencion}
-              onCheckedChange={(checked) => setForm((f) => ({ ...f, agenteRetencion: checked }))}
-              disabled={saving}
-            />
           </div>
 
           <Button type="submit" className="w-full" disabled={saving}>
@@ -721,15 +705,6 @@ export function EmployersSection({
                     <div className="text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
                       <span>Desde: {emp.fechaInicio}</span>
                       <span>Hasta: {emp.fechaFin || "Actual"}</span>
-                      <span
-                        className={
-                          emp.agenteRetencion
-                            ? "font-medium text-emerald-600 dark:text-emerald-400"
-                            : ""
-                        }
-                      >
-                        {emp.agenteRetencion ? "Agente de retención" : "No es agente de retención"}
-                      </span>
                     </div>
                     {isExportingThis && exportStep && (
                       <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-[11px]">
@@ -809,7 +784,6 @@ export function EmployersSection({
         editing={editing}
         fiscalYear={fiscalYear}
         onSaved={handleSaved}
-        hasAgenteRetencion={employers.some((e) => e.agenteRetencion)}
       />
 
       {/* Delete confirmation */}

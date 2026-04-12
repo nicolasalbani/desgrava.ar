@@ -633,7 +633,10 @@ async function processPullEmployers(
     }
   }
 
-  const summary = `Importacion completada: ${created} creados, ${updated} actualizados`;
+  // Count only agente de retención employers for user-facing summary
+  const agenteCount = employers.filter((e) => e.agenteRetencion).length;
+
+  const summary = `Importacion completada: ${created} creados, ${updated} actualizados (${agenteCount} agente${agenteCount !== 1 ? "s" : ""} de retencion)`;
   await appendLogFn(jobId, summary, onLog);
 
   setJobStatus(jobId, "COMPLETED");
@@ -642,7 +645,9 @@ async function processPullEmployers(
     data: {
       status: "COMPLETED",
       completedAt: new Date(),
-      resultData: JSON.parse(JSON.stringify({ created, updated, total: employers.length })),
+      resultData: JSON.parse(
+        JSON.stringify({ created, updated, total: employers.length, agenteCount }),
+      ),
     },
   });
 }
@@ -797,47 +802,6 @@ async function processPushEmployers(
   const agenteVal = employer.agenteRetencion ? "S" : "N";
   await jqValAndTrigger(siradigPage, sel.formAgenteRetencion, agenteVal);
   await siradigPage.waitForTimeout(500);
-
-  // Monthly salary details are only required when agenteRetencion = N
-  // When S, SiRADIG hides the section and doesn't require it
-  if (!employer.agenteRetencion) {
-    await appendLogFn(jobId, "Agregando detalle de importes mensuales...", onLog);
-    const altaLink = siradigPage.locator("#btn_alta_importes");
-    await altaLink.waitFor({ state: "visible", timeout: 15000 });
-    await altaLink.click();
-    await siradigPage.waitForTimeout(1500);
-
-    // Determine which month to use based on fechaInicio (use the start month)
-    const startMonth = parseInt(employer.fechaInicio.split("/")[1], 10); // DD/MM/YYYY → MM
-    const monthSelect = siradigPage.locator(".ui-dialog-content select").first();
-    await monthSelect.selectOption({ index: startMonth - 1 }); // 0-indexed
-    await siradigPage.waitForTimeout(500);
-
-    // Fill required fields: remuneración bruta (1.00), SAC (0.00), and mandatory deductions (0.00)
-    await siradigPage.evaluate(() => {
-      const ids = [
-        "ing_imp_gan_brutas",
-        "sac",
-        "ing_ap_obra_soc",
-        "ing_ap_sindical",
-        "ing_ap_seg_soc",
-      ];
-      const vals = ["1.00", "0.00", "0.00", "0.00", "0.00"];
-      for (let i = 0; i < ids.length; i++) {
-        const el = document.getElementById(ids[i]) as HTMLInputElement;
-        if (el) {
-          el.value = vals[i];
-          el.dispatchEvent(new Event("change"));
-        }
-      }
-    });
-
-    // Click "Agregar" in the monthly amounts dialog (use last visible to avoid session timeout dialog)
-    const agregarBtn = siradigPage.getByRole("button", { name: "Agregar" }).last();
-    await agregarBtn.click();
-    await siradigPage.waitForLoadState("networkidle");
-    await siradigPage.waitForTimeout(1500);
-  }
 
   // Save
   await appendLogFn(jobId, "Guardando empleador...", onLog);

@@ -70,7 +70,7 @@ export async function GET() {
       select: { id: true },
     }),
     prisma.employer.count({
-      where: { userId, fiscalYear },
+      where: { userId, fiscalYear, agenteRetencion: true },
     }),
     prisma.automationJob.findFirst({
       where: {

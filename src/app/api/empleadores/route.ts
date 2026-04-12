@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   }
 
   const countOnly = searchParams.get("count") === "true";
-  const where = { userId: session.user.id, fiscalYear: year };
+  const where = { userId: session.user.id, fiscalYear: year, agenteRetencion: true };
 
   if (countOnly) {
     const count = await prisma.employer.count({ where });
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       razonSocial: body.razonSocial,
       fechaInicio: body.fechaInicio,
       fechaFin: body.fechaFin || null,
-      agenteRetencion: body.agenteRetencion ?? false,
+      agenteRetencion: true,
     },
   });
 

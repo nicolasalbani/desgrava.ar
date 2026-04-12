@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+
 import {
   Dialog,
   DialogContent,
@@ -63,7 +63,6 @@ const employerSchema = z.object({
   razonSocial: z.string().min(1, "Requerido"),
   fechaInicio: z.string().min(1, "Requerido"),
   fechaFin: z.string().optional(),
-  agenteRetencion: z.boolean(),
 });
 
 type EmployerFormData = z.infer<typeof employerSchema>;
@@ -559,13 +558,11 @@ function EmployerFormDialog({
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupDone, setLookupDone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  // In onboarding, user has no employers — first one defaults to agente de retención
   const [form, setForm] = useState<EmployerFormData>({
     cuit: "",
     razonSocial: "",
     fechaInicio: "",
     fechaFin: "",
-    agenteRetencion: true,
   });
   const lookupAbortRef = useRef<AbortController | null>(null);
 
@@ -576,7 +573,6 @@ function EmployerFormDialog({
         razonSocial: "",
         fechaInicio: "",
         fechaFin: "",
-        agenteRetencion: true,
       });
       setErrors({});
       setLookupDone(false);
@@ -723,16 +719,6 @@ function EmployerFormDialog({
                 disabled={saving}
               />
             </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="onb-agenteRetencion">Agente de retención</Label>
-            <Switch
-              id="onb-agenteRetencion"
-              checked={form.agenteRetencion}
-              onCheckedChange={(checked) => setForm((f) => ({ ...f, agenteRetencion: checked }))}
-              disabled={saving}
-            />
           </div>
 
           <Button type="submit" className="w-full" disabled={saving}>
