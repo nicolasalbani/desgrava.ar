@@ -3,7 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, User, KeyRound, FileText, Receipt, Settings, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  User,
+  KeyRound,
+  FileText,
+  Receipt,
+  Send,
+  Settings,
+  LogOut,
+} from "lucide-react";
 import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +29,7 @@ const navItems = [
   { href: "/perfil", label: "Perfil impositivo", icon: User },
   { href: "/facturas", label: "Comprobantes deducibles", icon: FileText },
   { href: "/recibos", label: "Recibos salariales", icon: Receipt },
+  { href: "/presentaciones", label: "Presentaciones", icon: Send },
   { href: "/configuracion", label: "Configuracion", icon: Settings },
 ];
 
