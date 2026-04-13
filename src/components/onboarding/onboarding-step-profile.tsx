@@ -354,7 +354,7 @@ export function OnboardingStepProfile({
         </div>
         <h2 className="text-xl font-semibold">Importando tu perfil impositivo</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Estamos extrayendo tus datos de ARCA automáticamente.
+          Extrayendo tu perfil impositivo de ARCA...
         </p>
       </div>
 

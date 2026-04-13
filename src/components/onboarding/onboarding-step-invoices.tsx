@@ -8,10 +8,17 @@ import type { StepDefinition } from "@/lib/automation/job-steps";
 import { toast } from "sonner";
 
 const ONBOARDING_PULL_STEPS: StepDefinition[] = [
-  { key: "navigate_comprobantes", label: "Buscando comprobantes deducibles" },
-  { key: "download", label: "Extrayendo comprobantes deducibles" },
+  { key: "search", label: "Buscando comprobantes deducibles" },
+  { key: "extract", label: "Extrayendo comprobantes deducibles" },
   { key: "classify", label: "Clasificando proveedores" },
 ];
+
+// Map real job steps to simplified onboarding steps
+function mapStepForOnboarding(step: string | null): string | null {
+  if (step === "login" || step === "siradig" || step === "siradig_extract") return "search";
+  if (step === "navigate_comprobantes" || step === "download") return "extract";
+  return step;
+}
 
 interface Props {
   activeJobId?: string | null;
@@ -162,7 +169,7 @@ export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
         </h2>
         {jobStatus !== "COMPLETED" && jobStatus !== "FAILED" && (
           <p className="text-muted-foreground mt-1 text-sm">
-            Importando tus comprobantes disponibles en ARCA
+            Importando tus comprobantes disponibles en ARCA...
           </p>
         )}
       </div>
@@ -172,7 +179,7 @@ export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
         <div className="bg-muted/50 rounded-xl p-4">
           <StepProgress
             steps={ONBOARDING_PULL_STEPS}
-            currentStep={currentStep}
+            currentStep={mapStepForOnboarding(currentStep)}
             status={jobStatus}
           />
         </div>

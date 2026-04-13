@@ -6,7 +6,15 @@ import { Send, Check } from "lucide-react";
 import { StepProgress } from "@/components/shared/step-progress";
 import type { StepDefinition } from "@/lib/automation/job-steps";
 
-const ONBOARDING_SUBMIT_STEPS: StepDefinition[] = [{ key: "fill", label: "Cargando deducción" }];
+const ONBOARDING_SUBMIT_STEPS: StepDefinition[] = [
+  { key: "prepare", label: "Preparando deducción" },
+  { key: "fill", label: "Cargando deducción" },
+];
+
+function mapStepForOnboarding(step: string | null): string | null {
+  if (step === "login" || step === "siradig") return "prepare";
+  return step;
+}
 import { CATEGORY_LABELS } from "@/lib/simulador/deduction-rules";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -196,13 +204,18 @@ export function OnboardingStepSubmit({ activeJobId, onComplete }: Props) {
               Tu deducción fue cargada en SiRADIG. Ya podés ver tu panel.
             </p>
           )}
+          {jobStatus !== "COMPLETED" && jobStatus !== "FAILED" && (
+            <p className="text-muted-foreground mt-1 text-sm">
+              Relajate mientras ves la magia en acción...
+            </p>
+          )}
         </div>
 
         {jobStatus !== "COMPLETED" && (
           <div className="bg-muted/50 rounded-xl p-4">
             <StepProgress
               steps={ONBOARDING_SUBMIT_STEPS}
-              currentStep={currentStep}
+              currentStep={mapStepForOnboarding(currentStep)}
               status={jobStatus}
             />
           </div>
