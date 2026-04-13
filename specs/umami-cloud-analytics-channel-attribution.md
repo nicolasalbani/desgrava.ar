@@ -1,6 +1,6 @@
 ---
 title: Umami Cloud Analytics for Channel Attribution
-status: draft
+status: implemented
 priority: medium
 ---
 
