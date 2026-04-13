@@ -5,18 +5,31 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { ProfileCard } from "@/components/configuracion/profile-card";
 import { EmailIngestCard } from "@/components/configuracion/email-ingest-card";
 import { AutoSubmitCard } from "@/components/configuracion/auto-submit-card";
 import { SubscriptionCard } from "@/components/subscription/subscription-card";
 
+interface ProfileData {
+  name: string | null;
+  email: string | null;
+  image: string | null;
+}
+
 export default function ConfiguracionPage() {
   const [notifications, setNotifications] = useState(true);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/configuracion")
-      .then((res) => res.json())
-      .then((data) => setNotifications(data.preference?.notifications ?? true))
+    Promise.all([
+      fetch("/api/configuracion").then((r) => r.json()),
+      fetch("/api/perfil").then((r) => r.json()),
+    ])
+      .then(([config, profileData]) => {
+        setNotifications(config.preference?.notifications ?? true);
+        setProfile(profileData);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -59,6 +72,11 @@ export default function ConfiguracionPage() {
         className="animate-in fade-in slide-in-from-bottom-2 space-y-6 duration-500"
         style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
       >
+        {/* Profile section */}
+        {profile && <ProfileCard name={profile.name} email={profile.email} image={profile.image} />}
+
+        <div className="border-border border-t" />
+
         <div className="space-y-2">
           <Label>Suscripción</Label>
           <p className="text-muted-foreground/60 text-xs">Administrá tu plan y método de pago</p>

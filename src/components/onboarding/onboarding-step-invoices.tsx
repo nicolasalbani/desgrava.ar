@@ -160,6 +160,11 @@ export function OnboardingStepInvoices({ activeJobId, onComplete }: Props) {
         <h2 className="text-xl font-semibold">
           {jobStatus === "COMPLETED" ? "Comprobantes importados" : "Importando comprobantes"}
         </h2>
+        {jobStatus !== "COMPLETED" && jobStatus !== "FAILED" && (
+          <p className="text-muted-foreground mt-1 text-sm">
+            Importando tus comprobantes disponibles en ARCA
+          </p>
+        )}
       </div>
 
       {/* Progress */}

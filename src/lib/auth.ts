@@ -92,6 +92,17 @@ export function getAuthOptions(inviteToken?: string): NextAuthOptions {
       async session({ session, token }) {
         if (session.user && token.sub) {
           session.user.id = token.sub;
+          // Refresh name and image from DB so profile changes are visible immediately
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.sub },
+            select: { name: true, image: true },
+          });
+          if (dbUser?.name) {
+            session.user.name = dbUser.name;
+          }
+          if (dbUser?.image) {
+            session.user.image = dbUser.image;
+          }
         }
         return session;
       },

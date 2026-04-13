@@ -3,19 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import {
-  LayoutDashboard,
-  User,
-  KeyRound,
-  FileText,
-  Receipt,
-  Send,
-  Settings,
-  LogOut,
-} from "lucide-react";
+import { LayoutDashboard, User, KeyRound, FileText, Receipt, Send, Settings } from "lucide-react";
 import Image from "next/image";
-import { signOut } from "next-auth/react";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AttentionBadge } from "@/components/shared/attention-badge";
 import { useAttentionCounts } from "@/contexts/attention-counts";
@@ -117,16 +106,6 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
           })}
         </nav>
       </ScrollArea>
-      <div className="border-border mt-auto border-t p-3">
-        <Button
-          variant="ghost"
-          className="text-muted-foreground w-full justify-start gap-3 text-sm transition-colors duration-150 hover:bg-transparent hover:text-red-500"
-          onClick={() => signOut({ callbackUrl: "/" })}
-        >
-          <LogOut className="h-4 w-4" />
-          Cerrar sesion
-        </Button>
-      </div>
     </div>
   );
 }

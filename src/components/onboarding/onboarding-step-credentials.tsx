@@ -178,8 +178,8 @@ export function OnboardingStepCredentials({ hasCredentials, onComplete }: Props)
   // Show connecting progress after credentials are saved
   if (connectingPhase) {
     const steps = [
-      { key: "login", label: "Conectando con ARCA" },
-      { key: "siradig", label: "Abriendo SiRADIG" },
+      { key: "login", label: "Verificando credenciales" },
+      { key: "siradig", label: "Abriendo ARCA" },
     ];
     const currentIndex = connectingPhase === "login" ? 0 : 1;
 
@@ -189,9 +189,9 @@ export function OnboardingStepCredentials({ hasCredentials, onComplete }: Props)
           <div className="bg-primary/10 mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full">
             <KeyRound className="text-primary h-7 w-7" />
           </div>
-          <h2 className="text-xl font-semibold">Credenciales verificadas</h2>
+          <h2 className="text-xl font-semibold">Verificando credenciales</h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            Conectando con ARCA para importar tu perfil impositivo...
+            Preparando todo para importar tu perfil impositivo...
           </p>
         </div>
 

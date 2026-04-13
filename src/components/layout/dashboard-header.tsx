@@ -1,12 +1,21 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Menu, Sun, Moon, Monitor, ChevronDown, Check, Lock } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Menu, Sun, Moon, Monitor, ChevronDown, Check, Lock, User, LogOut } from "lucide-react";
 import { DashboardMobileNav } from "./dashboard-mobile-nav";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 import { cn } from "@/lib/utils";
@@ -113,15 +122,41 @@ export function DashboardHeader() {
       </Button>
 
       {session?.user && (
-        <div className="flex items-center gap-3">
-          <span className="text-foreground hidden text-sm font-medium sm:block">
-            {session.user.name}
-          </span>
-          <Avatar className="ring-border h-9 w-9 ring-2">
-            <AvatarImage src={session.user.image ?? undefined} />
-            <AvatarFallback>{session.user.name?.charAt(0)?.toUpperCase() ?? "U"}</AvatarFallback>
-          </Avatar>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-3 rounded-full outline-none">
+              <span className="text-foreground hidden text-sm font-medium sm:block">
+                {session.user.name}
+              </span>
+              <Avatar className="ring-border h-9 w-9 ring-2">
+                <AvatarImage src={session.user.image ?? undefined} />
+                <AvatarFallback>
+                  {session.user.name?.charAt(0)?.toUpperCase() ?? "U"}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-medium">{session.user.name ?? "Usuario"}</p>
+                <p className="text-muted-foreground truncate text-xs">{session.user.email}</p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/configuracion">
+                <User className="mr-2 h-4 w-4" />
+                Mi perfil
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={() => signOut({ callbackUrl: "/" })}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Cerrar sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </header>
   );

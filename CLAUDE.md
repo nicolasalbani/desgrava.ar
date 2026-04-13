@@ -39,7 +39,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `(auth)/` — login flow (Google OAuth + email/password), email verification, password reset
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
-**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/datos-personales`, `/cron/presentaciones`, `/subscription`, `/webhooks/mercadopago`, `/cron/subscription-reminders`, `/soporte` (tickets + AI chat). All protected routes validate `session?.user?.id`. Write routes (POST/PUT/DELETE) also check subscription access via `requireWriteAccess()` — returns 403 if subscription is expired.
+**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/perfil` (user profile: name + avatar image), `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/datos-personales`, `/cron/presentaciones`, `/subscription`, `/webhooks/mercadopago`, `/cron/subscription-reminders`, `/soporte` (tickets + AI chat). All protected routes validate `session?.user?.id`. Write routes (POST/PUT/DELETE) also check subscription access via `requireWriteAccess()` — returns 403 if subscription is expired.
 
 **Business logic** lives in `src/lib/`, organized by domain:
 
@@ -103,6 +103,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `soporte/` — system prompt content, tool definitions (incl. job type labels, failed automation lookup), types (22 tests)
 - `email` — sendBugFixPREmail function (4 tests)
 - `fiscal-year` — fiscal year read-only cutoff logic, available years (18 tests)
+- `validators/` — profile update schema (12 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
 
