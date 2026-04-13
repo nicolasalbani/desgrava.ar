@@ -35,7 +35,6 @@ export const passwordSchema = z
 export const registerSchema = z.object({
   email: z.string().email("Email inválido"),
   password: passwordSchema,
-  inviteCode: z.string().min(1, "Código de invitación requerido"),
 });
 
 export const resetPasswordSchema = z.object({

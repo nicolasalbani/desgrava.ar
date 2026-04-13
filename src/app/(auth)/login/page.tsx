@@ -18,17 +18,11 @@ type View = "login" | "register";
 function LoginForm() {
   const searchParams = useSearchParams();
   const initialError = searchParams.get("error");
-  const inviteParam = searchParams.get("invite");
-  const [view, setView] = useState<View>(
-    initialError === "invite_required" || inviteParam ? "register" : "login",
-  );
+  const [view, setView] = useState<View>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [inviteCode, setInviteCode] = useState(inviteParam ?? "");
   const [error, setError] = useState(() => {
-    if (initialError === "invite_required")
-      return "No tenes cuenta. Ingresa un código de invitación para registrarte.";
     if (initialError === "invalid_token") return "El enlace de verificación es inválido.";
     if (initialError === "token_expired") return "El enlace de verificación expiró.";
     return "";
@@ -71,7 +65,7 @@ function LoginForm() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, inviteCode }),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
@@ -86,7 +80,6 @@ function LoginForm() {
         setSuccess("Revisa tu email para verificar tu cuenta.");
         setView("login");
         setPassword("");
-        setInviteCode("");
       } else {
         setSuccess(data.message ?? "Cuenta creada correctamente.");
         setView("login");
@@ -101,30 +94,12 @@ function LoginForm() {
   async function handleGoogleSignIn() {
     setError("");
     setLoading(true);
-
-    // If registering with invite code, validate it first
-    if (view === "register" && inviteCode) {
-      const res = await fetch("/api/auth/invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: inviteCode }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error ?? "Código de invitación inválido");
-        setLoading(false);
-        return;
-      }
-    }
-
     await signIn("google", { callbackUrl: "/dashboard" });
   }
 
   const canSubmitLogin = email.trim() && password.trim();
   const passwordsMatch = password === confirmPassword;
-  const canSubmitRegister =
-    email.trim() && isPasswordValid(password) && passwordsMatch && inviteCode.trim();
+  const canSubmitRegister = email.trim() && isPasswordValid(password) && passwordsMatch;
 
   return (
     <div className="mx-4 flex w-full max-w-md flex-col items-center">
@@ -154,23 +129,12 @@ function LoginForm() {
             </div>
           )}
 
-          {view === "register" && (
-            <Input
-              placeholder="Código de invitación"
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              disabled={loading}
-              readOnly={!!inviteParam && inviteCode === inviteParam}
-              className={inviteParam && inviteCode === inviteParam ? "bg-muted" : ""}
-            />
-          )}
-
           <Button
             variant="outline"
             className="w-full"
             size="lg"
             onClick={handleGoogleSignIn}
-            disabled={loading || (view === "register" && !inviteCode.trim())}
+            disabled={loading}
           >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path

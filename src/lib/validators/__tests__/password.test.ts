@@ -111,7 +111,7 @@ describe("passwordSchema", () => {
 });
 
 describe("registerSchema", () => {
-  const valid = { email: "test@example.com", password: "Abcdefg1!", inviteCode: "abc123" };
+  const valid = { email: "test@example.com", password: "Abcdefg1!" };
 
   it("accepts valid input", () => {
     expect(registerSchema.safeParse(valid).success).toBe(true);
@@ -123,10 +123,6 @@ describe("registerSchema", () => {
 
   it("rejects weak password", () => {
     expect(registerSchema.safeParse({ ...valid, password: "weak" }).success).toBe(false);
-  });
-
-  it("rejects empty invite code", () => {
-    expect(registerSchema.safeParse({ ...valid, inviteCode: "" }).success).toBe(false);
   });
 });
 

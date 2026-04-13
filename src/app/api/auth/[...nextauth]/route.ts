@@ -1,15 +1,6 @@
 import NextAuth from "next-auth";
-import { getAuthOptions } from "@/lib/auth";
-import { cookies } from "next/headers";
+import { authOptions } from "@/lib/auth";
 
-export async function GET(req: Request, context: { params: Promise<{ nextauth: string[] }> }) {
-  const cookieStore = await cookies();
-  const inviteToken = cookieStore.get("invite_token")?.value;
-  return NextAuth(getAuthOptions(inviteToken))(req, { params: await context.params });
-}
+const handler = NextAuth(authOptions);
 
-export async function POST(req: Request, context: { params: Promise<{ nextauth: string[] }> }) {
-  const cookieStore = await cookies();
-  const inviteToken = cookieStore.get("invite_token")?.value;
-  return NextAuth(getAuthOptions(inviteToken))(req, { params: await context.params });
-}
+export { handler as GET, handler as POST };

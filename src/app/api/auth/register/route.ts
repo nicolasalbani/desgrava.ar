@@ -3,7 +3,6 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { registerSchema } from "@/lib/validators/password";
-import { INVITE_CODES } from "@/lib/invite-codes";
 import { sendVerificationEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 import { createTrialSubscription } from "@/lib/subscription/create";
@@ -41,12 +40,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: firstError }, { status: 400 });
     }
 
-    const { email, password, inviteCode } = parsed.data;
-
-    // Validate invite code (raw code, not signed token)
-    if (!INVITE_CODES.includes(inviteCode.toUpperCase())) {
-      return NextResponse.json({ error: "Código de invitación inválido" }, { status: 400 });
-    }
+    const { email, password } = parsed.data;
 
     // Check if user already exists
     const existing = await prisma.user.findUnique({ where: { email } });

@@ -4,10 +4,9 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { validateInviteToken } from "@/lib/invite-codes";
 import { createTrialSubscription } from "@/lib/subscription/create";
 
-export function getAuthOptions(inviteToken?: string): NextAuthOptions {
+export function getAuthOptions(): NextAuthOptions {
   return {
     secret: process.env.NEXTAUTH_SECRET,
     adapter: PrismaAdapter(prisma) as NextAuthOptions["adapter"],
@@ -15,6 +14,7 @@ export function getAuthOptions(inviteToken?: string): NextAuthOptions {
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID!,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        allowDangerousEmailAccountLinking: true,
       }),
       CredentialsProvider({
         name: "credentials",
@@ -47,44 +47,19 @@ export function getAuthOptions(inviteToken?: string): NextAuthOptions {
         // Credentials provider handles its own validation
         if (account?.provider === "credentials") return true;
 
-        // Google sign-in: check existing user
-        const existing = await prisma.user.findUnique({
-          where: { email: user.email! },
-          select: { id: true, accounts: { where: { provider: "google" } } },
-        });
+        // Google sign-in: mark email as verified since Google verified it
+        if (account?.provider === "google" && user.email) {
+          const existing = await prisma.user.findUnique({
+            where: { email: user.email },
+            select: { id: true, emailVerified: true },
+          });
 
-        if (existing) {
-          // Auto-link Google account if user exists but has no Google account linked
-          if (existing.accounts.length === 0 && account?.provider === "google") {
-            await prisma.account.create({
-              data: {
-                userId: existing.id,
-                type: account.type,
-                provider: account.provider,
-                providerAccountId: account.providerAccountId,
-                access_token: account.access_token,
-                refresh_token: account.refresh_token,
-                expires_at: account.expires_at,
-                token_type: account.token_type,
-                scope: account.scope,
-                id_token: account.id_token,
-                session_state: account.session_state as string | undefined,
-              },
-            });
-            // Also mark email as verified since Google verified it
+          if (existing && !existing.emailVerified) {
             await prisma.user.update({
               where: { id: existing.id },
               data: { emailVerified: new Date() },
             });
-            // Override user.id so JWT uses the existing user
-            user.id = existing.id;
           }
-          return true;
-        }
-
-        // New user — require a valid invite token
-        if (!inviteToken || !validateInviteToken(inviteToken)) {
-          return "/login?error=invite_required";
         }
 
         return true;
@@ -123,5 +98,4 @@ export function getAuthOptions(inviteToken?: string): NextAuthOptions {
   };
 }
 
-// Convenience export for places that don't need per-request invite token
 export const authOptions: NextAuthOptions = getAuthOptions();
