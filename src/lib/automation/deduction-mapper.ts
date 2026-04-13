@@ -22,17 +22,21 @@ export const SIRADIG_CATEGORY_MAP: Record<string, string> = {
 };
 
 export const SIRADIG_INVOICE_TYPE_MAP: Record<string, string> = {
-  FACTURA_A: "Factura A",
   FACTURA_B: "Factura B",
   FACTURA_C: "Factura C",
-  NOTA_DEBITO_A: "Nota de Débito A",
   NOTA_DEBITO_B: "Nota de Débito B",
   NOTA_DEBITO_C: "Nota de Débito C",
-  NOTA_CREDITO_A: "Nota de Crédito A",
   NOTA_CREDITO_B: "Nota de Crédito B",
   NOTA_CREDITO_C: "Nota de Crédito C",
-  RECIBO: "Recibo",
-  TICKET: "Ticket",
+  RECIBO_B: "Recibo B",
+  RECIBO_C: "Recibo C",
+  NOTA_VENTA_B: "Nota de Venta al contado B",
+  NOTA_VENTA_C: "Nota de Venta al contado C",
+  DOCUMENTO_ADUANERO: "Documento Aduanero",
+  OTRO_COMPROBANTE_B: "Otro comprobante B (RG 1415)",
+  OTRO_COMPROBANTE_C: "Otro comprobante C (RG 1415)",
+  TIQUE_FACTURA_B: "Tique-factura B",
+  OTROS_EXCEPTUADOS: "Otros comp. doc. exceptuados",
 };
 
 // Maps our DeductionCategory enum to the link element IDs in the SiRADIG dropdown
@@ -98,7 +102,7 @@ export function getAlquilerLinkId(ownsProperty: boolean): string {
  * SiRADIG treats them as negative amounts, causing "Monto Total calculado debe ser
  * mayor a cero" validation errors when submitted without a corresponding positive invoice.
  */
-const CREDIT_NOTE_TYPES = new Set(["NOTA_CREDITO_A", "NOTA_CREDITO_B", "NOTA_CREDITO_C"]);
+const CREDIT_NOTE_TYPES = new Set(["NOTA_CREDITO_B", "NOTA_CREDITO_C"]);
 
 export function isCreditNoteType(invoiceType: string): boolean {
   return CREDIT_NOTE_TYPES.has(invoiceType);
@@ -239,6 +243,15 @@ export function reverseLookupCategory(legendText: string): string | undefined {
 const REVERSE_INVOICE_TYPE_MAP = new Map<string, string>();
 for (const [enumVal, text] of Object.entries(SIRADIG_INVOICE_TYPE_MAP)) {
   REVERSE_INVOICE_TYPE_MAP.set(text.toLowerCase(), enumVal);
+}
+
+// SiRADIG displays longer text in tables than in dropdowns for some types.
+// Add table-text aliases so reverseLookupInvoiceType works for both.
+const SIRADIG_TABLE_TEXT_ALIASES: Record<string, string> = {
+  "otros comprobantes documentos exceptuados": "OTROS_EXCEPTUADOS",
+};
+for (const [text, enumVal] of Object.entries(SIRADIG_TABLE_TEXT_ALIASES)) {
+  REVERSE_INVOICE_TYPE_MAP.set(text, enumVal);
 }
 
 /**

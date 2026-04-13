@@ -1030,6 +1030,21 @@ async function processPullProfile(
       },
     });
 
+    // If the user has no display name yet, fill it from SiRADIG
+    if (nombre && apellido) {
+      const user = await prisma.user.findUnique({
+        where: { id: job.userId },
+        select: { name: true },
+      });
+      if (!user?.name) {
+        const toTitleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+        await prisma.user.update({
+          where: { id: job.userId },
+          data: { name: `${toTitleCase(nombre)} ${toTitleCase(apellido)}` },
+        });
+      }
+    }
+
     await appendLogFn(jobId, `Datos personales importados: ${apellido} ${nombre}`, onLog);
     results.personalData = { apellido, nombre };
 
@@ -1968,8 +1983,11 @@ async function upsertStandardDeduction(
   let updated = 0;
   const cuit = entry.providerCuit.replace(/[-\s]/g, "");
 
-  // If there are comprobantes, create one invoice per comprobante
+  // If there are comprobantes, create one invoice per unique comprobante.
+  // SiRADIG can have duplicate rows (e.g., same comprobante uploaded multiple times).
+  // Deduplicate by invoice number to avoid creating multiple invoices for the same comprobante.
   if (entry.comprobantes.length > 0) {
+    const seenNumbers = new Set<string>();
     for (const comp of entry.comprobantes) {
       // Determine fiscal month from the comprobante date or the entry period
       let fiscalMonth = entry.periodoDesde;
@@ -1989,6 +2007,13 @@ async function upsertStandardDeduction(
         invoiceNumber = `${comp.puntoVenta.padStart(5, "0")}-${comp.numero.padStart(8, "0")}`;
       } else if (comp.numero) {
         invoiceNumber = comp.numero;
+      }
+
+      // Skip duplicate comprobantes within the same extraction (same number from same provider)
+      if (invoiceNumber) {
+        const dedupeKey = `${cuit}|${invoiceNumber}`;
+        if (seenNumbers.has(dedupeKey)) continue;
+        seenNumbers.add(dedupeKey);
       }
 
       // Parse invoice date from DD/MM/YYYY to ISO

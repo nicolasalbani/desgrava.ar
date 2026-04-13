@@ -513,19 +513,24 @@ async function editExistingDeduction(
   cuitDigits: string,
   monthName: string,
   log: (msg: string) => void,
+  ignoreMonth = false,
 ): Promise<boolean> {
   const categoryLower = categoryText.toLowerCase();
 
-  // Find the row index matching category+CUIT+month
+  // Find the row index matching category+CUIT (and optionally month).
+  // For Detalle Mensual categories (Primas, Cuotas, Aportes) SiRADIG stores one
+  // entry per CUIT with all months inside, so we match by CUIT only.
   const rowIndex = await page.evaluate(
     ({
       categoryLower,
       cuitDigits,
       monthName,
+      ignoreMonth,
     }: {
       categoryLower: string;
       cuitDigits: string;
       monthName: string;
+      ignoreMonth: boolean;
     }) => {
       const fieldsets = document.querySelectorAll(
         "#div_tabla_deducciones_agrupadas fieldset.grupo_deducciones",
@@ -539,14 +544,14 @@ async function editExistingDeduction(
         for (let r = 0; r < rows.length; r++) {
           const rowText = rows[r].textContent ?? "";
           const normalizedRow = rowText.replace(/-/g, "");
-          if (normalizedRow.includes(cuitDigits) && rowText.includes(monthName)) {
+          if (normalizedRow.includes(cuitDigits) && (ignoreMonth || rowText.includes(monthName))) {
             return r;
           }
         }
       }
       return -1;
     },
-    { categoryLower, cuitDigits, monthName },
+    { categoryLower, cuitDigits, monthName, ignoreMonth },
   );
 
   if (rowIndex === -1) return false;
@@ -637,11 +642,13 @@ export async function fillDeductionForm(
     ];
     const monthName = monthNames[invoice.fiscalMonth] || "";
 
-    // Check for an existing entry in the deductions table matching
-    // category, CUIT, and period. If found, edit it to add a comprobante
-    // (SiRADIG stores one entry per category+CUIT+month with multiple comprobantes).
+    // Check for an existing entry in the deductions table.
+    // Detalle Mensual categories (Primas, Cuotas, Aportes) store ONE entry per CUIT
+    // with all months inside, so we match by CUIT only (ignoring month).
+    // Standard categories match by CUIT+month.
+    const isDetalleMensual = isDetalleMensualCategory(invoice.deductionCategory);
     log(
-      `Buscando deduccion existente para ${categoryText} / CUIT ${invoice.providerCuit} / ${monthName}...`,
+      `Buscando deduccion existente para ${categoryText} / CUIT ${invoice.providerCuit}${isDetalleMensual ? "" : ` / ${monthName}`}...`,
     );
     const editedExisting = await editExistingDeduction(
       page,
@@ -649,6 +656,7 @@ export async function fillDeductionForm(
       cuitDigits,
       monthName,
       log,
+      isDetalleMensual,
     );
 
     // If we opened an existing entry for editing, skip straight to adding a comprobante.
@@ -823,19 +831,146 @@ export async function fillDeductionForm(
       }
     }
 
+    // For Detalle Mensual categories editing an existing entry, we need to ensure
+    // the target month row exists in #tabla_meses. If it doesn't, add it via
+    // "Agregar Mes Individual". This is needed because the existing entry may only
+    // have a different month (e.g., Enero) and we're adding a comprobante for Febrero.
+    if (editedExisting && isDetalleMensual) {
+      const monthValue = String(invoice.fiscalMonth);
+
+      // Check if the target month already exists in the Detalle Mensual table
+      const monthExists = await page.evaluate((targetMonth) => {
+        const rows = document.querySelectorAll("#tabla_meses tbody tr");
+        for (const row of rows) {
+          const cells = Array.from(row.querySelectorAll("td"));
+          const monthCell = cells[0]?.textContent?.trim() ?? "";
+          // Month cell is "01 - Enero", "02 - Febrero", etc.
+          const monthNum = monthCell.split(/\s*-\s*/)[0]?.trim();
+          if (monthNum === targetMonth.padStart(2, "0")) return true;
+        }
+        return false;
+      }, monthValue);
+
+      if (!monthExists) {
+        log(`Agregando detalle mensual: ${monthName || monthValue}`);
+        const altaMesBtn = page.locator("#btn_alta_mes");
+        await altaMesBtn.waitFor({ state: "visible", timeout: 15000 });
+        await altaMesBtn.click();
+        await page.waitForTimeout(1000);
+
+        await page.selectOption("#detalleIndividualMes", monthValue);
+        await page.fill("#detalleIndividualMontoMensual", invoice.amount);
+
+        const mesDialog = page.locator(".ui-dialog:visible:has(#detalleIndividualMes)");
+        await mesDialog.locator(".ui-dialog-buttonset").getByText("Agregar").click();
+        await page.waitForTimeout(1500);
+        await dismissDialogOverlay(page);
+      } else {
+        log(`Mes ${monthName || monthValue} ya existe en el detalle mensual`);
+      }
+    }
+
     // ALQUILER_VIVIENDA uses a completely different form structure
     if (invoice.deductionCategory === "ALQUILER_VIVIENDA") {
       await fillAlquilerLocatarioForm(page, invoice, log);
       return { success: true };
     }
 
-    // Step 11: Click comprobante button to open the dialog
-    // Detalle Mensual categories use "Agregar Comprobante" link (#btn_alta_comprobante_detalle or text)
-    // Other categories use #btn_alta_comprobante button
+    // Step 10b: If editing an existing deduction, remove any comprobante with the
+    // same invoice number to avoid duplicates. SiRADIG doesn't support in-place
+    // editing of comprobantes — we delete the old row and re-add it.
+    // Use Playwright .click() (not page.evaluate .click()) because SiRADIG uses
+    // jQuery event delegation — native DOM click doesn't trigger the handler.
+    if (editedExisting && invoice.invoiceNumber) {
+      const invoiceNum = invoice.invoiceNumber.includes("-")
+        ? invoice.invoiceNumber.split("-")[1].replace(/^0+/, "")
+        : invoice.invoiceNumber;
+
+      // Find row indices that match the invoice number (read-only scan via evaluate)
+      const matchingIndices = await page.evaluate(
+        ({ targetNum }) => {
+          const table = document.querySelector("#tabla_comprobantes");
+          if (!table) return [];
+          const headers = Array.from(table.querySelectorAll("thead th")).map((th) =>
+            (th.textContent ?? "").trim().toLowerCase(),
+          );
+          const numIdx = headers.findIndex((h) => h.includes("número") || h.includes("numero"));
+          if (numIdx < 0) return [];
+
+          const indices: number[] = [];
+          const rows = Array.from(table.querySelectorAll("tbody tr"));
+          for (let i = 0; i < rows.length; i++) {
+            const cells = Array.from(rows[i].querySelectorAll("td"));
+            const cellNum = (cells[numIdx]?.textContent ?? "").trim();
+            const normalizedCell = cellNum
+              .split(/\s*-\s*/)
+              .pop()!
+              .replace(/^0+/, "");
+            if (normalizedCell === targetNum) indices.push(i);
+          }
+          return indices;
+        },
+        { targetNum: invoiceNum },
+      );
+
+      // Click delete buttons in reverse order (highest index first) so earlier
+      // indices remain valid as rows are removed from the table.
+      // The delete handler uses confirm() — auto-accept it via Playwright dialog handler.
+      // The event is bound via jQuery .live() on "#tabla_comprobantes div span"
+      // (the <span> inside .eliminar), so we must click the span, not the div.
+      const dialogHandler = (dialog: import("playwright-core").Dialog) => dialog.accept();
+      page.on("dialog", dialogHandler);
+      try {
+        for (const idx of [...matchingIndices].reverse()) {
+          const deleteSpan = page.locator(
+            `#tabla_comprobantes tbody tr:nth-child(${idx + 1}) .eliminar span`,
+          );
+          await deleteSpan.click();
+          await page.waitForTimeout(500);
+        }
+      } finally {
+        page.off("dialog", dialogHandler);
+      }
+
+      if (matchingIndices.length > 0) {
+        log(
+          `Eliminado ${matchingIndices.length} comprobante(s) existente(s) con numero ${invoice.invoiceNumber}`,
+        );
+      }
+    }
+
+    // Step 11: Click comprobante button to open the dialog.
+    // For Detalle Mensual categories editing an existing entry, click the
+    // "Agregar Comprobante" link in the specific month's row (not the first one).
+    // For new Detalle Mensual entries or non-Detalle Mensual categories, use the
+    // generic button/link.
     log("Abriendo formulario de alta de comprobante...");
-    const altaBtn = isDetalleMensualCategory(invoice.deductionCategory)
-      ? page.getByText("Agregar Comprobante", { exact: false }).first()
-      : page.locator("#btn_alta_comprobante");
+    let altaBtn;
+    if (isDetalleMensual && editedExisting) {
+      // Find the target month row in #tabla_meses and click its "Agregar Comprobante" link
+      const monthPadded = String(invoice.fiscalMonth).padStart(2, "0");
+      const monthRowIdx = await page.evaluate((mp) => {
+        const rows = document.querySelectorAll("#tabla_meses tbody tr");
+        for (let i = 0; i < rows.length; i++) {
+          const cell = rows[i].querySelector("td")?.textContent?.trim() ?? "";
+          if (cell.startsWith(mp + " ")) return i;
+        }
+        return -1;
+      }, monthPadded);
+
+      if (monthRowIdx >= 0) {
+        altaBtn = page.locator(
+          `#tabla_meses tbody tr:nth-child(${monthRowIdx + 1}) a.agregar-comprobantes`,
+        );
+      } else {
+        // Fallback: first "Agregar Comprobante" link
+        altaBtn = page.getByText("Agregar Comprobante", { exact: false }).first();
+      }
+    } else if (isDetalleMensual) {
+      altaBtn = page.getByText("Agregar Comprobante", { exact: false }).first();
+    } else {
+      altaBtn = page.locator("#btn_alta_comprobante");
+    }
     await altaBtn.waitFor({ state: "visible", timeout: 15000 });
     await altaBtn.click();
     await page.waitForTimeout(1000); // Wait for dialog animation
@@ -864,16 +999,27 @@ export async function fillDeductionForm(
       log(`Tipo "${invoiceTypeText}" no disponible, manteniendo valor por defecto`);
     }
 
-    // Número de Comprobante (split "XXXXX-YYYYYYYY" into punto de venta + número)
+    // Número de Comprobante
+    // Some invoice types (e.g., "Otros comp. doc. exceptuados") hide #cmpDivPuntoVentaNumero
+    // (containing #cmpPuntoVenta + #cmpNumero) and show #cmpDivNumeroAlternativo
+    // (containing #cmpNumeroAlternativo, a single "Número identificador" field) instead.
     if (invoice.invoiceNumber) {
-      const parts = invoice.invoiceNumber.split("-");
-      if (parts.length === 2) {
-        log(`Ingresando numero de comprobante: ${invoice.invoiceNumber}`);
-        await page.fill("#cmpPuntoVenta", parts[0]);
-        await page.fill("#cmpNumero", parts[1]);
+      const cmpNumeroVisible = await page.locator("#cmpNumero").isVisible();
+      if (cmpNumeroVisible) {
+        const parts = invoice.invoiceNumber.split("-");
+        if (parts.length === 2) {
+          log(`Ingresando numero de comprobante: ${invoice.invoiceNumber}`);
+          await page.fill("#cmpPuntoVenta", parts[0]);
+          await page.fill("#cmpNumero", parts[1]);
+        } else {
+          log(`Ingresando numero de comprobante: ${invoice.invoiceNumber}`);
+          await page.fill("#cmpNumero", invoice.invoiceNumber);
+        }
       } else {
-        log(`Ingresando numero de comprobante: ${invoice.invoiceNumber}`);
-        await page.fill("#cmpNumero", invoice.invoiceNumber);
+        log(
+          `Usando campo alternativo de numero para tipo ${invoiceTypeText}: ${invoice.invoiceNumber}`,
+        );
+        await page.fill("#cmpNumeroAlternativo", invoice.invoiceNumber);
       }
     }
 

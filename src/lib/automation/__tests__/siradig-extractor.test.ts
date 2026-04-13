@@ -85,21 +85,28 @@ describe("reverseLookupCategory", () => {
 
 describe("reverseLookupInvoiceType", () => {
   it.each([
-    ["Factura A", "FACTURA_A"],
     ["Factura B", "FACTURA_B"],
     ["Factura C", "FACTURA_C"],
-    ["Nota de Débito A", "NOTA_DEBITO_A"],
+    ["Nota de Débito B", "NOTA_DEBITO_B"],
     ["Nota de Crédito B", "NOTA_CREDITO_B"],
-    ["Recibo", "RECIBO"],
-    ["Ticket", "TICKET"],
+    ["Recibo B", "RECIBO_B"],
+    ["Recibo C", "RECIBO_C"],
+    ["Tique-factura B", "TIQUE_FACTURA_B"],
+    ["Otros comp. doc. exceptuados", "OTROS_EXCEPTUADOS"],
   ])("maps '%s' to %s", (typeText, expected) => {
     expect(reverseLookupInvoiceType(typeText)).toBe(expected);
   });
 
   it("is case-insensitive", () => {
-    expect(reverseLookupInvoiceType("factura a")).toBe("FACTURA_A");
+    expect(reverseLookupInvoiceType("factura b")).toBe("FACTURA_B");
     expect(reverseLookupInvoiceType("FACTURA B")).toBe("FACTURA_B");
-    expect(reverseLookupInvoiceType("recibo")).toBe("RECIBO");
+    expect(reverseLookupInvoiceType("recibo b")).toBe("RECIBO_B");
+  });
+
+  it("maps SiRADIG table text aliases (longer than dropdown text)", () => {
+    expect(reverseLookupInvoiceType("Otros comprobantes documentos exceptuados")).toBe(
+      "OTROS_EXCEPTUADOS",
+    );
   });
 
   it("returns undefined for unknown types", () => {

@@ -42,47 +42,50 @@ export interface MappedInvoice {
  * We normalize to unpadded strings for matching.
  */
 const TIPO_CODE_MAP: Record<string, string> = {
-  "1": "FACTURA_A",
-  "2": "NOTA_DEBITO_A",
-  "3": "NOTA_CREDITO_A",
-  "4": "RECIBO", // Recibo A
+  "1": "FACTURA_B", // Type A → B (SiRADIG does not accept type A)
+  "2": "NOTA_DEBITO_B", // Type A → B
+  "3": "NOTA_CREDITO_B", // Type A → B
+  "4": "RECIBO_B", // Recibo A → Recibo B
   "6": "FACTURA_B",
   "7": "NOTA_DEBITO_B",
   "8": "NOTA_CREDITO_B",
-  "9": "RECIBO", // Recibo B
+  "9": "RECIBO_B",
   "11": "FACTURA_C",
   "12": "NOTA_DEBITO_C",
   "13": "NOTA_CREDITO_C",
-  "15": "RECIBO", // Recibo C
-  "83": "TICKET",
+  "15": "RECIBO_C",
+  "83": "TIQUE_FACTURA_B",
+  "88": "OTROS_EXCEPTUADOS",
 };
 
 /**
  * Also match by text description when code is not present.
  */
 const TIPO_TEXT_MAP: Record<string, string> = {
-  "factura a": "FACTURA_A",
-  "facturas a": "FACTURA_A",
+  "factura a": "FACTURA_B", // Type A → B (SiRADIG does not accept type A)
+  "facturas a": "FACTURA_B",
   "factura b": "FACTURA_B",
   "facturas b": "FACTURA_B",
   "factura c": "FACTURA_C",
   "facturas c": "FACTURA_C",
-  "nota de debito a": "NOTA_DEBITO_A",
-  "nota de débito a": "NOTA_DEBITO_A",
+  "nota de debito a": "NOTA_DEBITO_B",
+  "nota de débito a": "NOTA_DEBITO_B",
   "nota de debito b": "NOTA_DEBITO_B",
   "nota de débito b": "NOTA_DEBITO_B",
   "nota de debito c": "NOTA_DEBITO_C",
   "nota de débito c": "NOTA_DEBITO_C",
-  "nota de credito a": "NOTA_CREDITO_A",
-  "nota de crédito a": "NOTA_CREDITO_A",
+  "nota de credito a": "NOTA_CREDITO_B",
+  "nota de crédito a": "NOTA_CREDITO_B",
   "nota de credito b": "NOTA_CREDITO_B",
   "nota de crédito b": "NOTA_CREDITO_B",
   "nota de credito c": "NOTA_CREDITO_C",
   "nota de crédito c": "NOTA_CREDITO_C",
-  recibo: "RECIBO",
-  recibos: "RECIBO",
-  ticket: "TICKET",
-  tickets: "TICKET",
+  recibo: "RECIBO_B",
+  recibos: "RECIBO_B",
+  ticket: "TIQUE_FACTURA_B",
+  tickets: "TIQUE_FACTURA_B",
+  "otros comp. doc. exceptuados": "OTROS_EXCEPTUADOS",
+  "otros comprobantes documentos exceptuados": "OTROS_EXCEPTUADOS",
 };
 
 /**
