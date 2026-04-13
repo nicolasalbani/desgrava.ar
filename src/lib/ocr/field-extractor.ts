@@ -23,35 +23,46 @@ const AMOUNT_PATTERNS = [
 ];
 
 const INVOICE_TYPE_PATTERNS: [RegExp, string][] = [
+  // Tique-factura must be checked first (before FACTURA patterns to avoid false match)
+  [/TIQUE[\s-]*FACTURA/i, "TIQUE_FACTURA_B"],
   // Reversed layout: type letter appears BEFORE the word FACTURA (e.g., Starlink PDFs)
-  [/\bA\b\s+FACTURA/i, "FACTURA_A"],
+  // Type A → mapped to B (SiRADIG does not accept type A comprobantes)
+  [/\bA\b\s+FACTURA/i, "FACTURA_B"],
   [/\bB\b\s+FACTURA/i, "FACTURA_B"],
   [/\bC\b\s+FACTURA/i, "FACTURA_C"],
   // Standard layout: FACTURA followed by type letter (with or without surrounding quotes)
   // Use negative lookahead instead of \b to also exclude accented chars (e.g. "FACTURA CÓD" should not match C)
-  [/FACTURA\s*"?A(?![A-Za-zÁÉÍÓÚáéíóúÑñ])/i, "FACTURA_A"],
+  [/FACTURA\s*"?A(?![A-Za-zÁÉÍÓÚáéíóúÑñ])/i, "FACTURA_B"],
   [/FACTURA\s*"?B(?![A-Za-zÁÉÍÓÚáéíóúÑñ])/i, "FACTURA_B"],
   [/FACTURA\s*"?C(?![A-Za-zÁÉÍÓÚáéíóúÑñ])/i, "FACTURA_C"],
-  [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?A"?/i, "NOTA_CREDITO_A"],
+  [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?A"?/i, "NOTA_CREDITO_B"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?B"?/i, "NOTA_CREDITO_B"],
   [/NOTA\s+DE?\s*CR[ÉE]DITO\s*"?C"?/i, "NOTA_CREDITO_C"],
-  [/NOTA\s+DE?\s*D[ÉE]BITO\s*"?A"?/i, "NOTA_DEBITO_A"],
+  [/NOTA\s+DE?\s*D[ÉE]BITO\s*"?A"?/i, "NOTA_DEBITO_B"],
   [/NOTA\s+DE?\s*D[ÉE]BITO\s*"?B"?/i, "NOTA_DEBITO_B"],
   [/NOTA\s+DE?\s*D[ÉE]BITO\s*"?C"?/i, "NOTA_DEBITO_C"],
+  // Nota de Venta al contado
+  [/NOTA\s+DE?\s*VENTA.*B/i, "NOTA_VENTA_B"],
+  [/NOTA\s+DE?\s*VENTA.*C/i, "NOTA_VENTA_C"],
   // ARCA fallback: detect type from comprobante code (COD. 011 = Factura C, etc.)
   // Reliable for ARCA-generated PDFs where the type letter and "FACTURA" end up on different lines
   // Both COD and CÓD (accented) variants are handled
-  [/C[OÓ]D\.\s*001\b/i, "FACTURA_A"],
-  [/C[OÓ]D\.\s*002\b/i, "NOTA_DEBITO_A"],
-  [/C[OÓ]D\.\s*003\b/i, "NOTA_CREDITO_A"],
+  // Type A codes → mapped to B (SiRADIG does not accept type A)
+  [/C[OÓ]D\.\s*001\b/i, "FACTURA_B"],
+  [/C[OÓ]D\.\s*002\b/i, "NOTA_DEBITO_B"],
+  [/C[OÓ]D\.\s*003\b/i, "NOTA_CREDITO_B"],
+  [/C[OÓ]D\.\s*004\b/i, "RECIBO_B"],
   [/C[OÓ]D\.\s*006\b/i, "FACTURA_B"],
   [/C[OÓ]D\.\s*007\b/i, "NOTA_DEBITO_B"],
   [/C[OÓ]D\.\s*008\b/i, "NOTA_CREDITO_B"],
+  [/C[OÓ]D\.\s*009\b/i, "RECIBO_B"],
   [/C[OÓ]D\.\s*011\b/i, "FACTURA_C"],
   [/C[OÓ]D\.\s*012\b/i, "NOTA_DEBITO_C"],
   [/C[OÓ]D\.\s*013\b/i, "NOTA_CREDITO_C"],
-  [/RECIBO/i, "RECIBO"],
-  [/TICKET/i, "TICKET"],
+  [/C[OÓ]D\.\s*015\b/i, "RECIBO_C"],
+  [/C[OÓ]D\.\s*083\b/i, "TIQUE_FACTURA_B"],
+  [/RECIBO/i, "RECIBO_B"],
+  [/TICKET/i, "TIQUE_FACTURA_B"],
 ];
 
 const DATE_PATTERN = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/;

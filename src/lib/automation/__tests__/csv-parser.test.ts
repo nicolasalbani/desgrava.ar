@@ -108,13 +108,13 @@ describe("mapComprobantesToInvoices", () => {
     const invoices = mapComprobantesToInvoices(parsed, 2025);
     expect(invoices[0].invoiceType).toBe("FACTURA_C"); // tipo 11
     expect(invoices[1].invoiceType).toBe("FACTURA_B"); // tipo 6
-    expect(invoices[2].invoiceType).toBe("FACTURA_A"); // tipo 1
+    expect(invoices[2].invoiceType).toBe("FACTURA_B"); // tipo 1 (A → B, SiRADIG doesn't accept A)
   });
 
   it("maps text-based tipo with code prefix", () => {
     const parsed = parseComprobantesCSV(SAMPLE_CSV_LEGACY);
     const invoices = mapComprobantesToInvoices(parsed, 2025);
-    expect(invoices[0].invoiceType).toBe("FACTURA_A"); // "1 - Factura A"
+    expect(invoices[0].invoiceType).toBe("FACTURA_B"); // "1 - Factura A" → B
     expect(invoices[1].invoiceType).toBe("FACTURA_B"); // "6 - Factura B"
   });
 

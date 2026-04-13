@@ -85,8 +85,8 @@ describe("extractFields — ARCA Factura C (psychology session)", () => {
 });
 
 describe("extractFields — invoice type patterns", () => {
-  it("detects FACTURA_A via reversed layout", () => {
-    expect(extractFields("A FACTURA\nCOD. 001\nCUIT: 20123456789").invoiceType).toBe("FACTURA_A");
+  it("detects Factura A as FACTURA_B via reversed layout (A→B mapping)", () => {
+    expect(extractFields("A FACTURA\nCOD. 001\nCUIT: 20123456789").invoiceType).toBe("FACTURA_B");
   });
 
   it("detects FACTURA_B via reversed layout", () => {
@@ -111,8 +111,20 @@ describe("extractFields — invoice type patterns", () => {
     );
   });
 
-  it("detects NOTA_DEBITO_A", () => {
-    expect(extractFields("NOTA DE DÉBITO A\nCUIT: 20123456789").invoiceType).toBe("NOTA_DEBITO_A");
+  it("detects Nota Débito A as NOTA_DEBITO_B (A→B mapping)", () => {
+    expect(extractFields("NOTA DE DÉBITO A\nCUIT: 20123456789").invoiceType).toBe("NOTA_DEBITO_B");
+  });
+
+  it("detects RECIBO as RECIBO_B", () => {
+    expect(extractFields("RECIBO\nCUIT: 20123456789").invoiceType).toBe("RECIBO_B");
+  });
+
+  it("detects TICKET as TIQUE_FACTURA_B", () => {
+    expect(extractFields("TICKET\nCUIT: 20123456789").invoiceType).toBe("TIQUE_FACTURA_B");
+  });
+
+  it("detects TIQUE-FACTURA B", () => {
+    expect(extractFields("TIQUE-FACTURA B\nCUIT: 20123456789").invoiceType).toBe("TIQUE_FACTURA_B");
   });
 
   it("returns null when no invoice type found", () => {

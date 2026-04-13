@@ -241,19 +241,17 @@ describe("getIndumentariaConceptoValue", () => {
 });
 
 describe("isCreditNoteType", () => {
-  it.each(["NOTA_CREDITO_A", "NOTA_CREDITO_B", "NOTA_CREDITO_C"])("returns true for %s", (type) => {
+  it.each(["NOTA_CREDITO_B", "NOTA_CREDITO_C"])("returns true for %s", (type) => {
     expect(isCreditNoteType(type)).toBe(true);
   });
 
   it.each([
-    "FACTURA_A",
     "FACTURA_B",
     "FACTURA_C",
-    "NOTA_DEBITO_A",
     "NOTA_DEBITO_B",
     "NOTA_DEBITO_C",
-    "RECIBO",
-    "TICKET",
+    "RECIBO_B",
+    "TIQUE_FACTURA_B",
   ])("returns false for %s", (type) => {
     expect(isCreditNoteType(type)).toBe(false);
   });

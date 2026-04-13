@@ -12,7 +12,7 @@ const VALID_CUIT = "20-27395860-7";
 const validInvoice = {
   deductionCategory: "CUOTAS_MEDICO_ASISTENCIALES" as const,
   providerCuit: VALID_CUIT,
-  invoiceType: "FACTURA_A" as const,
+  invoiceType: "FACTURA_B" as const,
   amount: 15000.5,
   fiscalYear: 2025,
   fiscalMonth: 6,

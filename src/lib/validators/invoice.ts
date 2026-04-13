@@ -23,17 +23,21 @@ export const DEDUCTION_CATEGORIES = [
 export const ALL_DEDUCTION_CATEGORIES = [...DEDUCTION_CATEGORIES, "NO_DEDUCIBLE"] as const;
 
 export const INVOICE_TYPES = [
-  "FACTURA_A",
   "FACTURA_B",
   "FACTURA_C",
-  "NOTA_DEBITO_A",
   "NOTA_DEBITO_B",
   "NOTA_DEBITO_C",
-  "NOTA_CREDITO_A",
   "NOTA_CREDITO_B",
   "NOTA_CREDITO_C",
-  "RECIBO",
-  "TICKET",
+  "RECIBO_B",
+  "RECIBO_C",
+  "NOTA_VENTA_B",
+  "NOTA_VENTA_C",
+  "DOCUMENTO_ADUANERO",
+  "OTRO_COMPROBANTE_B",
+  "OTRO_COMPROBANTE_C",
+  "TIQUE_FACTURA_B",
+  "OTROS_EXCEPTUADOS",
 ] as const;
 
 export const DEDUCTION_CATEGORY_LABELS: Record<string, string> = {
@@ -58,17 +62,21 @@ export const DEDUCTION_CATEGORY_LABELS: Record<string, string> = {
 };
 
 export const INVOICE_TYPE_LABELS: Record<string, string> = {
-  FACTURA_A: "Factura A",
   FACTURA_B: "Factura B",
   FACTURA_C: "Factura C",
-  NOTA_DEBITO_A: "Nota de Debito A",
-  NOTA_DEBITO_B: "Nota de Debito B",
-  NOTA_DEBITO_C: "Nota de Debito C",
-  NOTA_CREDITO_A: "Nota de Credito A",
-  NOTA_CREDITO_B: "Nota de Credito B",
-  NOTA_CREDITO_C: "Nota de Credito C",
-  RECIBO: "Recibo",
-  TICKET: "Ticket",
+  NOTA_DEBITO_B: "Nota de Débito B",
+  NOTA_DEBITO_C: "Nota de Débito C",
+  NOTA_CREDITO_B: "Nota de Crédito B",
+  NOTA_CREDITO_C: "Nota de Crédito C",
+  RECIBO_B: "Recibo B",
+  RECIBO_C: "Recibo C",
+  NOTA_VENTA_B: "Nota de Venta al contado B",
+  NOTA_VENTA_C: "Nota de Venta al contado C",
+  DOCUMENTO_ADUANERO: "Documento Aduanero",
+  OTRO_COMPROBANTE_B: "Otro comprobante B (RG 1415)",
+  OTRO_COMPROBANTE_C: "Otro comprobante C (RG 1415)",
+  TIQUE_FACTURA_B: "Tique-factura B",
+  OTROS_EXCEPTUADOS: "Otros comp. doc. exceptuados",
 };
 
 const invoiceBaseSchema = z.object({
