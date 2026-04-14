@@ -161,9 +161,12 @@ export function MetricsPanel({
     setAnimKey((k) => k + 1);
   }
 
+  // Only show months up to the current month (no empty future months)
+  const currentMonth = new Date().getMonth() + 1;
+
   // Build stacked bar data per month, filtered by enabled categories
   const stackedMonths = useMemo(() => {
-    return Array.from({ length: 12 }, (_, i) => {
+    return Array.from({ length: currentMonth }, (_, i) => {
       const month = i + 1;
       const segments = categoryTotals
         .filter((ct) => enabledCategories.has(ct.category))
@@ -177,41 +180,18 @@ export function MetricsPanel({
       const total = segments.reduce((sum, s) => sum + s.amount, 0);
       return { month, segments, total };
     });
-  }, [monthCategoryData, categoryTotals, enabledCategories]);
+  }, [monthCategoryData, categoryTotals, enabledCategories, currentMonth]);
 
-  // Current month (1-indexed) — months up to this are actual, rest are projected
-  const currentMonth = new Date().getMonth() + 1;
-
-  // Cumulative totals with projection for future months
-  const { cumulativeMonths, projectedStartIndex } = useMemo(() => {
-    // Calculate average monthly deduction from months that have data
-    const monthsWithData = stackedMonths.filter((m) => m.month <= currentMonth && m.total > 0);
-    const avgMonthly =
-      monthsWithData.length > 0
-        ? monthsWithData.reduce((sum, m) => sum + m.total, 0) / monthsWithData.length
-        : 0;
-
+  // Cumulative totals (actual data only, no projections)
+  const cumulativeMonths = useMemo(() => {
     let running = 0;
-    const cumulative = stackedMonths.map((m) => {
-      if (m.month <= currentMonth) {
-        running += m.total;
-      } else {
-        // Project future months using average
-        running += avgMonthly;
-      }
+    return stackedMonths.map((m) => {
+      running += m.total;
       return running;
     });
+  }, [stackedMonths]);
 
-    return {
-      cumulativeMonths: cumulative,
-      projectedStartIndex: currentMonth - 1, // 0-based index of last actual month
-    };
-  }, [stackedMonths, currentMonth]);
-
-  const maxCumulative = Math.max(...cumulativeMonths, 1);
-
-  // Scale to actual cumulative (through current month) — no projections needed
-  const chartMax = Math.max(cumulativeMonths[currentMonth - 1] ?? 1, 1);
+  const chartMax = Math.max(...cumulativeMonths, 1);
 
   return (
     <div className="space-y-6">
@@ -367,14 +347,12 @@ export function MetricsPanel({
                   const padding = 5;
                   const usable = 100 - padding;
 
-                  const ptsData = cumulativeMonths
-                    .map((cum, i) => ({
-                      xPct: ((i + 0.5) / 12) * 100,
-                      yPct: chartMax > 0 ? padding + usable * (1 - cum / chartMax) : 100,
-                      cum,
-                      month: MONTH_NAMES[i],
-                    }))
-                    .filter((_, i) => i <= projectedStartIndex);
+                  const ptsData = cumulativeMonths.map((cum, i) => ({
+                    xPct: ((i + 0.5) / currentMonth) * 100,
+                    yPct: chartMax > 0 ? padding + usable * (1 - cum / chartMax) : 100,
+                    cum,
+                    month: MONTH_NAMES[i],
+                  }));
 
                   return (
                     <>
@@ -448,7 +426,7 @@ export function MetricsPanel({
 
             {/* Month labels */}
             <div className="absolute right-0 bottom-0 left-0 flex gap-1.5 sm:gap-2">
-              {MONTH_NAMES.map((name) => (
+              {MONTH_NAMES.slice(0, currentMonth).map((name) => (
                 <span key={name} className="text-muted-foreground flex-1 text-center text-[10px]">
                   {name}
                 </span>
