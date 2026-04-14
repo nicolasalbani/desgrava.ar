@@ -48,6 +48,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `automation/` — Playwright-based ARCA/SiRADIG automation: job processor, browser pool, navigators, CSS selectors, deduction mapper
 - `crypto/encryption.ts` — AES-256-GCM for ARCA credentials (encrypt/decrypt at API boundary)
 - `email.ts` — Resend integration for verification and password reset emails
+- `telegram.ts` — Telegram Bot API integration for group notifications (new user signups, support tickets)
 - `rate-limit.ts` — In-memory rate limiter for auth endpoints
 - `catalog/` — Global provider catalog: CUIT → deduction category lookup with sistemas360.ar enrichment
 - `validators/` — Zod schemas for invoices, credentials, CUIT format, domestic workers/receipts
@@ -81,7 +82,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 ## Testing
 
-**Framework**: Vitest with 794+ tests across 34 test files.
+**Framework**: Vitest with 813+ tests across 35 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -101,6 +102,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `subscription/` — plans constants, access control logic (22 tests)
 - `soporte/` — system prompt content, tool definitions (incl. job type labels, failed automation lookup), types (22 tests)
 - `email` — sendBugFixPREmail function (4 tests)
+- `telegram` — Telegram Bot API notifications: formatting, env var handling, error handling (13 tests)
 - `fiscal-year` — fiscal year read-only cutoff logic, available years (18 tests)
 - `validators/` — profile update schema (12 tests)
 
@@ -140,4 +142,4 @@ Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_te
 
 ## Environment Variables
 
-`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for cron endpoint auth), `MERCADOPAGO_ACCESS_TOKEN` (MercadoPago API key for subscriptions), `MERCADOPAGO_WEBHOOK_SECRET` (webhook signature validation), `SUPPORT_EMAIL` (email for new ticket notifications + bug fix PR notifications), `SUPPORT_WHATSAPP` (WhatsApp number for escalation, e.g. 5491112345678), `PROD_API_URL` (production API base URL for fix-ticket agent + cron workflows), `PROD_CRON_SECRET` (production CRON_SECRET for fix-ticket agent), `PROD_DATABASE_URL` (read-only prod DB connection string for fix-ticket agent to sync prod data locally), `FLY_API_TOKEN` (GitHub Actions secret for Fly.io deploys), `NEXT_PUBLIC_UMAMI_WEBSITE_ID` (optional, Umami Cloud website ID for analytics — script not loaded when absent), `NEXT_PUBLIC_UMAMI_URL` (optional, Umami instance URL — defaults to `https://cloud.umami.is`).
+`DATABASE_URL`, `ENCRYPTION_KEY` (64-char hex), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY` (for verification/reset emails), `CRON_SECRET` (for cron endpoint auth), `MERCADOPAGO_ACCESS_TOKEN` (MercadoPago API key for subscriptions), `MERCADOPAGO_WEBHOOK_SECRET` (webhook signature validation), `SUPPORT_EMAIL` (email for new ticket notifications + bug fix PR notifications), `SUPPORT_WHATSAPP` (WhatsApp number for escalation, e.g. 5491112345678), `PROD_API_URL` (production API base URL for fix-ticket agent + cron workflows), `PROD_CRON_SECRET` (production CRON_SECRET for fix-ticket agent), `PROD_DATABASE_URL` (read-only prod DB connection string for fix-ticket agent to sync prod data locally), `FLY_API_TOKEN` (GitHub Actions secret for Fly.io deploys), `TELEGRAM_BOT_TOKEN` (optional, Telegram Bot API token for group notifications — notifications skipped when absent), `TELEGRAM_CHAT_ID` (optional, Telegram group chat ID for notifications), `NEXT_PUBLIC_UMAMI_WEBSITE_ID` (optional, Umami Cloud website ID for analytics — script not loaded when absent), `NEXT_PUBLIC_UMAMI_URL` (optional, Umami instance URL — defaults to `https://cloud.umami.is`).

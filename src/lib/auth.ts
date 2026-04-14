@@ -5,6 +5,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createTrialSubscription } from "@/lib/subscription/create";
+import { sendNewUserNotification } from "@/lib/telegram";
 
 export function getAuthOptions(): NextAuthOptions {
   return {
@@ -88,6 +89,12 @@ export function getAuthOptions(): NextAuthOptions {
         // Create trial subscription for newly signed-up users
         if (trigger === "signUp" && token.sub) {
           await createTrialSubscription(token.sub);
+          const email = user?.email ?? token.email;
+          if (email) {
+            sendNewUserNotification(email, "Google").catch((err) => {
+              console.error("Failed to send Telegram notification:", err);
+            });
+          }
         }
         return token;
       },

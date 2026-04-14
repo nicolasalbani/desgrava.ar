@@ -6,6 +6,7 @@ import { registerSchema } from "@/lib/validators/password";
 import { sendVerificationEmail } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 import { createTrialSubscription } from "@/lib/subscription/create";
+import { sendNewUserNotification } from "@/lib/telegram";
 
 async function createAndSendVerificationToken(email: string): Promise<void> {
   const token = crypto.randomBytes(32).toString("hex");
@@ -85,6 +86,10 @@ export async function POST(req: NextRequest) {
 
     await createTrialSubscription(newUser.id);
     await createAndSendVerificationToken(email);
+
+    sendNewUserNotification(email, "Email/Contraseña").catch((err) => {
+      console.error("Failed to send Telegram notification:", err);
+    });
 
     return NextResponse.json({
       message: "Cuenta creada. Revisa tu email para verificar tu cuenta.",

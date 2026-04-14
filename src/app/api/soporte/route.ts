@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendNewTicketEmail } from "@/lib/email";
+import { sendNewTicketNotification } from "@/lib/telegram";
 
 export async function GET(req: NextRequest) {
   // Admin mode: CRON_SECRET returns all OPEN tickets (for scheduled bug fix agent)
@@ -94,6 +95,16 @@ export async function POST(req: NextRequest) {
     pageUrl || null,
     validatedJobId,
   ).catch((err) => console.error("Failed to send ticket notification:", err));
+
+  // Send Telegram notification (non-blocking)
+  sendNewTicketNotification(
+    ticket.id,
+    subject,
+    description,
+    session.user.email ?? "unknown",
+    pageUrl || null,
+    validatedJobId,
+  ).catch((err) => console.error("Failed to send Telegram notification:", err));
 
   return NextResponse.json(ticket, { status: 201 });
 }
