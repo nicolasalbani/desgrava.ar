@@ -188,3 +188,18 @@ export function applyDeductionRules(
     notes,
   };
 }
+
+/**
+ * Returns the effective rate that SiRADIG applies to the invoice amount
+ * when computing the total in the F.572 Web form PDF.
+ *
+ * Most categories: 100% (full amount).
+ * GASTOS_MEDICOS: 40% (Art. 85 inc. g).
+ * ALQUILER_VIVIENDA: 40% for tenants (Art. 85 inc. h), 10% for owners (Art. 85 inc. k).
+ */
+export function getSiradigEffectiveRate(category: string, ownsProperty: boolean = false): Decimal {
+  if (category === "GASTOS_MEDICOS") return new Decimal("0.4");
+  if (category === "ALQUILER_VIVIENDA")
+    return ownsProperty ? new Decimal("0.1") : new Decimal("0.4");
+  return new Decimal("1");
+}

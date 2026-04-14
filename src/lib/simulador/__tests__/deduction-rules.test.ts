@@ -5,6 +5,7 @@ import {
   DeductionInput,
   SimuladorCategory,
   CATEGORY_LABELS,
+  getSiradigEffectiveRate,
 } from "@/lib/simulador/deduction-rules";
 import { getTaxTables } from "@/lib/simulador/tax-tables";
 
@@ -284,5 +285,63 @@ describe("applyDeductionRules()", () => {
       const highResult = applyRule("CUOTAS_MEDICO_ASISTENCIALES", 5_000_000, highNet);
       expect(lowResult.deductibleAmount.lt(highResult.deductibleAmount)).toBe(true);
     });
+  });
+});
+
+describe("getSiradigEffectiveRate()", () => {
+  it("returns 0.4 for GASTOS_MEDICOS", () => {
+    expect(getSiradigEffectiveRate("GASTOS_MEDICOS").toNumber()).toBe(0.4);
+  });
+
+  it("returns 0.4 for ALQUILER_VIVIENDA (tenant / non-owner)", () => {
+    expect(getSiradigEffectiveRate("ALQUILER_VIVIENDA", false).toNumber()).toBe(0.4);
+  });
+
+  it("returns 0.4 for ALQUILER_VIVIENDA when ownsProperty defaults to false", () => {
+    expect(getSiradigEffectiveRate("ALQUILER_VIVIENDA").toNumber()).toBe(0.4);
+  });
+
+  it("returns 0.1 for ALQUILER_VIVIENDA (owner)", () => {
+    expect(getSiradigEffectiveRate("ALQUILER_VIVIENDA", true).toNumber()).toBe(0.1);
+  });
+
+  it("returns 1 for all other categories", () => {
+    const otherCategories = [
+      "CUOTAS_MEDICO_ASISTENCIALES",
+      "PRIMAS_SEGURO_MUERTE",
+      "PRIMAS_AHORRO_SEGUROS_MIXTOS",
+      "APORTES_RETIRO_PRIVADO",
+      "DONACIONES",
+      "INTERESES_HIPOTECARIOS",
+      "GASTOS_SEPELIO",
+      "GASTOS_INDUMENTARIA_TRABAJO",
+      "SERVICIO_DOMESTICO",
+      "APORTE_SGR",
+      "VEHICULOS_CORREDORES",
+      "INTERESES_CORREDORES",
+      "GASTOS_EDUCATIVOS",
+      "OTRAS_DEDUCCIONES",
+    ];
+    for (const cat of otherCategories) {
+      expect(getSiradigEffectiveRate(cat).toNumber()).toBe(1);
+    }
+  });
+
+  it("correctly computes adjusted total matching SiRADIG presentacion", () => {
+    // Real data: raw sums by category
+    const invoices = [
+      { category: "PRIMAS_SEGURO_MUERTE", amount: new Decimal("144934.52") },
+      { category: "GASTOS_MEDICOS", amount: new Decimal("622000.00") },
+      { category: "GASTOS_INDUMENTARIA_TRABAJO", amount: new Decimal("5084543.00") },
+      { category: "GASTOS_EDUCATIVOS", amount: new Decimal("3149530.00") },
+    ];
+
+    const adjustedTotal = invoices.reduce((sum, inv) => {
+      const rate = getSiradigEffectiveRate(inv.category);
+      return sum.plus(inv.amount.mul(rate));
+    }, new Decimal(0));
+
+    // Should match SiRADIG presentacion montoTotal exactly
+    expect(adjustedTotal.toDP(2).toString()).toBe("8627807.52");
   });
 });

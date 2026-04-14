@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MetricsPanel } from "@/components/dashboard/metrics-panel";
 import { Decimal } from "decimal.js";
+import { getSiradigEffectiveRate } from "@/lib/simulador/deduction-rules";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -14,9 +15,9 @@ export default async function DashboardPage() {
     totalInvoices,
     submittedCount,
     pendingCount,
-    submittedTotal,
     monthCategoryBreakdown,
     subscription,
+    yearPreference,
   ] = await Promise.all([
     prisma.invoice.count({
       where: { userId, fiscalYear, deductionCategory: { not: "NO_DEDUCIBLE" } },
@@ -32,10 +33,6 @@ export default async function DashboardPage() {
         siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING"] },
       },
     }),
-    prisma.invoice.aggregate({
-      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
-      _sum: { amount: true },
-    }),
     // Group by month AND category for the stacked chart
     prisma.invoice.groupBy({
       by: ["fiscalMonth", "deductionCategory"],
@@ -48,20 +45,35 @@ export default async function DashboardPage() {
       _sum: { amount: true },
     }),
     prisma.subscription.findUnique({ where: { userId } }),
+    prisma.userYearPreference.findUnique({
+      where: { userId_fiscalYear: { userId, fiscalYear } },
+      select: { ownsProperty: true },
+    }),
   ]);
 
-  const totalDeducted = submittedTotal._sum.amount
-    ? new Decimal(submittedTotal._sum.amount.toString()).toNumber()
-    : 0;
+  const ownsProperty = yearPreference?.ownsProperty ?? false;
+
+  // Build month×category data applying SiRADIG effective rates.
+  // SiRADIG applies percentage rates to certain categories (e.g. 40% for GASTOS_MEDICOS),
+  // so the dashboard must reflect the same amounts as the F.572 PDF total.
+  const monthCategoryData = monthCategoryBreakdown.map((entry) => {
+    const rawAmount = entry._sum.amount
+      ? new Decimal(entry._sum.amount.toString())
+      : new Decimal(0);
+    const rate = getSiradigEffectiveRate(entry.deductionCategory, ownsProperty);
+    return {
+      month: entry.fiscalMonth,
+      category: entry.deductionCategory,
+      amount: rawAmount.mul(rate).toDP(2).toNumber(),
+    };
+  });
+
+  const totalDeducted = monthCategoryData
+    .reduce((sum, entry) => sum.plus(entry.amount), new Decimal(0))
+    .toDP(2)
+    .toNumber();
 
   const estimatedSavings = new Decimal(totalDeducted).mul(0.35).toDP(2).toNumber();
-
-  // Build month×category data
-  const monthCategoryData = monthCategoryBreakdown.map((entry) => ({
-    month: entry.fiscalMonth,
-    category: entry.deductionCategory,
-    amount: entry._sum.amount ? new Decimal(entry._sum.amount.toString()).toNumber() : 0,
-  }));
 
   return (
     <MetricsPanel
