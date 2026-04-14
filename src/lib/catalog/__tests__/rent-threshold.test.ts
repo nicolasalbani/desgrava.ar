@@ -128,6 +128,11 @@ describe("resolveCategory — rent amount threshold", () => {
   });
 
   it("re-classifies via web lookup path when amount is below threshold", async () => {
+    // Mock fetch so the web lookup doesn't make a real HTTP request
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("", { status: 500 }));
+
     // No pdfText → falls to web lookup → no web result → fallback metadata classification
     classifyCategoryMock
       .mockResolvedValueOnce("ALQUILER_VIVIENDA")
@@ -144,5 +149,7 @@ describe("resolveCategory — rent amount threshold", () => {
     expect(classifyCategoryMock).toHaveBeenLastCalledWith(expect.any(String), [
       "ALQUILER_VIVIENDA",
     ]);
+
+    fetchSpy.mockRestore();
   });
 });
