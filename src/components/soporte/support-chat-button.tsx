@@ -15,10 +15,10 @@ export function SupportChatButton() {
         <Button
           onClick={() => setOpen(true)}
           size="lg"
-          className="fixed right-4 bottom-4 z-50 size-12 rounded-full shadow-lg sm:size-14"
+          className="group fixed right-4 bottom-4 z-50 size-12 rounded-full shadow-lg transition-all duration-300 ease-out hover:scale-110 hover:shadow-xl sm:size-14"
           aria-label="Abrir chat de soporte"
         >
-          <MessageCircleQuestion className="size-5 sm:size-6" />
+          <MessageCircleQuestion className="size-5 transition-transform duration-300 ease-out group-hover:-rotate-12 sm:size-6" />
         </Button>
       )}
     </>
