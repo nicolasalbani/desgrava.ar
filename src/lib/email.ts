@@ -14,7 +14,7 @@ function getBaseUrl(): string {
 }
 
 export async function sendVerificationEmail(email: string, token: string): Promise<void> {
-  const url = `${getBaseUrl()}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+  const url = `${getBaseUrl()}/verify-email?token=${encodeURIComponent(token)}`;
 
   await getResend().emails.send({
     from: FROM_EMAIL,
