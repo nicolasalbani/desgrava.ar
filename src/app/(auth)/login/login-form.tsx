@@ -40,7 +40,13 @@ export function LoginForm({ initial }: { initial: LoginFormInitial }) {
     });
 
     if (result?.error) {
-      setError("Email o contraseña incorrectos");
+      if (result.error.includes("email_not_verified")) {
+        setError(
+          "Tenés que verificar tu email antes de iniciar sesión. Revisá tu bandeja de entrada.",
+        );
+      } else {
+        setError("Email o contraseña incorrectos");
+      }
       setLoading(false);
       return;
     }

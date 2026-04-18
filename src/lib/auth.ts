@@ -31,10 +31,15 @@ export function getAuthOptions(): NextAuthOptions {
           });
 
           if (!user || !user.passwordHash) return null;
-          if (!user.emailVerified) return null;
 
           const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
           if (!isValid) return null;
+
+          // Password is correct — only now surface the unverified-email error.
+          // Checking after the password avoids leaking which emails are registered.
+          if (!user.emailVerified) {
+            throw new Error("email_not_verified");
+          }
 
           return { id: user.id, email: user.email, name: user.name, image: user.image };
         },
