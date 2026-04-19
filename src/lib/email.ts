@@ -19,22 +19,62 @@ export async function sendVerificationEmail(email: string, token: string): Promi
   await getResend().emails.send({
     from: FROM_EMAIL,
     to: email,
-    subject: "Verificá tu email — desgrava.ar",
-    html: `
-      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
-        <h2 style="margin-bottom: 16px;">Verificá tu email</h2>
-        <p style="color: #555; line-height: 1.6;">
-          Hacé clic en el siguiente enlace para verificar tu cuenta en desgrava.ar.
-          Este enlace expira en 24 horas.
-        </p>
-        <a href="${url}" style="display: inline-block; margin-top: 16px; padding: 12px 24px; background: #000; color: #fff; text-decoration: none; border-radius: 8px;">
-          Verificar email
-        </a>
-        <p style="color: #999; font-size: 12px; margin-top: 24px;">
-          Si no creaste una cuenta en desgrava.ar, puedes ignorar este email.
-        </p>
-      </div>
-    `,
+    subject: "Confirmá tu cuenta de Desgrava",
+    html: `<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light only" />
+    <meta name="supported-color-schemes" content="light only" />
+    <title>Confirmá tu cuenta</title>
+    <style>
+      a.btn, a.btn:link, a.btn:visited, a.btn:hover, a.btn:active {
+        color: #ffffff !important;
+        text-decoration: none !important;
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #f5f5f7;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f5f5f7;">
+      <tr>
+        <td align="center" style="padding: 24px 12px;">
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="max-width: 480px; background-color: #ffffff; border-radius: 12px;">
+            <tr>
+              <td style="padding: 32px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; color: #111111;">
+                <h1 style="margin: 0 0 16px; font-size: 22px; line-height: 1.3; color: #111111;">
+                  Confirmá tu cuenta
+                </h1>
+                <p style="margin: 0 0 28px; color: #4b5563; line-height: 1.6; font-size: 15px;">
+                  Tocá el botón para activar tu cuenta. El enlace expira en 24 horas.
+                </p>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 28px;">
+                  <tr>
+                    <td align="center" bgcolor="#2563eb" style="background-color: #2563eb; border-radius: 10px;">
+                      <a class="btn" href="${url}" style="display: inline-block; padding: 16px 32px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 10px;">
+                        Confirmar mi cuenta
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin: 0 0 8px; color: #6b7280; line-height: 1.6; font-size: 13px;">
+                  ¿No funciona el botón? Copiá y pegá este enlace en tu navegador:
+                </p>
+                <p style="margin: 0 0 28px; color: #2563eb; word-break: break-all; font-size: 13px; line-height: 1.5;">
+                  ${url}
+                </p>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 0 0 20px;" />
+                <p style="margin: 0; color: #9ca3af; font-size: 12px; line-height: 1.5;">
+                  Si no creaste esta cuenta, podés ignorar este email.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
   });
 }
 
