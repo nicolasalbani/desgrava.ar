@@ -251,7 +251,8 @@ export function OnboardingStepSubmit({ activeJobId, onComplete }: Props) {
         </div>
         <h2 className="text-xl font-semibold">Enviá tu primera deducción</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Elegí un comprobante para enviar a SiRADIG y ver la magia en acción.
+          Para que veas cómo funciona, elegí un comprobante y te lo cargamos en SiRADIG. Después vas
+          a poder enviar varios a la vez desde el panel.
         </p>
       </div>
 
