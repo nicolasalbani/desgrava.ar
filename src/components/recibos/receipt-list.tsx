@@ -263,19 +263,31 @@ export function ReceiptList({
 
       if (res.ok) {
         const jobData = await res.json().catch(() => null);
-        const latestJobData: LatestJob | null = jobData?.job
-          ? {
-              id: jobData.job.id,
-              status: jobData.job.status,
-              createdAt: jobData.job.createdAt,
+        // The API now returns `jobs: [{ id, status, createdAt, receiptIds }]`,
+        // one job per CUIL. Map each submitted receipt to its worker's job so
+        // the per-row `latestJob` reflects the correct job (not a shared one).
+        const jobs: { id: string; status: string; createdAt: string; receiptIds: string[] }[] =
+          jobData?.jobs ?? [];
+        const jobByReceiptId = new Map<string, LatestJob>();
+        for (const j of jobs) {
+          for (const rid of j.receiptIds) {
+            jobByReceiptId.set(rid, {
+              id: j.id,
+              status: j.status,
+              createdAt: j.createdAt,
               errorMessage: null,
-            }
-          : null;
+            });
+          }
+        }
         toast.success("Deduccion de servicio domestico desgravada");
         setReceipts((prev) =>
           prev.map((r) =>
             selectedIds.has(r.id)
-              ? { ...r, siradiqStatus: "QUEUED", latestJob: latestJobData ?? r.latestJob }
+              ? {
+                  ...r,
+                  siradiqStatus: "QUEUED",
+                  latestJob: jobByReceiptId.get(r.id) ?? r.latestJob,
+                }
               : r,
           ),
         );
@@ -309,11 +321,13 @@ export function ReceiptList({
       });
       if (res.ok) {
         const jobData = await res.json().catch(() => null);
-        const latestJobData: LatestJob | null = jobData?.job
+        const jobs: { id: string; status: string; createdAt: string; receiptIds: string[] }[] =
+          jobData?.jobs ?? [];
+        const latestJobData: LatestJob | null = jobs[0]
           ? {
-              id: jobData.job.id,
-              status: jobData.job.status,
-              createdAt: jobData.job.createdAt,
+              id: jobs[0].id,
+              status: jobs[0].status,
+              createdAt: jobs[0].createdAt,
               errorMessage: null,
             }
           : null;

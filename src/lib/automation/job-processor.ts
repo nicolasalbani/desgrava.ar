@@ -2473,9 +2473,12 @@ async function processSubmitDomesticDeduction(
 
   // Fetch workers + their receipts for this fiscal year.
   // If receiptIds were provided, only include those specific receipts.
+  // QUEUED is included because the API transitions receipts to QUEUED when it
+  // enqueues this job; PROCESSING covers an edge case where a previous run
+  // crashed mid-flight.
   const receiptFilter: Prisma.DomesticReceiptWhereInput = {
     fiscalYear,
-    siradiqStatus: { in: ["PENDING", "FAILED"] },
+    siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING", "FAILED"] },
     ...(receiptIds ? { id: { in: receiptIds } } : {}),
   };
 
@@ -2509,6 +2512,12 @@ async function processSubmitDomesticDeduction(
 
   let totalSubmitted = 0;
   let totalFailed = 0;
+  // Surface the last per-worker failure on the job record so the UI's
+  // JobStatusBadge tooltip and StepProgress can show it. With one job per
+  // CUIL (see POST /api/automatizacion SUBMIT_DOMESTIC_DEDUCTION) there is
+  // at most one failing worker per job, so "last error" is effectively
+  // "the error for this job".
+  let lastError: string | null = null;
 
   for (const worker of workersWithReceipts) {
     await appendLogFn(
@@ -2538,61 +2547,66 @@ async function processSubmitDomesticDeduction(
     );
 
     if (!fillResult.success) {
-      await appendLogFn(
-        jobId,
-        `Error al completar formulario para ${worker.apellidoNombre}: ${fillResult.error}`,
-        onLog,
-      );
+      lastError = `Error al completar formulario para ${worker.apellidoNombre}: ${fillResult.error}`;
+      await appendLogFn(jobId, lastError, onLog);
       // Mark these receipts as failed
       await prisma.domesticReceipt.updateMany({
         where: { id: { in: worker.receipts.map((r) => r.id) } },
         data: { siradiqStatus: "FAILED" },
       });
       totalFailed += worker.receipts.length;
-      continue;
-    }
-
-    // Click Guardar
-    const saveResult = await submitDeduction(siradigPage, (msg) => appendLogFn(jobId, msg, onLog));
-
-    if (saveResult.success) {
-      await appendLogFn(
-        jobId,
-        `Deduccion domestica guardada para ${worker.apellidoNombre} (${worker.receipts.length} meses)`,
-        onLog,
-      );
-      // Mark receipts as submitted
-      await prisma.domesticReceipt.updateMany({
-        where: { id: { in: worker.receipts.map((r) => r.id) } },
-        data: { siradiqStatus: "SUBMITTED" },
-      });
-      totalSubmitted += worker.receipts.length;
     } else {
-      await appendLogFn(
-        jobId,
-        `Error al guardar deduccion para ${worker.apellidoNombre}: ${saveResult.error}`,
-        onLog,
+      // Click Guardar
+      const saveResult = await submitDeduction(siradigPage, (msg) =>
+        appendLogFn(jobId, msg, onLog),
       );
-      await prisma.domesticReceipt.updateMany({
-        where: { id: { in: worker.receipts.map((r) => r.id) } },
-        data: { siradiqStatus: "FAILED" },
-      });
-      totalFailed += worker.receipts.length;
+
+      if (saveResult.success) {
+        await appendLogFn(
+          jobId,
+          `Deduccion domestica guardada para ${worker.apellidoNombre} (${worker.receipts.length} meses)`,
+          onLog,
+        );
+        // Mark receipts as submitted
+        await prisma.domesticReceipt.updateMany({
+          where: { id: { in: worker.receipts.map((r) => r.id) } },
+          data: { siradiqStatus: "SUBMITTED" },
+        });
+        totalSubmitted += worker.receipts.length;
+      } else {
+        lastError = `Error al guardar deduccion para ${worker.apellidoNombre}: ${saveResult.error}`;
+        await appendLogFn(jobId, lastError, onLog);
+        await prisma.domesticReceipt.updateMany({
+          where: { id: { in: worker.receipts.map((r) => r.id) } },
+          data: { siradiqStatus: "FAILED" },
+        });
+        totalFailed += worker.receipts.length;
+      }
     }
 
-    // If there are more workers, navigate back to deductions section
+    // If there are more workers, navigate back to the deductions menu so the
+    // next iteration's fillDomesticDeductionForm can find #btn_agregar_deducciones.
+    // After a failed save SiRADIG leaves the page on verPersonalDomestico.do with
+    // validation errors, and after a successful save it leaves the page on the
+    // listado view — neither has the "Agregar Deducciones" button. A direct goto
+    // to verMenuDeducciones.do recovers reliably from both states, but the
+    // "Deducciones y desgravaciones" accordion is collapsed by default so we
+    // must re-expand it to make #btn_agregar_deducciones visible.
     if (workersWithReceipts.indexOf(worker) < workersWithReceipts.length - 1) {
-      await appendLogFn(jobId, "Volviendo a la seccion de deducciones...", onLog);
-      // After Guardar, SiRADIG returns to the form list. We need to re-expand
-      // the deductions accordion and continue.
+      await appendLogFn(jobId, "Volviendo al menu de deducciones...", onLog);
       try {
+        await siradigPage.goto(
+          "https://serviciosjava2.afip.gob.ar/radig/jsp/verMenuDeducciones.do",
+          { waitUntil: "networkidle", timeout: 20_000 },
+        );
         const deductionsSection = siradigPage.getByText("Deducciones y desgravaciones").first();
         await deductionsSection.waitFor({ timeout: 10_000 });
         await deductionsSection.click();
         await siradigPage.waitForLoadState("networkidle");
         await siradigPage.waitForTimeout(1_000);
-      } catch {
-        await appendLogFn(jobId, "No se pudo volver a la seccion de deducciones", onLog);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "error desconocido";
+        await appendLogFn(jobId, `No se pudo volver al menu de deducciones: ${msg}`, onLog);
       }
     }
   }
@@ -2610,6 +2624,7 @@ async function processSubmitDomesticDeduction(
     data: {
       status: finalStatus,
       completedAt: new Date(),
+      errorMessage: finalStatus === "FAILED" ? lastError : null,
       resultData: JSON.stringify({ totalSubmitted, totalFailed }),
     },
   });

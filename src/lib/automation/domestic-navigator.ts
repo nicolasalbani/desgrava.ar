@@ -58,6 +58,28 @@ function parsePeriodo(text: string): { month: number; year: number } | null {
   return { month, year };
 }
 
+/**
+ * Decide whether a row from ARCA's "Pagos y Recibos" table represents a month
+ * that can be deducted. Only rows where the contribution is paid AND the
+ * receipt has been generated are deductible; unpaid/ungenerated rows still
+ * appear in the table with action buttons ("PAGAR", "RECIBO") and must be
+ * filtered out before importing, because the contribution amount is not yet
+ * a real deduction.
+ *
+ * Returns `null` when deductible, or a short reason string ("sin pagar" |
+ * "sin recibo") when the row must be skipped.
+ */
+export function reasonToSkipReceiptRow(
+  estadoPago: string,
+  estadoRecibo: string,
+): "sin pagar" | "sin recibo" | null {
+  const estadoPagoUpper = estadoPago.toUpperCase();
+  const estadoReciboUpper = estadoRecibo.toUpperCase();
+  if (/\bPAGAR\b/.test(estadoPagoUpper)) return "sin pagar";
+  if (estadoReciboUpper === "RECIBO") return "sin recibo";
+  return null;
+}
+
 function parseAmount(text: string): number {
   const cleaned = text.replace(/[$\s]/g, "").replace(/\./g, "").replace(",", ".");
   return parseFloat(cleaned) || 0;
@@ -608,6 +630,8 @@ async function extractReceiptsFromTable(
     periodo: string;
     pago: string;
     sueldo: string;
+    estadoPago: string;
+    estadoRecibo: string;
     reciboUrl: string | null;
     detalleUrl: string | null;
   }
@@ -617,6 +641,8 @@ async function extractReceiptsFromTable(
       periodo: string;
       pago: string;
       sueldo: string;
+      estadoPago: string;
+      estadoRecibo: string;
       reciboUrl: string | null;
       detalleUrl: string | null;
     }[] = [];
@@ -642,7 +668,13 @@ async function extractReceiptsFromTable(
       result.push({
         periodo: valSpan(cells[0]),
         pago: valSpan(cells[1]),
+        // Estado del pago (cells[2]) and Estado del recibo (cells[4]) wrap an
+        // <a>/<input> button inside a span sibling of the .td-label. Read the
+        // value span to get "Pagar"/"RECIBO"/"VER RECIBO" without the label
+        // prefix ("Estado"/"Estado del recibo").
+        estadoPago: valSpan(cells[2]),
         sueldo: valSpan(cells[3]),
+        estadoRecibo: valSpan(cells[4]),
         reciboUrl,
         detalleUrl,
       });
@@ -673,6 +705,12 @@ async function extractReceiptsFromTable(
       break;
     }
     if (parsed.year > fiscalYear) continue;
+
+    const skipReason = reasonToSkipReceiptRow(raw.estadoPago, raw.estadoRecibo);
+    if (skipReason) {
+      onLog(`Saltando ${raw.periodo} (${skipReason})`);
+      continue;
+    }
 
     matchingRows.push({
       periodoText: raw.periodo,

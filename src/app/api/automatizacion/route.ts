@@ -386,49 +386,84 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ job }, { status: 201 });
     }
 
-    // SUBMIT_DOMESTIC_DEDUCTION: submit domestic worker deduction to SiRADIG
+    // SUBMIT_DOMESTIC_DEDUCTION: submit domestic worker deduction to SiRADIG.
+    //
+    // We create ONE JOB PER CUIL (domestic worker), so that a save failure for
+    // one worker's receipts is recorded independently and doesn't poison the
+    // UI status of unrelated workers. The browser pool runs these jobs
+    // sequentially; each does its own login + SiRADIG navigation.
     if (jobType === "SUBMIT_DOMESTIC_DEDUCTION") {
       if (!fiscalYear) {
         return NextResponse.json({ error: "Falta el año fiscal" }, { status: 400 });
       }
 
-      // Accept optional receiptIds to limit which receipts are submitted
       const receiptIds: string[] | undefined = body.receiptIds;
+      if (!receiptIds?.length) {
+        return NextResponse.json({ error: "Debe seleccionar al menos un recibo" }, { status: 400 });
+      }
 
-      const job = await prisma.automationJob.create({
-        data: {
-          userId: session.user.id,
-          jobType,
-          fiscalYear,
-          status: "PENDING",
-          ...(receiptIds ? { resultData: { receiptIds } } : {}),
-          ...(receiptIds
-            ? {
-                domesticReceipts: {
-                  connect: receiptIds.map((id) => ({ id })),
-                },
-              }
-            : {}),
+      // Group receipts by CUIL so each job covers exactly one worker.
+      const receipts = await prisma.domesticReceipt.findMany({
+        where: { id: { in: receiptIds }, userId: session.user.id },
+        select: {
+          id: true,
+          domesticWorker: { select: { cuil: true } },
         },
       });
 
-      // Update receipt statuses to QUEUED
-      if (receiptIds?.length) {
-        await prisma.domesticReceipt.updateMany({
-          where: { id: { in: receiptIds }, userId: session.user.id },
-          data: { siradiqStatus: "QUEUED" },
+      const receiptsByCuil = new Map<string, string[]>();
+      for (const r of receipts) {
+        const cuil = r.domesticWorker?.cuil;
+        if (!cuil) continue;
+        const list = receiptsByCuil.get(cuil) ?? [];
+        list.push(r.id);
+        receiptsByCuil.set(cuil, list);
+      }
+
+      if (receiptsByCuil.size === 0) {
+        return NextResponse.json(
+          { error: "Los recibos seleccionados no tienen trabajador asociado" },
+          { status: 400 },
+        );
+      }
+
+      const jobs: { id: string; status: string; createdAt: Date; receiptIds: string[] }[] = [];
+      for (const [, groupReceiptIds] of receiptsByCuil) {
+        const created = await prisma.automationJob.create({
+          data: {
+            userId: session.user.id,
+            jobType,
+            fiscalYear,
+            status: "PENDING",
+            resultData: { receiptIds: groupReceiptIds },
+            domesticReceipts: { connect: groupReceiptIds.map((id) => ({ id })) },
+          },
+        });
+        jobs.push({
+          id: created.id,
+          status: created.status,
+          createdAt: created.createdAt,
+          receiptIds: groupReceiptIds,
         });
       }
 
+      await prisma.domesticReceipt.updateMany({
+        where: { id: { in: receiptIds }, userId: session.user.id },
+        data: { siradiqStatus: "QUEUED" },
+      });
+
+      const jobIds = jobs.map((j) => j.id);
       after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
+        for (const jobId of jobIds) {
+          try {
+            await processJob(jobId);
+          } catch (err) {
+            console.error("Job processing error:", err);
+          }
         }
       });
 
-      return NextResponse.json({ job }, { status: 201 });
+      return NextResponse.json({ jobs }, { status: 201 });
     }
 
     // Verify invoice belongs to user
