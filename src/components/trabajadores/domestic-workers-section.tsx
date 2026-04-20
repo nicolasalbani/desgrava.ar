@@ -779,8 +779,7 @@ function ImportWorkersArcaDialog({
         <DialogHeader>
           <DialogTitle>Importar trabajadores desde ARCA</DialogTitle>
           <DialogDescription>
-            Se conectara a Personal de Casas Particulares y descargara los datos de todos los
-            trabajadores registrados.
+            Descarga los trabajadores registrados en Personal de Casas Particulares.
           </DialogDescription>
         </DialogHeader>
 

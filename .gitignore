@@ -51,3 +51,6 @@ next-env.d.ts
 
 # dev session logs
 /logs
+
+# Tesseract training data (downloaded at runtime)
+*.traineddata

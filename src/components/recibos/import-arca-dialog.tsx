@@ -271,8 +271,7 @@ export function ImportArcaReceiptsDialog({
         <DialogHeader>
           <DialogTitle>Importar recibos salariales desde ARCA</DialogTitle>
           <DialogDescription>
-            Se conectara a Personal de Casas Particulares y descargara los recibos de sueldo de
-            todos los trabajadores.
+            Descarga los recibos de sueldo de Personal de Casas Particulares.
           </DialogDescription>
         </DialogHeader>
 
