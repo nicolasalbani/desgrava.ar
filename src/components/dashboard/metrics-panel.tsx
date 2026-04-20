@@ -3,7 +3,16 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CATEGORY_LABELS } from "@/lib/simulador/deduction-rules";
-import { TrendingUp, FileText, Send, Clock, CreditCard, Crown, AlertCircle } from "lucide-react";
+import {
+  TrendingUp,
+  FileText,
+  Receipt,
+  Send,
+  Clock,
+  CreditCard,
+  Crown,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -72,6 +81,9 @@ interface MetricsPanelProps {
   totalInvoices: number;
   submittedCount: number;
   pendingCount: number;
+  totalReceipts: number;
+  submittedReceiptsCount: number;
+  pendingReceiptsCount: number;
   monthCategoryData: MonthCategoryEntry[];
   subscription: SubscriptionInfo | null;
 }
@@ -112,10 +124,13 @@ export function MetricsPanel({
   totalInvoices,
   submittedCount,
   pendingCount,
+  totalReceipts,
+  submittedReceiptsCount,
+  pendingReceiptsCount,
   monthCategoryData,
   subscription,
 }: MetricsPanelProps) {
-  const hasData = totalInvoices > 0;
+  const hasData = totalInvoices > 0 || totalReceipts > 0;
 
   // Auto-refresh when relevant automation jobs complete
   const router = useRouter();
@@ -260,7 +275,7 @@ export function MetricsPanel({
 
       {/* Top metric cards */}
       <div
-        className="animate-in fade-in slide-in-from-bottom-2 grid grid-cols-1 gap-4 duration-500 sm:grid-cols-2 lg:grid-cols-3"
+        className="animate-in fade-in slide-in-from-bottom-2 grid grid-cols-1 gap-4 duration-500 sm:grid-cols-2 lg:grid-cols-4"
         style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
       >
         <div className="bg-card border-border rounded-2xl border p-5">
@@ -313,6 +328,28 @@ export function MetricsPanel({
             </span>
           </div>
         </div>
+
+        <div className="bg-card border-border rounded-2xl border p-5">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-xl">
+              <Receipt className="text-primary h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs">Recibos salariales</p>
+              <p className="text-xl font-semibold tabular-nums">{totalReceipts}</p>
+            </div>
+          </div>
+          <div className="text-muted-foreground mt-3 flex gap-4 text-xs">
+            <span className="flex items-center gap-1">
+              <Send className="h-3 w-3 text-emerald-500" />
+              {submittedReceiptsCount} enviados
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3 text-amber-500" />
+              {pendingReceiptsCount} pendientes
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Empty state */}
@@ -323,7 +360,8 @@ export function MetricsPanel({
         >
           <FileText className="text-muted-foreground/30 mx-auto mb-3 h-8 w-8" />
           <p className="text-muted-foreground text-sm">
-            Todavía no tenés comprobantes deducidos. Importalos desde ARCA o subí un PDF.
+            Todavía no tenés comprobantes ni recibos salariales deducidos. Importalos desde ARCA o
+            cargalos manualmente.
           </p>
           <Button asChild variant="outline" className="mt-4" size="sm">
             <Link href="/facturas">Ir a comprobantes</Link>

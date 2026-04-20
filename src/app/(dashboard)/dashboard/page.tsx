@@ -16,6 +16,10 @@ export default async function DashboardPage() {
     submittedCount,
     pendingCount,
     monthCategoryBreakdown,
+    totalReceipts,
+    submittedReceiptsCount,
+    pendingReceiptsCount,
+    receiptMonthBreakdown,
     subscription,
     yearPreference,
   ] = await Promise.all([
@@ -30,7 +34,9 @@ export default async function DashboardPage() {
         userId,
         fiscalYear,
         deductionCategory: { not: "NO_DEDUCIBLE" },
-        siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING"] },
+        // "Pendientes" = anything not successfully SUBMITTED, including FAILED
+        // retries the user still needs to address.
+        siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING", "FAILED"] },
       },
     }),
     // Group by month AND category for the stacked chart
@@ -44,6 +50,26 @@ export default async function DashboardPage() {
       },
       _sum: { amount: true },
     }),
+    prisma.domesticReceipt.count({
+      where: { userId, fiscalYear },
+    }),
+    prisma.domesticReceipt.count({
+      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
+    }),
+    prisma.domesticReceipt.count({
+      where: {
+        userId,
+        fiscalYear,
+        // "Pendientes" = anything not successfully SUBMITTED, including FAILED
+        // retries the user still needs to address.
+        siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING", "FAILED"] },
+      },
+    }),
+    prisma.domesticReceipt.groupBy({
+      by: ["fiscalMonth"],
+      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
+      _sum: { total: true, contributionAmount: true },
+    }),
     prisma.subscription.findUnique({ where: { userId } }),
     prisma.userYearPreference.findUnique({
       where: { userId_fiscalYear: { userId, fiscalYear } },
@@ -56,7 +82,7 @@ export default async function DashboardPage() {
   // Build month×category data applying SiRADIG effective rates.
   // SiRADIG applies percentage rates to certain categories (e.g. 40% for GASTOS_MEDICOS),
   // so the dashboard must reflect the same amounts as the F.572 PDF total.
-  const monthCategoryData = monthCategoryBreakdown.map((entry) => {
+  const invoiceEntries = monthCategoryBreakdown.map((entry) => {
     const rawAmount = entry._sum.amount
       ? new Decimal(entry._sum.amount.toString())
       : new Decimal(0);
@@ -67,6 +93,35 @@ export default async function DashboardPage() {
       amount: rawAmount.mul(rate).toDP(2).toNumber(),
     };
   });
+
+  // SiRADIG's "Deducción del Personal Doméstico" form deducts the salary
+  // (retribución) PLUS the monthly APORTES+CONTRIBUCIONES, summed together
+  // as "Monto Total" per month. Mirror that here so the dashboard matches the
+  // F.572 PDF subtotal.
+  const receiptEntries = receiptMonthBreakdown.map((entry) => {
+    const total = entry._sum.total ? new Decimal(entry._sum.total.toString()) : new Decimal(0);
+    const contribution = entry._sum.contributionAmount
+      ? new Decimal(entry._sum.contributionAmount.toString())
+      : new Decimal(0);
+    return {
+      month: entry.fiscalMonth,
+      category: "SERVICIO_DOMESTICO",
+      amount: total.plus(contribution).toDP(2).toNumber(),
+    };
+  });
+
+  // Merge invoices + receipts so the chart has at most one segment per month per category.
+  const mergedByKey = new Map<string, { month: number; category: string; amount: number }>();
+  for (const entry of [...invoiceEntries, ...receiptEntries]) {
+    const key = `${entry.month}:${entry.category}`;
+    const existing = mergedByKey.get(key);
+    if (existing) {
+      existing.amount = new Decimal(existing.amount).plus(entry.amount).toDP(2).toNumber();
+    } else {
+      mergedByKey.set(key, { ...entry });
+    }
+  }
+  const monthCategoryData = Array.from(mergedByKey.values());
 
   const totalDeducted = monthCategoryData
     .reduce((sum, entry) => sum.plus(entry.amount), new Decimal(0))
@@ -84,6 +139,9 @@ export default async function DashboardPage() {
       totalInvoices={totalInvoices}
       submittedCount={submittedCount}
       pendingCount={pendingCount}
+      totalReceipts={totalReceipts}
+      submittedReceiptsCount={submittedReceiptsCount}
+      pendingReceiptsCount={pendingReceiptsCount}
       monthCategoryData={monthCategoryData}
       subscription={
         subscription
