@@ -287,7 +287,8 @@ export function parseCuitOnlineSearch(
   cuit: string,
 ): { razonSocial: string | null; detailSlug: string | null } | null {
   // Extract detail link: href="detalle/30534357016/fundacion-escuelas-san-juan.html"
-  const linkRegex = new RegExp(`detalle/${cuit}/([\\w-]+)\\.html`, "i");
+  // Slug may contain dots for legal suffixes like "s.r.l" or "s.a".
+  const linkRegex = new RegExp(`detalle/${cuit}/([\\w.-]+)\\.html`, "i");
   const linkMatch = html.match(linkRegex);
   const detailSlug = linkMatch?.[1] ?? null;
 
@@ -297,7 +298,7 @@ export function parseCuitOnlineSearch(
   if (linkMatch) {
     // Try title attribute first: title="Ver detalles de BUSINESS NAME"
     const titleRegex = new RegExp(
-      `detalle/${cuit}/[\\w-]+\\.html[^>]*title="Ver detalles de\\s+([^"]+)"`,
+      `detalle/${cuit}/[\\w.-]+\\.html[^>]*title="Ver detalles de\\s+([^"]+)"`,
       "i",
     );
     const titleMatch = html.match(titleRegex);
@@ -305,7 +306,7 @@ export function parseCuitOnlineSearch(
 
     // Fallback: inner text after closing >
     if (!razonSocial) {
-      const nameRegex = new RegExp(`detalle/${cuit}/[\\w-]+\\.html[^>]*>\\s*([^<]+)`, "i");
+      const nameRegex = new RegExp(`detalle/${cuit}/[\\w.-]+\\.html[^>]*>\\s*([^<]+)`, "i");
       const nameMatch = html.match(nameRegex);
       razonSocial = nameMatch?.[1]?.trim() || null;
     }

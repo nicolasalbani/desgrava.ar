@@ -38,7 +38,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     "Gastos de sepelio: gastos efectivamente incurridos en concepto de sepelio del contribuyente o de personas a su cargo. Corresponde a los gastos debidamente documentados con comprobantes.",
 
   GASTOS_MEDICOS:
-    "Gastos médicos y paramédicos: honorarios facturados por servicios de asistencia sanitaria, médica y paramédica, tanto para el contribuyente como para sus cargas de familia. Se puede deducir el 40% del total facturado, con un límite del 5% de la ganancia neta del ejercicio.",
+    "Gastos médicos y paramédicos: honorarios por servicios de asistencia sanitaria, médica y paramédica (hospitalización, consultas médicas, odontología, kinesiología, fonoaudiología, psicología, análisis bioquímicos, traslados sanitarios, servicios de enfermería), así como prótesis, ortopedia (calzado ortopédico, muletas, plantillas, vendas), anteojos recetados, audífonos, instrumental médico y odontológico, y otros elementos terapéuticos similares de uso personal. Aplica tanto al contribuyente como a sus cargas de familia. Se puede deducir el 40% del total facturado, con un límite del 5% de la ganancia neta del ejercicio.",
 
   GASTOS_INDUMENTARIA_TRABAJO:
     "Gastos de adquisición de indumentaria y equipamiento para uso exclusivo en el lugar de trabajo: importes abonados por ropa, herramientas y equipamiento de uso estrictamente laboral, siempre que no hayan sido reintegrados por el empleador. Incluye también servicios de conectividad a internet (como Starlink, Fibertel, Telecentro, Personal, Movistar), telefonía laboral, y equipamiento tecnológico (computadoras, tablets, impresoras) utilizados exclusivamente para el trabajo o trabajo remoto.",

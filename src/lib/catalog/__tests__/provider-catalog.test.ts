@@ -158,6 +158,14 @@ describe("parseCuitOnlineSearch", () => {
     expect(result).not.toBeNull();
     expect(result!.razonSocial).toBe("SUBTERRANEOS DE BUENOS AIRES SOCIEDAD DEL ESTADO");
   });
+
+  it("handles slugs that contain dots for legal suffixes like s.r.l", () => {
+    const html = `<a href="detalle/30717882780/central-ortopedica-junin-s.r.l.html" title="Ver detalles de CENTRAL ORTOPEDICA JUNIN S.R.L." class="denominacion">CENTRAL ORTOPEDICA JUNIN S.R.L.</a>`;
+    const result = parseCuitOnlineSearch(html, "30717882780");
+    expect(result).not.toBeNull();
+    expect(result!.detailSlug).toBe("central-ortopedica-junin-s.r.l");
+    expect(result!.razonSocial).toBe("CENTRAL ORTOPEDICA JUNIN S.R.L.");
+  });
 });
 
 // ── parseCuitOnlineActivities ────────────────────────────────
