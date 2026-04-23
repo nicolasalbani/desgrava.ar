@@ -517,10 +517,16 @@ async function editExistingDeduction(
 ): Promise<boolean> {
   const categoryLower = categoryText.toLowerCase();
 
-  // Find the row index matching category+CUIT (and optionally month).
-  // For Detalle Mensual categories (Primas, Cuotas, Aportes) SiRADIG stores one
-  // entry per CUIT with all months inside, so we match by CUIT only.
-  const rowIndex = await page.evaluate(
+  // Find the matching row and trigger a click on its .act_editar button via jQuery.
+  // SiRADIG's edit handler does more than just navigate: it sets up internal edit
+  // state (form hidden id, request-type metadata) so the subsequent Guardar issues
+  // an UPDATE instead of an INSERT. A direct page.goto to the edit URL visually
+  // pre-fills the form but leaves that state missing, which causes SiRADIG to
+  // reject the save with "Ya existen Gastos registrados para esta CUIT, mes y
+  // concepto" — the server-side uniqueness check treats the save as a new entry.
+  // Triggering via jQuery (not native .click()) is required because SiRADIG binds
+  // the handler through event delegation on the table.
+  const clicked = await page.evaluate(
     ({
       categoryLower,
       cuitDigits,
@@ -545,55 +551,24 @@ async function editExistingDeduction(
           const rowText = rows[r].textContent ?? "";
           const normalizedRow = rowText.replace(/-/g, "");
           if (normalizedRow.includes(cuitDigits) && (ignoreMonth || rowText.includes(monthName))) {
-            return r;
+            const editEl =
+              rows[r].querySelector("div.act_editar span") ??
+              rows[r].querySelector("div.act_editar");
+            if (!editEl) return false;
+            (window as any).$(editEl).trigger("click");
+            return true;
           }
         }
       }
-      return -1;
+      return false;
     },
     { categoryLower, cuitDigits, monthName, ignoreMonth },
   );
 
-  if (rowIndex === -1) return false;
+  if (!clicked) return false;
 
-  // Navigate directly to the edit URL. SiRADIG's edit handler does:
-  //   document.location.href = $(table).data("urlEditar") + "?id=" + $(tr).data("idReg")
-  // We replicate this by reading the URL and ID from the DOM, then navigating directly.
-  // This is more reliable than triggering jQuery click events.
   log("Deducción existente encontrada, editando para agregar comprobante...");
-  const editUrl = await page.evaluate(
-    ({ categoryLower, rowIndex }) => {
-      const fieldsets = document.querySelectorAll(
-        "#div_tabla_deducciones_agrupadas fieldset.grupo_deducciones",
-      );
-      for (let f = 0; f < fieldsets.length; f++) {
-        const legend = fieldsets[f].querySelector("legend");
-        const legendText = (legend?.textContent ?? "").toLowerCase();
-        if (!legendText.includes(categoryLower)) continue;
-
-        const rows = fieldsets[f].querySelectorAll("tbody tr");
-        const row = rows[rowIndex];
-        if (!row) return null;
-
-        const table = row.closest("table");
-        const urlEditar = (window as any).$(table).data("urlEditar");
-        const idReg = (window as any).$(row).data("idReg");
-        const tipoReg = (window as any).$(row).data("tipoReg");
-        if (!urlEditar || !idReg) return null;
-
-        return urlEditar + "?id=" + idReg + (tipoReg ? "&t=" + tipoReg : "");
-      }
-      return null;
-    },
-    { categoryLower, rowIndex },
-  );
-
-  if (!editUrl) {
-    log("No se pudo obtener la URL de edición");
-    return false;
-  }
-
-  await page.goto(new URL(editUrl, page.url()).href, { waitUntil: "networkidle" });
+  await page.waitForLoadState("networkidle");
   await page.waitForTimeout(1500);
   return true;
 }
