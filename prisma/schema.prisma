@@ -385,6 +385,7 @@ model ProviderCatalog {
   razonSocial       String?
   deductionCategory DeductionCategory
   source            CatalogSource     @default(AI_INVOICE)
+  lastReviewedAt    DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 }
@@ -394,6 +395,18 @@ enum CatalogSource {
   AI_WEB_LOOKUP
   AI_INVOICE
   MANUAL
+}
+
+model CatalogReviewProposal {
+  id                String            @id @default(cuid())
+  cuit              String
+  proposedCategory  DeductionCategory
+  telegramMessageId String?
+  resolvedAt        DateTime?
+  resolution        String? // "APPROVED" | "REJECTED"
+  createdAt         DateTime          @default(now())
+
+  @@index([cuit])
 }
 
 // ─── Personal de Casas Particulares ─────────────────────────

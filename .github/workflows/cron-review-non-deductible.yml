@@ -1,0 +1,19 @@
+name: "Cron: Review non-deductible CUITs"
+
+on:
+  schedule:
+    # Daily at 10:00 UTC (07:00 Argentina time)
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    name: Trigger review-non-deductible cron
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST to /api/cron/review-non-deductible
+        run: |
+          curl -sf -X POST \
+            "${{ secrets.PROD_API_URL }}/api/cron/review-non-deductible" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"
