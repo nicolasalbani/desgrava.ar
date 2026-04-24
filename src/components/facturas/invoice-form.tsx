@@ -16,13 +16,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Sparkles } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { HelpCircle, Loader2, Sparkles } from "lucide-react";
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
   DEDUCTION_CATEGORIES,
   DEDUCTION_CATEGORY_LABELS,
   INVOICE_TYPES,
   INVOICE_TYPE_LABELS,
+  getInvoiceNumberFormat,
+  invoiceNumberMatchesType,
+  type InvoiceType,
 } from "@/lib/validators/invoice";
 import { formatCuit, validateCuit } from "@/lib/validators/cuit";
 import { toast } from "sonner";
@@ -47,6 +51,16 @@ function unformatArgNumber(value: string): string {
     return intPart + "." + decPart;
   }
   return intPart;
+}
+
+function formatInvoiceNumberStandard(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 13);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
+function isFreeFormInvoiceType(type: string | undefined): boolean {
+  return type === "DOCUMENTO_ADUANERO" || type === "OTROS_EXCEPTUADOS";
 }
 
 const formSchema = z
@@ -89,7 +103,19 @@ const formSchema = z
       message: "La fecha del comprobante no corresponde al año fiscal seleccionado",
       path: ["invoiceDate"],
     },
-  );
+  )
+  .superRefine((data, ctx) => {
+    if (!data.invoiceNumber || !data.invoiceType) return;
+    if (!(INVOICE_TYPES as readonly string[]).includes(data.invoiceType)) return;
+    const type = data.invoiceType as InvoiceType;
+    if (invoiceNumberMatchesType(data.invoiceNumber, type)) return;
+    const { example } = getInvoiceNumberFormat(type);
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["invoiceNumber"],
+      message: `Formato inválido. Ejemplo: ${example}`,
+    });
+  });
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -179,6 +205,17 @@ export function InvoiceForm({
   });
 
   const watchedFiscalYear = form.watch("fiscalYear");
+  const watchedInvoiceType = form.watch("invoiceType");
+  const invoiceNumberFormat =
+    watchedInvoiceType && (INVOICE_TYPES as readonly string[]).includes(watchedInvoiceType)
+      ? getInvoiceNumberFormat(watchedInvoiceType as InvoiceType)
+      : null;
+
+  useEffect(() => {
+    if (form.getValues("invoiceNumber")) {
+      form.trigger("invoiceNumber");
+    }
+  }, [watchedInvoiceType, form]);
 
   useEffect(() => {
     const year = parseInt(watchedFiscalYear);
@@ -337,7 +374,6 @@ export function InvoiceForm({
   const watchedCategory = form.watch("deductionCategory");
   const watchedCuit = form.watch("providerCuit");
   const watchedProviderName = form.watch("providerName");
-  const watchedInvoiceType = form.watch("invoiceType");
   const watchedAmount = form.watch("amount");
   const watchedInvoiceNumber = form.watch("invoiceNumber");
   const watchedInvoiceDate = form.watch("invoiceDate");
@@ -474,12 +510,43 @@ export function InvoiceForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="invoiceNumber">Numero de comprobante</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="invoiceNumber">Numero de comprobante</Label>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Formato esperado según el tipo de comprobante"
+                    className="text-muted-foreground hover:text-foreground -m-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 sm:-m-1 sm:min-h-0 sm:min-w-0 sm:p-1"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[260px] text-center">
+                  {invoiceNumberFormat ? (
+                    <>
+                      <div>{invoiceNumberFormat.description}</div>
+                      <div className="mt-1 font-mono">Ej: {invoiceNumberFormat.example}</div>
+                    </>
+                  ) : (
+                    "Seleccioná primero un tipo de comprobante"
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <Input
             id="invoiceNumber"
-            placeholder="00001-00012345"
+            placeholder={invoiceNumberFormat?.example ?? "00001-00012345"}
             className={missingGlow(watchedInvoiceNumber)}
             {...form.register("invoiceNumber")}
+            onChange={(e) => {
+              const next = isFreeFormInvoiceType(watchedInvoiceType)
+                ? e.target.value
+                : formatInvoiceNumberStandard(e.target.value);
+              form.setValue("invoiceNumber", next, { shouldValidate: true });
+            }}
           />
           {form.formState.errors.invoiceNumber && (
             <p className="text-destructive text-sm">

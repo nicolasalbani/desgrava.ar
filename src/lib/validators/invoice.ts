@@ -79,6 +79,42 @@ export const INVOICE_TYPE_LABELS: Record<string, string> = {
   OTROS_EXCEPTUADOS: "Otros comp. doc. exceptuados",
 };
 
+export type InvoiceType = (typeof INVOICE_TYPES)[number];
+
+export type InvoiceNumberFormat = {
+  regex: RegExp;
+  description: string;
+  example: string;
+};
+
+const STANDARD_INVOICE_NUMBER_FORMAT: InvoiceNumberFormat = {
+  regex: /^\d{5}-\d{8}$/,
+  description: "Formato: XXXXX-XXXXXXXX (punto de venta - número)",
+  example: "00001-00012345",
+};
+
+const FREE_FORM_INVOICE_NUMBER_FORMATS: Record<string, InvoiceNumberFormat> = {
+  DOCUMENTO_ADUANERO: {
+    regex: /^\S.*$/,
+    description: "Número identificador del despacho aduanero",
+    example: "19001MANI000001A",
+  },
+  OTROS_EXCEPTUADOS: {
+    regex: /^\S.*$/,
+    description: "Número identificador (sin formato específico)",
+    example: "Identificador",
+  },
+};
+
+export function getInvoiceNumberFormat(invoiceType: InvoiceType): InvoiceNumberFormat {
+  return FREE_FORM_INVOICE_NUMBER_FORMATS[invoiceType] ?? STANDARD_INVOICE_NUMBER_FORMAT;
+}
+
+export function invoiceNumberMatchesType(invoiceNumber: string, invoiceType: InvoiceType): boolean {
+  const { regex } = getInvoiceNumberFormat(invoiceType);
+  return regex.test(invoiceNumber);
+}
+
 const invoiceBaseSchema = z.object({
   deductionCategory: z.enum(DEDUCTION_CATEGORIES),
   providerCuit: cuitSchema,
@@ -95,6 +131,16 @@ const invoiceBaseSchema = z.object({
   familyDependentId: z.string().nullable().optional(),
 });
 
+function invoiceNumberFormatIssue(
+  invoiceNumber: string | undefined,
+  invoiceType: InvoiceType | undefined,
+): { message: string } | null {
+  if (!invoiceNumber || !invoiceType) return null;
+  if (invoiceNumberMatchesType(invoiceNumber, invoiceType)) return null;
+  const { example } = getInvoiceNumberFormat(invoiceType);
+  return { message: `Formato inválido. Ejemplo: ${example}` };
+}
+
 export const createInvoiceSchema = invoiceBaseSchema
   .refine(
     (data) => data.deductionCategory !== "ALQUILER_VIVIENDA" || data.contractStartDate != null,
@@ -109,9 +155,28 @@ export const createInvoiceSchema = invoiceBaseSchema
       message: "La fecha de fin del contrato es obligatoria para alquiler",
       path: ["contractEndDate"],
     },
-  );
+  )
+  .superRefine((data, ctx) => {
+    const issue = invoiceNumberFormatIssue(data.invoiceNumber, data.invoiceType);
+    if (issue) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["invoiceNumber"],
+        message: issue.message,
+      });
+    }
+  });
 
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 
-export const updateInvoiceSchema = invoiceBaseSchema.partial();
+export const updateInvoiceSchema = invoiceBaseSchema.partial().superRefine((data, ctx) => {
+  const issue = invoiceNumberFormatIssue(data.invoiceNumber, data.invoiceType);
+  if (issue) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["invoiceNumber"],
+      message: issue.message,
+    });
+  }
+});
 export type UpdateInvoiceInput = z.infer<typeof updateInvoiceSchema>;

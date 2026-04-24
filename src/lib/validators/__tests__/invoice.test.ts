@@ -5,6 +5,9 @@ import {
   DEDUCTION_CATEGORIES,
   ALL_DEDUCTION_CATEGORIES,
   INVOICE_TYPES,
+  getInvoiceNumberFormat,
+  invoiceNumberMatchesType,
+  type InvoiceType,
 } from "@/lib/validators/invoice";
 
 const VALID_CUIT = "20-27395860-7";
@@ -273,6 +276,180 @@ describe("updateInvoiceSchema", () => {
 
   it("should accept a full valid invoice as an update", () => {
     const result = updateInvoiceSchema.safeParse(validInvoice);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("getInvoiceNumberFormat", () => {
+  const STANDARD_TYPES: InvoiceType[] = [
+    "FACTURA_B",
+    "FACTURA_C",
+    "NOTA_DEBITO_B",
+    "NOTA_DEBITO_C",
+    "NOTA_CREDITO_B",
+    "NOTA_CREDITO_C",
+    "RECIBO_B",
+    "RECIBO_C",
+    "NOTA_VENTA_B",
+    "NOTA_VENTA_C",
+    "OTRO_COMPROBANTE_B",
+    "OTRO_COMPROBANTE_C",
+    "TIQUE_FACTURA_B",
+  ];
+  const FREE_FORM_TYPES: InvoiceType[] = ["DOCUMENTO_ADUANERO", "OTROS_EXCEPTUADOS"];
+
+  it("returns a shape with regex, description, and example for every invoice type", () => {
+    for (const type of INVOICE_TYPES) {
+      const format = getInvoiceNumberFormat(type);
+      expect(format.regex).toBeInstanceOf(RegExp);
+      expect(typeof format.description).toBe("string");
+      expect(format.description.length).toBeGreaterThan(0);
+      expect(typeof format.example).toBe("string");
+      expect(format.example.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("every standard type uses the XXXXX-XXXXXXXX regex and a matching example", () => {
+    for (const type of STANDARD_TYPES) {
+      const format = getInvoiceNumberFormat(type);
+      expect(format.regex.source).toBe("^\\d{5}-\\d{8}$");
+      expect(format.regex.test(format.example)).toBe(true);
+    }
+  });
+
+  it("standard types accept valid punto-de-venta + número format", () => {
+    for (const type of STANDARD_TYPES) {
+      expect(invoiceNumberMatchesType("00001-00012345", type)).toBe(true);
+      expect(invoiceNumberMatchesType("99999-99999999", type)).toBe(true);
+    }
+  });
+
+  it("standard types reject malformed numbers", () => {
+    for (const type of STANDARD_TYPES) {
+      expect(invoiceNumberMatchesType("1-12345", type)).toBe(false);
+      expect(invoiceNumberMatchesType("abc", type)).toBe(false);
+      expect(invoiceNumberMatchesType("", type)).toBe(false);
+      expect(invoiceNumberMatchesType("00001-1234567", type)).toBe(false);
+      expect(invoiceNumberMatchesType("00001-123456789", type)).toBe(false);
+      expect(invoiceNumberMatchesType("00001 00012345", type)).toBe(false);
+    }
+  });
+
+  it("free-form types accept any non-empty identifier", () => {
+    for (const type of FREE_FORM_TYPES) {
+      expect(invoiceNumberMatchesType("ABC-123/XYZ", type)).toBe(true);
+      expect(invoiceNumberMatchesType("19001MANI000001A", type)).toBe(true);
+      expect(invoiceNumberMatchesType("123", type)).toBe(true);
+    }
+  });
+
+  it("free-form types reject empty / whitespace-only identifiers", () => {
+    for (const type of FREE_FORM_TYPES) {
+      expect(invoiceNumberMatchesType("", type)).toBe(false);
+      expect(invoiceNumberMatchesType(" ", type)).toBe(false);
+    }
+  });
+});
+
+describe("createInvoiceSchema invoice number format", () => {
+  it("accepts a valid standard invoice number matching the type", () => {
+    const result = createInvoiceSchema.safeParse({
+      ...validInvoice,
+      invoiceType: "FACTURA_B",
+      invoiceNumber: "00001-00000123",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a malformed standard invoice number with an error on invoiceNumber", () => {
+    const result = createInvoiceSchema.safeParse({
+      ...validInvoice,
+      invoiceType: "FACTURA_B",
+      invoiceNumber: "1-123",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path.join("."));
+      expect(paths).toContain("invoiceNumber");
+      const message = result.error.issues.find(
+        (i) => i.path.join(".") === "invoiceNumber",
+      )?.message;
+      expect(message).toMatch(/Formato inválido/);
+      expect(message).toMatch(/00001-00012345/);
+    }
+  });
+
+  it("still accepts omitting invoiceNumber entirely", () => {
+    const result = createInvoiceSchema.safeParse({
+      ...validInvoice,
+      invoiceType: "FACTURA_B",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts any non-empty identifier for DOCUMENTO_ADUANERO", () => {
+    const result = createInvoiceSchema.safeParse({
+      ...validInvoice,
+      invoiceType: "DOCUMENTO_ADUANERO",
+      invoiceNumber: "19001MANI000001A",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts any non-empty identifier for OTROS_EXCEPTUADOS", () => {
+    const result = createInvoiceSchema.safeParse({
+      ...validInvoice,
+      invoiceType: "OTROS_EXCEPTUADOS",
+      invoiceNumber: "REF-2025/042",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a value that would be valid for a different type", () => {
+    // Standard format is rejected by free-form? No — free-form accepts any non-empty.
+    // Here we test the reverse: a free-form identifier used with a standard type.
+    const result = createInvoiceSchema.safeParse({
+      ...validInvoice,
+      invoiceType: "FACTURA_B",
+      invoiceNumber: "19001MANI000001A",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("updateInvoiceSchema invoice number format", () => {
+  it("validates invoiceNumber against invoiceType when both are present", () => {
+    const result = updateInvoiceSchema.safeParse({
+      invoiceType: "FACTURA_B",
+      invoiceNumber: "1-123",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path.join("."));
+      expect(paths).toContain("invoiceNumber");
+    }
+  });
+
+  it("accepts a standalone invoiceNumber update without invoiceType", () => {
+    // Partial updates can't cross-validate without both fields — permissive.
+    const result = updateInvoiceSchema.safeParse({
+      invoiceNumber: "anything-goes",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a standalone invoiceType update", () => {
+    const result = updateInvoiceSchema.safeParse({
+      invoiceType: "FACTURA_C",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a matching pair", () => {
+    const result = updateInvoiceSchema.safeParse({
+      invoiceType: "FACTURA_B",
+      invoiceNumber: "00001-00000123",
+    });
     expect(result.success).toBe(true);
   });
 });
