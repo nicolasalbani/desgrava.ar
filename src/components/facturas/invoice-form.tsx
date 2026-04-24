@@ -206,6 +206,7 @@ export function InvoiceForm({
 
   const watchedFiscalYear = form.watch("fiscalYear");
   const watchedInvoiceType = form.watch("invoiceType");
+  const watchedInvoiceDate = form.watch("invoiceDate");
   const invoiceNumberFormat =
     watchedInvoiceType && (INVOICE_TYPES as readonly string[]).includes(watchedInvoiceType)
       ? getInvoiceNumberFormat(watchedInvoiceType as InvoiceType)
@@ -216,6 +217,18 @@ export function InvoiceForm({
       form.trigger("invoiceNumber");
     }
   }, [watchedInvoiceType, form]);
+
+  const lastProcessedInvoiceDate = useRef(defaultValues?.invoiceDate ?? "");
+
+  useEffect(() => {
+    if (watchedInvoiceDate === lastProcessedInvoiceDate.current) return;
+    lastProcessedInvoiceDate.current = watchedInvoiceDate;
+    if (!watchedInvoiceDate) return;
+    const month = parseInt(watchedInvoiceDate.split("-")[1] ?? "", 10);
+    if (!isNaN(month) && month >= 1 && month <= 12) {
+      form.setValue("fiscalMonth", String(month), { shouldValidate: true });
+    }
+  }, [watchedInvoiceDate, form]);
 
   useEffect(() => {
     const year = parseInt(watchedFiscalYear);
@@ -286,8 +299,6 @@ export function InvoiceForm({
         const { razonSocial } = await res.json();
         if (razonSocial) {
           form.setValue("providerName", razonSocial, { shouldValidate: true });
-        } else {
-          form.setValue("providerName", "", { shouldValidate: false });
         }
       } catch {
         // silently ignore — lookup is best-effort
@@ -376,7 +387,6 @@ export function InvoiceForm({
   const watchedProviderName = form.watch("providerName");
   const watchedAmount = form.watch("amount");
   const watchedInvoiceNumber = form.watch("invoiceNumber");
-  const watchedInvoiceDate = form.watch("invoiceDate");
   const watchedContractStartDate = form.watch("contractStartDate");
   const watchedContractEndDate = form.watch("contractEndDate");
 
@@ -450,9 +460,8 @@ export function InvoiceForm({
           <div className="relative">
             <Input
               id="providerName"
-              placeholder={lookingUpName ? "Buscando..." : "Se completa con el CUIT"}
-              className={cn(missingGlow(watchedProviderName), "read-only:bg-muted/30")}
-              readOnly
+              placeholder={lookingUpName ? "Buscando..." : "Nombre o razón social del proveedor"}
+              className={missingGlow(watchedProviderName)}
               {...form.register("providerName")}
             />
             {lookingUpName && (
