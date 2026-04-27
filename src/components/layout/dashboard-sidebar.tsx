@@ -44,7 +44,7 @@ export function DashboardSidebar() {
     <aside className="border-border bg-background hidden h-full w-64 flex-col border-r md:flex">
       <div className="border-border flex h-16 items-center border-b px-6">
         <Link href="/" className="flex items-center gap-2 text-lg font-bold">
-          <Image src="/logo.png" alt="desgrava.ar" width={20} height={20} />
+          <Image src="/logo.png" alt="desgrava.ar" width={40} height={40} />
           desgrava.ar
         </Link>
       </div>
@@ -84,6 +84,7 @@ export function DashboardSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={item.href === "/presentaciones" ? "nav-presentaciones" : undefined}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150",
                   isActive

@@ -112,7 +112,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `(auth)/` — login flow (Google OAuth + email/password), email verification, password reset
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
-**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/perfil` (user profile: name + avatar image), `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/datos-personales`, `/cron/presentaciones`, `/cron/review-non-deductible`, `/subscription`, `/webhooks/mercadopago`, `/webhooks/telegram` (handles Telegram callback queries for catalog review approvals), `/cron/subscription-reminders`, `/soporte` (tickets + AI chat). All protected routes validate `session?.user?.id`. Write routes (POST/PUT/DELETE) also check subscription access via `requireWriteAccess()` — returns 403 if subscription is expired.
+**API routes** (`src/app/api/`) mirror domain structure: `/facturas`, `/credenciales`, `/automatizacion`, `/simulador/calcular`, `/configuracion`, `/perfil` (user profile: name + avatar image), `/trabajadores`, `/recibos`, `/presentaciones`, `/empleadores`, `/datos-personales`, `/cron/presentaciones`, `/cron/review-non-deductible`, `/subscription`, `/webhooks/mercadopago`, `/webhooks/telegram` (handles Telegram callback queries for catalog review approvals), `/cron/subscription-reminders`, `/soporte` (tickets + AI chat), `/tour/complete` and `/tour/replay` (sets/clears `User.tourSeenAt` for the post-onboarding dashboard tour). All protected routes validate `session?.user?.id`. Write routes (POST/PUT/DELETE) also check subscription access via `requireWriteAccess()` — returns 403 if subscription is expired.
 
 **Business logic** lives in `src/lib/`, organized by domain:
 
@@ -130,12 +130,14 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `subscription/` — Subscription management: plans/pricing constants, access control (`resolveCanWrite`), trial creation
 - `mercadopago/` — MercadoPago SDK integration: client init, preapproval (subscription) creation/cancellation, webhook processing
 - `soporte/` — AI support chat: system prompt with app knowledge, OpenAI tool definitions for ticket creation and WhatsApp escalation
+- `onboarding/` — Pure helpers for the post-onboarding dashboard tour: `progress-stages.ts` maps automation job steps to a 7-stage label list (connecting/invoices/employers/dependents/receipts/classifying/done), `aggregate-progress.ts` filters and aggregates the API job list per fiscal year into `{ snapshot, summary }`, `proximo-paso-state.ts` derives the "Próximo paso" card variant (5 branches) from invoice counts and import state
 
-**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`, `auth/`, `subscription/`, `soporte/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
+**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`, `auth/`, `subscription/`, `soporte/`, `onboarding/`, `dashboard/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
 
 **Hooks** (`src/hooks/`) contain shared React hooks:
 
 - `use-paginated-fetch` — Generic hook for server-side paginated data fetching with debounced search, filter management, and polling support. Used by `InvoiceList`, `ReceiptList`, and `PresentacionesList`.
+- `use-arca-import-progress` — Polls `/api/automatizacion` every 4s and exposes `{ snapshot, summary }` derived from the post-onboarding ARCA imports (PULL_COMPROBANTES, PULL_DOMESTIC_RECEIPTS, PULL_PRESENTACIONES + leftover PULL_PROFILE). Single source of truth for the persistent ARCA progress strip and the disabled "Importar desde ARCA" button on the Próximo paso card. Stops polling once all tracked jobs are terminal.
 
 ## Key Patterns
 
@@ -154,10 +156,14 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - **Design**: Jony Ive-inspired — clean whites, `border-gray-200` borders, `bg-gray-50` content areas, generous whitespace, translucent navbar with backdrop blur. Consistent palette across landing page and dashboard.
 - **Non-deductible CUIT review** runs daily via `/api/cron/review-non-deductible`, re-classifying up to 50 NO_DEDUCIBLE catalog entries per run with a fresh web lookup (sistemas360.ar → cuitonline.com) combined with aggregated invoice metadata from all users' NO_DEDUCIBLE invoices for that CUIT. Entries are skipped if reviewed in the last 30 days (`ProviderCatalog.lastReviewedAt`), if the provider name matches the hardcoded keyword list, or if an open `CatalogReviewProposal` already exists. Deductible results trigger a Telegram message with inline "✅ Aprobar / ❌ Rechazar" buttons. The admin's click hits `/api/webhooks/telegram`, which validates a `X-Telegram-Bot-Api-Secret-Token` header and verifies an HMAC on the `callback_data` (signed with `TELEGRAM_WEBHOOK_SECRET`). On approve, the catalog entry and every `NO_DEDUCIBLE` invoice with that CUIT are updated in a single transaction, and affected users receive a generic email linking to `/facturas`. The Telegram webhook must be registered once via `setWebhook` with the secret token — not automated.
 - **Subscriptions** use MercadoPago's Preapproval (Suscripciones) API for recurring billing. New users get a 30-day trial (TRIALING), existing pre-launch users are FOUNDERS (permanent access). Access control: FOUNDERS always have write access; TRIALING/ACTIVE/CANCELLED (within period) can write; EXPIRED/PAST_DUE are read-only. Pricing lives in `src/lib/subscription/plans.ts` — single source of truth for landing page and checkout. Webhook at `/api/webhooks/mercadopago` syncs subscription state. Daily cron at `/api/cron/subscription-reminders` sends trial expiry emails and expires stale subscriptions.
+- **Post-onboarding dashboard tour** auto-opens once for users with `onboardingCompleted=true` and `tourSeenAt=null`. The flow is: welcome modal (Ganancio character) → 4 spotlight steps targeting real DOM via `data-tour` attributes (`metrics-row` → `proximo-paso` → `comprobantes-recientes` → `nav-presentaciones` with mobile fallback `nav-presentaciones-mobile`) → completion modal with confetti and import summary. The spotlight overlay uses an SVG `<mask>` with a rounded-rect hole, re-measuring on resize/scroll/ResizeObserver and auto-scrolling the target into view. Targets are matched by `findVisibleTarget()` which iterates the candidate selectors and skips hidden elements. Skip / replay flow: `POST /api/tour/complete` sets `tourSeenAt = now()`; `POST /api/tour/replay` clears it. Replay button lives in the new "Ayuda" card on `/configuracion`.
+- **ARCA progress strip** is mounted in `DashboardShell` so it sits above `<main>` on every dashboard route. It uses `useArcaImportProgress` (polls `/api/automatizacion`) and aggregates the post-onboarding ARCA imports into a 7-stage progress label + percentage. The strip auto-hides 5s after `done`, supports a collapsed floating-pill mode, and turns amber if any tracked job FAILS (linking to `/automatizacion`). The same hook drives the disabled "Importar desde ARCA" button on the Próximo paso card so the button shows a left-to-right progress fill that stays in sync with the strip.
+- **"Próximo paso" card** on `/dashboard` shows a contextual next action via a 5-branch state machine in `src/lib/onboarding/proximo-paso-state.ts`: importing → review-month → no-invoices → ready-to-present → all-set. Branches are pure-derivable from `pendingCount`, `totalDeducible`, `allSubmitted`, `hasRunningImport`, and `currentMonth`. CTAs either deep-link (e.g. `/facturas`, `/presentaciones`) or trigger a `PULL_COMPROBANTES` job through `POST /api/automatizacion`.
+- **"Comprobantes recientes" section** on `/dashboard` shows the 5 most recent deducible invoices fetched in the dashboard server component (`prisma.invoice.findMany({ take: 5, orderBy: [{ invoiceDate: "desc" }, { createdAt: "desc" }] })`). Mobile uses stacked card rows; tablet+ uses a row layout. Status badges follow the same color tokens as the rest of the app (`bg-emerald-500/10` for SUBMITTED, `bg-amber-500/10` for PENDING, etc.).
 
 ## Testing
 
-**Framework**: Vitest with 813+ tests across 35 test files.
+**Framework**: Vitest with 920+ tests across 44 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -180,6 +186,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `telegram` — Telegram Bot API notifications: formatting, env var handling, error handling (13 tests)
 - `fiscal-year` — fiscal year read-only cutoff logic, available years (18 tests)
 - `validators/` — profile update schema (12 tests)
+- `onboarding/` — progress-stages aggregator, proximo-paso state machine, aggregate-progress filter+summary (28 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
 

@@ -13,20 +13,23 @@ export default async function DashboardPage() {
 
   const [
     totalInvoices,
-    submittedCount,
-    pendingCount,
+    submittedInvoiceCount,
+    submittedReceiptCount,
+    pendingInvoiceCount,
+    pendingReceiptCount,
     monthCategoryBreakdown,
-    totalReceipts,
-    submittedReceiptsCount,
-    pendingReceiptsCount,
     receiptMonthBreakdown,
     subscription,
     yearPreference,
+    recentInvoices,
   ] = await Promise.all([
     prisma.invoice.count({
       where: { userId, fiscalYear, deductionCategory: { not: "NO_DEDUCIBLE" } },
     }),
     prisma.invoice.count({
+      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
+    }),
+    prisma.domesticReceipt.count({
       where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
     }),
     prisma.invoice.count({
@@ -39,7 +42,14 @@ export default async function DashboardPage() {
         siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING", "FAILED"] },
       },
     }),
-    // Group by month AND category for the stacked chart
+    prisma.domesticReceipt.count({
+      where: {
+        userId,
+        fiscalYear,
+        siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING", "FAILED"] },
+      },
+    }),
+    // Group by month AND category — feeds the monthly bar chart (combined with recibos below)
     prisma.invoice.groupBy({
       by: ["fiscalMonth", "deductionCategory"],
       where: {
@@ -49,21 +59,6 @@ export default async function DashboardPage() {
         deductionCategory: { not: "NO_DEDUCIBLE" },
       },
       _sum: { amount: true },
-    }),
-    prisma.domesticReceipt.count({
-      where: { userId, fiscalYear },
-    }),
-    prisma.domesticReceipt.count({
-      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
-    }),
-    prisma.domesticReceipt.count({
-      where: {
-        userId,
-        fiscalYear,
-        // "Pendientes" = anything not successfully SUBMITTED, including FAILED
-        // retries the user still needs to address.
-        siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING", "FAILED"] },
-      },
     }),
     prisma.domesticReceipt.groupBy({
       by: ["fiscalMonth"],
@@ -75,7 +70,25 @@ export default async function DashboardPage() {
       where: { userId_fiscalYear: { userId, fiscalYear } },
       select: { ownsProperty: true },
     }),
+    prisma.invoice.findMany({
+      where: { userId, fiscalYear, deductionCategory: { not: "NO_DEDUCIBLE" } },
+      orderBy: [{ invoiceDate: "desc" }, { createdAt: "desc" }],
+      take: 6,
+      select: {
+        id: true,
+        providerName: true,
+        providerCuit: true,
+        deductionCategory: true,
+        invoiceNumber: true,
+        invoiceDate: true,
+        amount: true,
+        siradiqStatus: true,
+      },
+    }),
   ]);
+
+  const submittedCount = submittedInvoiceCount + submittedReceiptCount;
+  const pendingCount = pendingInvoiceCount + pendingReceiptCount;
 
   const ownsProperty = yearPreference?.ownsProperty ?? false;
 
@@ -130,6 +143,20 @@ export default async function DashboardPage() {
 
   const estimatedSavings = new Decimal(totalDeducted).mul(0.35).toDP(2).toNumber();
 
+  const recentInvoicesSerialized = recentInvoices.map((invoice) => ({
+    id: invoice.id,
+    providerName: invoice.providerName,
+    providerCuit: invoice.providerCuit,
+    deductionCategory: invoice.deductionCategory,
+    invoiceNumber: invoice.invoiceNumber,
+    invoiceDate: invoice.invoiceDate?.toISOString() ?? null,
+    amount: new Decimal(invoice.amount.toString()).toDP(2).toNumber(),
+    siradiqStatus: invoice.siradiqStatus,
+  }));
+
+  // Pending deductible invoices for the Próximo paso card state machine.
+  const allSubmitted = totalInvoices > 0 && pendingCount === 0;
+
   return (
     <MetricsPanel
       firstName={firstName}
@@ -139,10 +166,9 @@ export default async function DashboardPage() {
       totalInvoices={totalInvoices}
       submittedCount={submittedCount}
       pendingCount={pendingCount}
-      totalReceipts={totalReceipts}
-      submittedReceiptsCount={submittedReceiptsCount}
-      pendingReceiptsCount={pendingReceiptsCount}
       monthCategoryData={monthCategoryData}
+      recentInvoices={recentInvoicesSerialized}
+      allSubmitted={allSubmitted}
       subscription={
         subscription
           ? {

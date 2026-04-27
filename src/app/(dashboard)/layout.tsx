@@ -14,12 +14,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Verify the user record actually exists in the DB (session cookie may outlive a DB reset)
   const user = await prisma.user.findUnique({
     where: { id: session.user!.id },
-    select: { id: true, onboardingCompleted: true },
+    select: { id: true, name: true, onboardingCompleted: true, tourSeenAt: true },
   });
 
   if (!user) {
     redirect("/api/auth/signout");
   }
 
-  return <DashboardShell onboardingCompleted={user.onboardingCompleted}>{children}</DashboardShell>;
+  const firstName = user.name?.split(" ")[0] ?? "usuario";
+
+  return (
+    <DashboardShell
+      onboardingCompleted={user.onboardingCompleted}
+      tourSeen={user.tourSeenAt !== null}
+      firstName={firstName}
+    >
+      {children}
+    </DashboardShell>
+  );
 }

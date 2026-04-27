@@ -15,6 +15,7 @@ import { FileUploader } from "@/components/facturas/file-uploader";
 import { InvoiceForm } from "@/components/facturas/invoice-form";
 import { InvoiceList } from "@/components/facturas/invoice-list";
 import { ImportArcaDialog } from "@/components/facturas/import-arca-dialog";
+import { UploadSpotlight } from "@/components/facturas/upload-spotlight";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
@@ -277,7 +278,7 @@ function FacturasInner() {
             Comprobantes para deducciones SiRADIG
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div data-tour="facturas-actions" className="flex items-center gap-2">
           <ExpandingButton
             icon={Download}
             label="Importar desde ARCA"
@@ -360,6 +361,8 @@ function FacturasInner() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <UploadSpotlight />
     </div>
   );
 }

@@ -2,20 +2,13 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CATEGORY_LABELS } from "@/lib/simulador/deduction-rules";
-import {
-  TrendingUp,
-  FileText,
-  Receipt,
-  Send,
-  Clock,
-  CreditCard,
-  Crown,
-  AlertCircle,
-} from "lucide-react";
+import { TrendingUp, Hourglass, CheckCheck, CreditCard, Crown, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { ProximoPasoCard } from "./proximo-paso-card";
+import { ComprobantesRecientes } from "./comprobantes-recientes";
+import { CATEGORY_LABELS } from "@/lib/simulador/deduction-rules";
 
 const DASHBOARD_RELEVANT_JOB_TYPES = new Set([
   "PULL_COMPROBANTES",
@@ -40,24 +33,26 @@ const MONTH_NAMES = [
   "Dic",
 ];
 
-// Softer category colors for stacking
+// Categories map to design-system chart tokens (--chart-1 through --chart-10).
+// The 10 most commonly-used categories get unique slots; the remaining 5
+// cycle the palette, paired with categories they rarely co-occur with.
 const CATEGORY_COLORS: Record<string, string> = {
-  CUOTAS_MEDICO_ASISTENCIALES: "bg-blue-400/80",
-  PRIMAS_SEGURO_MUERTE: "bg-violet-400/80",
-  PRIMAS_AHORRO_SEGUROS_MIXTOS: "bg-purple-400/80",
-  APORTES_RETIRO_PRIVADO: "bg-indigo-400/80",
-  DONACIONES: "bg-pink-400/80",
-  INTERESES_HIPOTECARIOS: "bg-cyan-400/80",
-  GASTOS_SEPELIO: "bg-slate-400/80",
-  GASTOS_MEDICOS: "bg-teal-400/80",
-  GASTOS_INDUMENTARIA_TRABAJO: "bg-orange-400/80",
-  ALQUILER_VIVIENDA: "bg-amber-400/80",
-  SERVICIO_DOMESTICO: "bg-lime-400/80",
-  APORTE_SGR: "bg-emerald-400/80",
-  VEHICULOS_CORREDORES: "bg-rose-400/80",
-  INTERESES_CORREDORES: "bg-fuchsia-400/80",
-  GASTOS_EDUCATIVOS: "bg-sky-400/80",
-  OTRAS_DEDUCCIONES: "bg-stone-400/80",
+  ALQUILER_VIVIENDA: "var(--chart-1)",
+  GASTOS_MEDICOS: "var(--chart-2)",
+  SERVICIO_DOMESTICO: "var(--chart-3)",
+  CUOTAS_MEDICO_ASISTENCIALES: "var(--chart-4)",
+  DONACIONES: "var(--chart-5)",
+  GASTOS_EDUCATIVOS: "var(--chart-6)",
+  INTERESES_HIPOTECARIOS: "var(--chart-7)",
+  GASTOS_INDUMENTARIA_TRABAJO: "var(--chart-8)",
+  PRIMAS_SEGURO_MUERTE: "var(--chart-9)",
+  APORTES_RETIRO_PRIVADO: "var(--chart-10)",
+  PRIMAS_AHORRO_SEGUROS_MIXTOS: "var(--chart-1)",
+  APORTE_SGR: "var(--chart-2)",
+  VEHICULOS_CORREDORES: "var(--chart-3)",
+  INTERESES_CORREDORES: "var(--chart-4)",
+  GASTOS_SEPELIO: "var(--chart-5)",
+  OTRAS_DEDUCCIONES: "var(--muted-foreground)",
 };
 
 interface MonthCategoryEntry {
@@ -73,6 +68,17 @@ interface SubscriptionInfo {
   currentPeriodEnd: string | null;
 }
 
+interface RecentInvoice {
+  id: string;
+  providerName: string | null;
+  providerCuit: string;
+  deductionCategory: string;
+  invoiceNumber: string | null;
+  invoiceDate: string | null;
+  amount: number;
+  siradiqStatus: string;
+}
+
 interface MetricsPanelProps {
   firstName: string;
   fiscalYear: number;
@@ -81,10 +87,9 @@ interface MetricsPanelProps {
   totalInvoices: number;
   submittedCount: number;
   pendingCount: number;
-  totalReceipts: number;
-  submittedReceiptsCount: number;
-  pendingReceiptsCount: number;
   monthCategoryData: MonthCategoryEntry[];
+  recentInvoices: RecentInvoice[];
+  allSubmitted: boolean;
   subscription: SubscriptionInfo | null;
 }
 
@@ -110,12 +115,6 @@ function daysUntil(iso: string): number {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-function shortLabel(category: string): string {
-  const full = CATEGORY_LABELS[category as keyof typeof CATEGORY_LABELS] ?? category;
-  if (full.length > 35) return full.slice(0, 32) + "...";
-  return full;
-}
-
 export function MetricsPanel({
   firstName,
   fiscalYear,
@@ -124,14 +123,11 @@ export function MetricsPanel({
   totalInvoices,
   submittedCount,
   pendingCount,
-  totalReceipts,
-  submittedReceiptsCount,
-  pendingReceiptsCount,
   monthCategoryData,
+  recentInvoices,
+  allSubmitted,
   subscription,
 }: MetricsPanelProps) {
-  const hasData = totalInvoices > 0 || totalReceipts > 0;
-
   // Auto-refresh when relevant automation jobs complete
   const router = useRouter();
   useEffect(() => {
@@ -178,388 +174,340 @@ export function MetricsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Derive unique categories with totals
-  const categoryTotals = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const entry of monthCategoryData) {
-      map.set(entry.category, (map.get(entry.category) ?? 0) + entry.amount);
+  // Animation key — bumped on data changes to replay the bar-grow animation
+  const [animKey] = useState(0);
+
+  // Bars run up to the current month for the current fiscal year, full year otherwise.
+  const now = new Date();
+  const lastMonthToShow = fiscalYear === now.getFullYear() ? now.getMonth() + 1 : 12;
+
+  // Categories with any data, sorted by total descending — this is the legend order.
+  const availableCategories = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const e of monthCategoryData) {
+      if (e.amount > 0) totals.set(e.category, (totals.get(e.category) ?? 0) + e.amount);
     }
-    return Array.from(map.entries())
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount);
+    return Array.from(totals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat]) => cat);
   }, [monthCategoryData]);
 
-  // Category filter state — all enabled by default
-  const [enabledCategories, setEnabledCategories] = useState<Set<string>>(
-    () => new Set(categoryTotals.map((c) => c.category)),
-  );
+  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set());
 
-  // Stable key for the set of available categories — only changes when categories actually change
-  const categoryKeys = useMemo(
-    () =>
-      categoryTotals
-        .map((c) => c.category)
-        .sort()
-        .join(","),
-    [categoryTotals],
-  );
-
-  // Sync enabled categories when available categories change (e.g. after onboarding refresh)
+  // Drop hidden entries that no longer exist when data changes.
   useEffect(() => {
-    setEnabledCategories(new Set(categoryTotals.map((c) => c.category)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryKeys]);
-
-  // Toggling a filter triggers a new animation via a key
-  const [animKey, setAnimKey] = useState(0);
-
-  // Show/hide cumulative line
-  const [showCumulativeLine, setShowCumulativeLine] = useState(true);
-
-  function toggleCategory(cat: string) {
-    setEnabledCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(cat)) {
-        // Don't allow disabling all
-        if (next.size === 1) return prev;
-        next.delete(cat);
-      } else {
-        next.add(cat);
-      }
-      return next;
+    setHiddenCategories((prev) => {
+      const valid = new Set(availableCategories);
+      const next = new Set<string>();
+      for (const cat of prev) if (valid.has(cat)) next.add(cat);
+      return next.size === prev.size ? prev : next;
     });
-    setAnimKey((k) => k + 1);
-  }
+  }, [availableCategories]);
 
-  // Only show months up to the current month (no empty future months)
-  const currentMonth = new Date().getMonth() + 1;
+  const visibleCategories = useMemo(
+    () => availableCategories.filter((c) => !hiddenCategories.has(c)),
+    [availableCategories, hiddenCategories],
+  );
 
-  // Build stacked bar data per month, filtered by enabled categories
-  const stackedMonths = useMemo(() => {
-    return Array.from({ length: currentMonth }, (_, i) => {
+  // Per-month breakdown of visible categories, stacked from bottom up by legend order.
+  const monthlyBreakdown = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
-      const segments = categoryTotals
-        .filter((ct) => enabledCategories.has(ct.category))
-        .map((ct) => {
-          const entry = monthCategoryData.find(
-            (e) => e.month === month && e.category === ct.category,
-          );
-          return { category: ct.category, amount: entry?.amount ?? 0 };
-        })
+      if (month > lastMonthToShow) {
+        return { month, segments: [] as { category: string; amount: number }[], total: 0 };
+      }
+      const segments = visibleCategories
+        .map((category) => ({
+          category,
+          amount:
+            monthCategoryData.find((e) => e.month === month && e.category === category)?.amount ??
+            0,
+        }))
         .filter((s) => s.amount > 0);
       const total = segments.reduce((sum, s) => sum + s.amount, 0);
       return { month, segments, total };
     });
-  }, [monthCategoryData, categoryTotals, enabledCategories, currentMonth]);
+  }, [monthCategoryData, visibleCategories, lastMonthToShow]);
 
-  // Cumulative totals (actual data only, no projections)
-  const cumulativeMonths = useMemo(() => {
-    let running = 0;
-    return stackedMonths.map((m) => {
-      running += m.total;
-      return running;
+  const monthlyMax = Math.max(...monthlyBreakdown.map((m) => m.total), 1);
+
+  const visibleTotal = useMemo(
+    () => monthlyBreakdown.reduce((sum, m) => sum + m.total, 0),
+    [monthlyBreakdown],
+  );
+
+  const chartSubtitle =
+    hiddenCategories.size === 0
+      ? `Todas las categorías · año fiscal ${fiscalYear}`
+      : `${visibleCategories.length} de ${availableCategories.length} categorías · año fiscal ${fiscalYear}`;
+
+  const [hoverMonth, setHoverMonth] = useState<number | null>(null);
+  const [hoverSegment, setHoverSegment] = useState<{ month: number; category: string } | null>(
+    null,
+  );
+
+  function toggleCategory(cat: string) {
+    setHiddenCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
     });
-  }, [stackedMonths]);
-
-  const chartMax = Math.max(...cumulativeMonths, 1);
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="animate-in fade-in duration-500" style={{ animationFillMode: "backwards" }}>
-        <h1 className="text-2xl font-semibold tracking-tight">Hola, {firstName}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Resumen de deducciones — Año fiscal {fiscalYear}
+        <p className="text-muted-foreground text-sm">
+          Hola, {firstName} <span aria-hidden="true">👋</span>
         </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+          Resumen de deducciones — Año fiscal {fiscalYear}
+        </h1>
       </div>
 
       {/* Top metric cards */}
       <div
+        data-tour="metrics-row"
         className="animate-in fade-in slide-in-from-bottom-2 grid grid-cols-1 gap-4 duration-500 sm:grid-cols-2 lg:grid-cols-4"
         style={{ animationDelay: "100ms", animationFillMode: "backwards" }}
       >
-        <div className="bg-card border-border rounded-2xl border p-5">
-          <div className="flex items-center gap-3">
-            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-xl">
-              <TrendingUp className="text-primary h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-muted-foreground text-xs">Total deducido</p>
-              <p className="text-xl font-semibold tabular-nums">{formatARS(totalDeducted)}</p>
-            </div>
-          </div>
-        </div>
+        <MetricCard
+          icon={<TrendingUp className="text-primary h-5 w-5" />}
+          iconBgClass="bg-primary/10"
+          eyebrow="TOTAL DEDUCIDO"
+          value={formatARS(totalDeducted)}
+          subtitle={`${totalInvoices} ${totalInvoices === 1 ? "comprobante" : "comprobantes"}`}
+        />
 
-        <div className="bg-card border-border rounded-2xl border p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-              <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-muted-foreground text-xs">Ahorro estimado</p>
-              <p className="text-xl font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">
-                {formatARS(estimatedSavings)}
-              </p>
-            </div>
-          </div>
-          <p className="text-muted-foreground/60 mt-2 text-[10px]">
-            Basado en la alícuota máxima (35%)
-          </p>
-        </div>
+        <MetricCard
+          icon={<TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+          iconBgClass="bg-emerald-500/10"
+          eyebrow="AHORRO ESTIMADO"
+          value={formatARS(estimatedSavings)}
+          valueClass="text-emerald-600 dark:text-emerald-400"
+          subtitle="alícuota máxima (35%)"
+          highlight
+        />
 
-        <div className="bg-card border-border rounded-2xl border p-5">
-          <div className="flex items-center gap-3">
-            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-xl">
-              <FileText className="text-primary h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-muted-foreground text-xs">Comprobantes</p>
-              <p className="text-xl font-semibold tabular-nums">{totalInvoices}</p>
-            </div>
-          </div>
-          <div className="text-muted-foreground mt-3 flex gap-4 text-xs">
-            <span className="flex items-center gap-1">
-              <Send className="h-3 w-3 text-emerald-500" />
-              {submittedCount} enviados
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3 text-amber-500" />
-              {pendingCount} pendientes
-            </span>
-          </div>
-        </div>
+        <MetricCard
+          icon={<Hourglass className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
+          iconBgClass="bg-amber-500/10"
+          eyebrow="PENDIENTES"
+          value={String(pendingCount)}
+          subtitle="esperando validación"
+        />
 
-        <div className="bg-card border-border rounded-2xl border p-5">
-          <div className="flex items-center gap-3">
-            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-xl">
-              <Receipt className="text-primary h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-muted-foreground text-xs">Recibos salariales</p>
-              <p className="text-xl font-semibold tabular-nums">{totalReceipts}</p>
-            </div>
-          </div>
-          <div className="text-muted-foreground mt-3 flex gap-4 text-xs">
-            <span className="flex items-center gap-1">
-              <Send className="h-3 w-3 text-emerald-500" />
-              {submittedReceiptsCount} enviados
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3 text-amber-500" />
-              {pendingReceiptsCount} pendientes
-            </span>
-          </div>
-        </div>
+        <MetricCard
+          icon={<CheckCheck className="h-5 w-5 text-violet-600 dark:text-violet-400" />}
+          iconBgClass="bg-violet-500/10"
+          eyebrow="PRESENTADAS"
+          value={String(submittedCount)}
+          subtitle="al formulario F.572"
+        />
       </div>
 
-      {/* Empty state */}
-      {!hasData && (
+      {/* Chart + Próximo paso side-by-side */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Monthly stacked-by-category bar chart */}
         <div
-          className="animate-in fade-in slide-in-from-bottom-2 bg-card border-border rounded-2xl border p-8 text-center duration-500"
+          className="animate-in fade-in slide-in-from-bottom-2 bg-card border-border rounded-2xl border p-5 duration-500 lg:col-span-2"
           style={{ animationDelay: "200ms", animationFillMode: "backwards" }}
         >
-          <FileText className="text-muted-foreground/30 mx-auto mb-3 h-8 w-8" />
-          <p className="text-muted-foreground text-sm">
-            Todavía no tenés comprobantes ni recibos salariales deducidos. Importalos desde ARCA o
-            cargalos manualmente.
+          <p className="text-muted-foreground text-[10px] font-semibold tracking-wider">
+            RESUMEN POR MES
           </p>
-          <Button asChild variant="outline" className="mt-4" size="sm">
-            <Link href="/facturas">Ir a comprobantes</Link>
-          </Button>
-        </div>
-      )}
+          <p className="text-foreground mt-1 text-2xl font-semibold tabular-nums">
+            {formatARS(visibleTotal)}
+          </p>
+          <p className="text-muted-foreground mt-0.5 text-xs">{chartSubtitle}</p>
 
-      {/* Stacked bar chart + category legend */}
-      {hasData && categoryTotals.length > 0 && (
-        <div
-          className="animate-in fade-in slide-in-from-bottom-2 bg-card border-border rounded-2xl border p-5 duration-500"
-          style={{ animationDelay: "200ms", animationFillMode: "backwards" }}
-        >
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Evolución mensual por categoría</h2>
-            <button
-              onClick={() => setShowCumulativeLine((v) => !v)}
-              className={cn(
-                "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] transition-all duration-200",
-                showCumulativeLine
-                  ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                  : "border-border text-muted-foreground",
-              )}
-            >
-              <span
-                className={cn(
-                  "inline-block h-1.5 w-3 rounded-full",
-                  showCumulativeLine ? "bg-emerald-500" : "bg-muted-foreground/30",
-                )}
-              />
-              Acumulado
-            </button>
-          </div>
+          {availableCategories.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {availableCategories.map((cat) => {
+                const hidden = hiddenCategories.has(cat);
+                const color = CATEGORY_COLORS[cat] ?? "var(--muted-foreground)";
+                const label = CATEGORY_LABELS[cat as keyof typeof CATEGORY_LABELS] ?? cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => toggleCategory(cat)}
+                    aria-pressed={!hidden}
+                    title={label}
+                    className={cn(
+                      "inline-flex max-w-[260px] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                      hidden
+                        ? "border-border bg-muted/30 text-muted-foreground/60"
+                        : "border-border bg-card hover:bg-muted/50",
+                    )}
+                  >
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full transition-opacity"
+                      style={{ backgroundColor: color, opacity: hidden ? 0.3 : 1 }}
+                    />
+                    <span className="truncate">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
-          {/* Stacked bar chart with cumulative line overlay */}
-          <div className="relative" style={{ height: 200 }} key={animKey}>
-            {/* Chart area — bars, line, and dots share this exact 160px space */}
-            <div className="absolute inset-x-0 top-0 overflow-hidden" style={{ height: 160 }}>
-              {/* Bars */}
-              <div className="flex h-full items-end gap-1.5 sm:gap-2">
-                {stackedMonths.map((m, mi) => {
-                  const barPct = chartMax > 0 ? (m.total / chartMax) * 100 : 0;
+          <div className="relative mt-6" style={{ height: 220 }} key={animKey}>
+            <div className="absolute inset-x-0 top-0" style={{ height: 180 }}>
+              <div className="flex h-full items-end gap-2 sm:gap-3">
+                {monthlyBreakdown.map((m, mi) => {
+                  const barPct = monthlyMax > 0 ? (m.total / monthlyMax) * 100 : 0;
+                  const showRight = mi < 6;
+                  const isActive = hoverMonth === m.month && m.total > 0;
+                  const segHover =
+                    hoverSegment?.month === m.month
+                      ? m.segments.find((s) => s.category === hoverSegment.category)
+                      : undefined;
                   return (
-                    <div key={m.month} className="relative flex h-full flex-1 items-end">
+                    <div
+                      key={m.month}
+                      className="relative flex h-full flex-1 items-end"
+                      onMouseEnter={() => setHoverMonth(m.month)}
+                      onMouseLeave={() => {
+                        setHoverMonth(null);
+                        setHoverSegment(null);
+                      }}
+                    >
                       <div
-                        className="flex w-full flex-col justify-end overflow-hidden rounded-t-lg"
+                        className={cn(
+                          "relative flex w-full flex-col-reverse overflow-hidden rounded-t-xl transition-shadow",
+                          isActive && "ring-primary/30 ring-2",
+                        )}
                         style={{
                           height: `${barPct}%`,
                           minHeight: m.total > 0 ? 4 : 0,
                           opacity: 0,
-                          animation: `barGrow 500ms ${80 * mi}ms cubic-bezier(0.34,1.56,0.64,1) forwards`,
+                          animation: `barGrow 500ms ${60 * mi}ms cubic-bezier(0.34,1.56,0.64,1) forwards`,
                         }}
                       >
                         {m.segments.map((seg) => {
                           const segPct = m.total > 0 ? (seg.amount / m.total) * 100 : 0;
+                          const dimmed =
+                            hoverSegment?.month === m.month &&
+                            hoverSegment.category !== seg.category;
                           return (
                             <div
                               key={seg.category}
-                              className={cn(
-                                "w-full shrink-0",
-                                CATEGORY_COLORS[seg.category] ?? "bg-primary",
-                              )}
-                              style={{ height: `${segPct}%`, minHeight: 2 }}
+                              className="w-full transition-opacity"
+                              style={{
+                                height: `${segPct}%`,
+                                backgroundColor:
+                                  CATEGORY_COLORS[seg.category] ?? "var(--muted-foreground)",
+                                opacity: dimmed ? 0.4 : 1,
+                              }}
+                              onMouseEnter={(e) => {
+                                e.stopPropagation();
+                                setHoverSegment({ month: m.month, category: seg.category });
+                              }}
                             />
                           );
                         })}
                       </div>
+
+                      {/* Per-segment inline label */}
+                      {segHover && (
+                        <div
+                          className="bg-foreground text-background pointer-events-none absolute z-10 max-w-[240px] rounded-md px-2 py-1 text-xs leading-snug shadow-md"
+                          style={{
+                            bottom: `calc(${barPct}% + 8px)`,
+                            ...(showRight
+                              ? { left: "100%", marginLeft: 8 }
+                              : { right: "100%", marginRight: 8 }),
+                          }}
+                        >
+                          <span className="font-medium">
+                            {CATEGORY_LABELS[segHover.category as keyof typeof CATEGORY_LABELS] ??
+                              segHover.category}
+                          </span>
+                          : {formatARS(segHover.amount)}
+                        </div>
+                      )}
+
+                      {/* Per-month tooltip card */}
+                      {isActive && (
+                        <div
+                          className="border-border bg-card pointer-events-none absolute top-0 z-20 w-[280px] rounded-xl border p-3 shadow-lg"
+                          style={{
+                            ...(showRight
+                              ? { left: "100%", marginLeft: 12 }
+                              : { right: "100%", marginRight: 12 }),
+                          }}
+                        >
+                          <div className="text-foreground mb-2 text-sm font-semibold">
+                            {MONTH_NAMES[m.month - 1]} · {formatARS(m.total)}
+                          </div>
+                          <div className="space-y-1.5">
+                            {[...m.segments]
+                              .sort((a, b) => b.amount - a.amount)
+                              .map((s) => (
+                                <div
+                                  key={s.category}
+                                  className="flex items-start justify-between gap-3 text-xs"
+                                >
+                                  <span className="flex min-w-0 items-start gap-2">
+                                    <span
+                                      className="mt-1 h-2 w-2 shrink-0 rounded-full"
+                                      style={{
+                                        backgroundColor:
+                                          CATEGORY_COLORS[s.category] ?? "var(--muted-foreground)",
+                                      }}
+                                    />
+                                    <span className="text-muted-foreground leading-snug">
+                                      {CATEGORY_LABELS[
+                                        s.category as keyof typeof CATEGORY_LABELS
+                                      ] ?? s.category}
+                                    </span>
+                                  </span>
+                                  <span className="text-foreground shrink-0 tabular-nums">
+                                    {formatARS(s.amount)}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-
-              {/* Cumulative line overlay — actual months only */}
-              {showCumulativeLine &&
-                (() => {
-                  const padding = 5;
-                  const usable = 100 - padding;
-
-                  const ptsData = cumulativeMonths.map((cum, i) => ({
-                    xPct: ((i + 0.5) / currentMonth) * 100,
-                    yPct: chartMax > 0 ? padding + usable * (1 - cum / chartMax) : 100,
-                    cum,
-                    month: MONTH_NAMES[i],
-                  }));
-
-                  return (
-                    <>
-                      {/* SVG line segments */}
-                      <svg
-                        className="pointer-events-none absolute inset-0"
-                        width="100%"
-                        height="100%"
-                      >
-                        {ptsData.length > 1 &&
-                          ptsData.map((p, i) => {
-                            if (i === 0) return null;
-                            const prev = ptsData[i - 1];
-                            return (
-                              <line
-                                key={`actual-${i}`}
-                                x1={`${prev.xPct}%`}
-                                y1={`${prev.yPct}%`}
-                                x2={`${p.xPct}%`}
-                                y2={`${p.yPct}%`}
-                                stroke="rgb(34 197 94)"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                style={{
-                                  opacity: 0,
-                                  animation: `dotFadeIn 300ms ${400 + i * 100}ms ease-out forwards`,
-                                }}
-                              />
-                            );
-                          })}
-                      </svg>
-
-                      {/* Interactive HTML dots with tooltips */}
-                      <div className="absolute inset-0">
-                        {ptsData.map((p, i) => {
-                          if (p.cum === 0) return null;
-                          return (
-                            <div
-                              key={i}
-                              className="group absolute -translate-x-1/2 -translate-y-1/2"
-                              style={{ left: `${p.xPct}%`, top: `${p.yPct}%` }}
-                            >
-                              <div className="flex h-6 w-6 items-center justify-center">
-                                <div
-                                  className="h-2 w-2 rounded-full bg-emerald-500"
-                                  style={{
-                                    opacity: 0,
-                                    animation: `dotFadeIn 200ms ${600 + i * 60}ms ease-out forwards`,
-                                  }}
-                                />
-                              </div>
-                              <div className="bg-foreground text-background pointer-events-none absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 rounded-md px-2 py-1 text-[10px] whitespace-nowrap opacity-0 transition-opacity group-hover:opacity-100">
-                                <span className="font-medium tabular-nums">{formatARS(p.cum)}</span>
-                                <span className="ml-1 opacity-60">{p.month}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {ptsData.length > 0 && ptsData[ptsData.length - 1].cum > 0 && (
-                        <div className="absolute top-0 right-0 flex items-center gap-1 text-[10px] text-emerald-500/70 tabular-nums">
-                          <span className="text-muted-foreground/40">acumulado</span>
-                          {formatARS(ptsData[ptsData.length - 1].cum)}
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
             </div>
 
-            {/* Month labels */}
-            <div className="absolute right-0 bottom-0 left-0 flex gap-1.5 sm:gap-2">
-              {MONTH_NAMES.slice(0, currentMonth).map((name) => (
-                <span key={name} className="text-muted-foreground flex-1 text-center text-[10px]">
+            <div className="absolute right-0 bottom-0 left-0 flex gap-2 sm:gap-3">
+              {MONTH_NAMES.map((name, mi) => (
+                <span
+                  key={name}
+                  className={cn(
+                    "flex-1 text-center text-xs",
+                    hoverMonth === mi + 1
+                      ? "text-foreground font-semibold"
+                      : "text-muted-foreground",
+                  )}
+                >
                   {name}
                 </span>
               ))}
             </div>
           </div>
-
-          {/* Category legend / filters */}
-          <div className="flex flex-wrap gap-2">
-            {categoryTotals.map((ct) => {
-              const enabled = enabledCategories.has(ct.category);
-              const colorClass = CATEGORY_COLORS[ct.category] ?? "bg-primary";
-              return (
-                <button
-                  key={ct.category}
-                  onClick={() => toggleCategory(ct.category)}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-all duration-200",
-                    enabled
-                      ? "border-border bg-card text-foreground"
-                      : "text-muted-foreground/40 border-transparent bg-transparent",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-block h-2 w-2 rounded-full",
-                      colorClass,
-                      !enabled && "opacity-30",
-                    )}
-                  />
-                  <span className="max-w-[120px] truncate sm:max-w-[200px]">
-                    {shortLabel(ct.category)}
-                  </span>
-                  <span className="text-muted-foreground tabular-nums">{formatARS(ct.amount)}</span>
-                </button>
-              );
-            })}
-          </div>
         </div>
-      )}
+
+        {/* Próximo paso card */}
+        <ProximoPasoCard
+          pendingCount={pendingCount}
+          totalDeducible={totalInvoices}
+          allSubmitted={allSubmitted}
+          fiscalYear={fiscalYear}
+        />
+      </div>
+
+      {/* Comprobantes recientes */}
+      <ComprobantesRecientes invoices={recentInvoices} totalCount={totalInvoices} />
 
       {/* Subscription card */}
       <div
@@ -603,6 +551,51 @@ export function MetricsPanel({
           }
         }
       `}</style>
+    </div>
+  );
+}
+
+function MetricCard({
+  icon,
+  iconBgClass,
+  eyebrow,
+  value,
+  valueClass,
+  subtitle,
+  highlight = false,
+}: {
+  icon: React.ReactNode;
+  iconBgClass: string;
+  eyebrow: string;
+  value: string;
+  valueClass?: string;
+  subtitle: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "bg-card rounded-2xl border p-5 transition-colors",
+        highlight ? "border-emerald-500/30" : "border-border",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+            iconBgClass,
+          )}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-muted-foreground text-[10px] font-semibold tracking-wider">
+            {eyebrow}
+          </p>
+          <p className={cn("text-xl font-semibold tabular-nums", valueClass)}>{value}</p>
+        </div>
+      </div>
+      <p className="text-muted-foreground/70 mt-3 text-xs">{subtitle}</p>
     </div>
   );
 }

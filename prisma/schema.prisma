@@ -19,6 +19,7 @@ model User {
   passwordHash        String?
   ingestToken         String?   @unique
   onboardingCompleted Boolean   @default(false)
+  tourSeenAt          DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

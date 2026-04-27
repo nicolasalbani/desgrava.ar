@@ -44,7 +44,7 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
     <div className="flex h-full flex-col">
       <div className="border-border flex h-16 items-center border-b px-6">
         <Link href="/" className="flex items-center gap-2 text-lg font-bold" onClick={onNavigate}>
-          <Image src="/logo.png" alt="desgrava.ar" width={20} height={20} />
+          <Image src="/logo.png" alt="desgrava.ar" width={40} height={40} />
           desgrava.ar
         </Link>
       </div>
@@ -85,6 +85,9 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
                 key={item.href}
                 href={item.href}
                 onClick={onNavigate}
+                data-tour={
+                  item.href === "/presentaciones" ? "nav-presentaciones-mobile" : undefined
+                }
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150",
                   isActive

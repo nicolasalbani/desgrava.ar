@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ProfileCard } from "@/components/configuracion/profile-card";
 import { EmailIngestCard } from "@/components/configuracion/email-ingest-card";
 import { AutoSubmitCard } from "@/components/configuracion/auto-submit-card";
+import { AyudaCard } from "@/components/configuracion/ayuda-card";
 import { SubscriptionCard } from "@/components/subscription/subscription-card";
 
 interface ProfileData {
@@ -110,6 +111,10 @@ export default function ConfiguracionPage() {
         </div>
 
         <EmailIngestCard />
+
+        <div className="border-border border-t" />
+
+        <AyudaCard />
       </div>
     </div>
   );

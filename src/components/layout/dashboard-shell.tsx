@@ -9,17 +9,24 @@ import { EmployerCountProvider } from "@/contexts/employer-count";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardHeader } from "./dashboard-header";
 import { DeadlineBanner } from "./deadline-banner";
+import { ArcaProgressStrip } from "./arca-progress-strip";
 import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
 import { SupportChatButton } from "@/components/soporte/support-chat-button";
 import { GuidedOnboarding } from "@/components/onboarding/guided-onboarding";
+import { DashboardTour } from "@/components/onboarding/dashboard-tour";
+import { TourReplayButton } from "@/components/onboarding/tour-replay-button";
 import { cn } from "@/lib/utils";
 
 export function DashboardShell({
   children,
   onboardingCompleted: initialOnboardingCompleted,
+  tourSeen,
+  firstName,
 }: {
   children: React.ReactNode;
   onboardingCompleted: boolean;
+  tourSeen: boolean;
+  firstName: string;
 }) {
   const router = useRouter();
   const [onboardingCompleted, setOnboardingCompleted] = useState(initialOnboardingCompleted);
@@ -35,6 +42,8 @@ export function DashboardShell({
 
   // Force providers to remount after onboarding so they refetch fresh counts
   const providerKey = onboardingCompleted ? "ready" : "onboarding";
+  const fiscalYear = new Date().getFullYear();
+  const showTour = onboardingCompleted && !tourSeen;
 
   return (
     <FiscalYearProvider>
@@ -44,19 +53,26 @@ export function DashboardShell({
             {!onboardingCompleted && <GuidedOnboarding onComplete={handleOnboardingComplete} />}
             <div
               className={cn(
-                "flex h-dvh overflow-hidden transition-opacity duration-700",
+                "flex h-dvh flex-col overflow-hidden transition-opacity duration-700",
                 !showDashboard && "pointer-events-none opacity-0",
               )}
             >
-              <DashboardSidebar />
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <DashboardHeader />
-                <SubscriptionBanner />
-                <DeadlineBanner />
-                <main className="bg-muted/30 flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+              <ArcaProgressStrip />
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <DashboardSidebar />
+                <div className="flex flex-1 flex-col overflow-hidden">
+                  <DashboardHeader />
+                  <SubscriptionBanner />
+                  <DeadlineBanner />
+                  <main className="bg-muted/30 flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+                </div>
               </div>
             </div>
             {showDashboard && <SupportChatButton />}
+            {showDashboard && tourSeen && <TourReplayButton />}
+            {showDashboard && showTour && (
+              <DashboardTour fiscalYear={fiscalYear} firstName={firstName} />
+            )}
           </EmployerCountProvider>
         </DomesticWorkerCountProvider>
       </AttentionCountsProvider>
