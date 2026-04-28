@@ -14,7 +14,7 @@ export interface Filters {
 }
 
 interface UsePaginatedFetchOptions<T> {
-  /** API endpoint path, e.g. "/api/facturas" */
+  /** API endpoint path, e.g. "/api/comprobantes" */
   url: string;
   /** Key in the response JSON that holds the array, e.g. "invoices" */
   dataKey: string;

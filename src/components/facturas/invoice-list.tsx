@@ -164,7 +164,7 @@ export function InvoiceList({
     setShouldPoll,
     meta,
   } = usePaginatedFetch<Invoice>({
-    url: "/api/facturas",
+    url: "/api/comprobantes",
     dataKey: "invoices",
     staticParams: useMemo(
       () => ({
@@ -246,7 +246,7 @@ export function InvoiceList({
   }, [invoices]);
 
   async function handleLinkDependent(invoiceId: string, dependentId: string | null) {
-    const res = await fetch(`/api/facturas/${invoiceId}`, {
+    const res = await fetch(`/api/comprobantes/${invoiceId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ familyDependentId: dependentId }),
@@ -272,7 +272,7 @@ export function InvoiceList({
     const id = deleteTarget;
     setDeleteTarget(null);
 
-    const res = await fetch(`/api/facturas/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/comprobantes/${id}`, { method: "DELETE" });
     if (res.ok) {
       setInvoices((prev) => prev.filter((inv) => inv.id !== id));
       setSelectedIds((prev) => {
@@ -297,7 +297,7 @@ export function InvoiceList({
     setBulkDeleteOpen(false);
 
     const results = await Promise.allSettled(
-      deletableIds.map((id) => fetch(`/api/facturas/${id}`, { method: "DELETE" })),
+      deletableIds.map((id) => fetch(`/api/comprobantes/${id}`, { method: "DELETE" })),
     );
 
     const deleted = deletableIds.filter((_, i) => {
@@ -359,7 +359,7 @@ export function InvoiceList({
     if (!bulkCategory || selectedIds.size === 0) return;
     setBulkCategoryUpdating(true);
     try {
-      const res = await fetch("/api/facturas/bulk-category", {
+      const res = await fetch("/api/comprobantes/bulk-category", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1243,7 +1243,7 @@ export function InvoiceList({
                               {inv.hasFile && (
                                 <Button variant="ghost" size="icon" asChild title="Ver comprobante">
                                   <a
-                                    href={`/api/facturas/${inv.id}/file`}
+                                    href={`/api/comprobantes/${inv.id}/file`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                   >

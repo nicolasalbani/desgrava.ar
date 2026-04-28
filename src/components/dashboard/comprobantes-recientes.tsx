@@ -92,7 +92,7 @@ export function ComprobantesRecientes({ invoices, totalCount }: ComprobantesReci
           )}
         </div>
         <Button asChild size="sm">
-          <Link href="/facturas?spotlight=upload">
+          <Link href="/comprobantes?spotlight=upload">
             <Plus className="h-3.5 w-3.5" />
             Cargar comprobante
           </Link>
@@ -106,7 +106,7 @@ export function ComprobantesRecientes({ invoices, totalCount }: ComprobantesReci
             Todavía no tenés comprobantes deducibles. Importalos desde ARCA o cargalos manualmente.
           </p>
           <Button asChild variant="outline" className="mt-4" size="sm">
-            <Link href="/facturas">Ir a comprobantes</Link>
+            <Link href="/comprobantes">Ir a comprobantes</Link>
           </Button>
         </div>
       ) : (
@@ -147,7 +147,7 @@ export function ComprobantesRecientes({ invoices, totalCount }: ComprobantesReci
             })}
           </ul>
 
-          {/* Tablet+: table with headers, columns matching /facturas */}
+          {/* Tablet+: table with headers, columns matching /comprobantes */}
           <div className="hidden sm:block">
             <Table>
               <TableHeader>

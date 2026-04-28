@@ -101,7 +101,7 @@ describe("sendNewDeductibleInvoicesEmail", () => {
     await sendNewDeductibleInvoicesEmail("user@test.com");
 
     const call = mockSend.mock.calls[0][0];
-    expect(call.html).toContain("https://app.desgrava.ar/facturas");
+    expect(call.html).toContain("https://app.desgrava.ar/comprobantes");
     expect(call.html).toContain("Ver mis comprobantes");
   });
 
@@ -123,6 +123,6 @@ describe("sendNewDeductibleInvoicesEmail", () => {
     await sendNewDeductibleInvoicesEmail("user@test.com");
 
     const call = mockSend.mock.calls[0][0];
-    expect(call.html).toContain("http://localhost:3000/facturas");
+    expect(call.html).toContain("http://localhost:3000/comprobantes");
   });
 });

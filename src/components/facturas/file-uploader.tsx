@@ -38,7 +38,7 @@ export function FileUploader({ onInvoiceSaved }: { onInvoiceSaved?: () => void }
       formData.append("file", file);
       setFilename(file.name);
 
-      const res = await fetch("/api/facturas/upload", {
+      const res = await fetch("/api/comprobantes/upload", {
         method: "POST",
         body: formData,
       });

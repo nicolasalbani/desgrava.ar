@@ -75,7 +75,7 @@ export function deriveProximoPasoState(input: ProximoPasoInputs): ProximoPasoCar
       title: `Revisá y presentá ${monthName}`,
       body: `${input.pendingCount} comprobante${input.pendingCount === 1 ? "" : "s"} esperan tu confirmación antes de presentarse a SiRADIG.`,
       ctas: [
-        { label: "Revisar comprobantes", href: "/facturas", variant: "primary" },
+        { label: "Revisar comprobantes", href: "/comprobantes", variant: "primary" },
         { label: "Importar desde ARCA", action: "import-comprobantes", variant: "secondary" },
       ],
     };

@@ -247,7 +247,7 @@ export function InvoiceForm({
       lastLookedUpCuit.current = cuit;
 
       try {
-        const res = await fetch(`/api/facturas/last-category?cuit=${cuit}`);
+        const res = await fetch(`/api/comprobantes/last-category?cuit=${cuit}`);
         if (!res.ok) return;
         const { category } = await res.json();
         if (category && !form.getValues("deductionCategory")) {
@@ -262,7 +262,7 @@ export function InvoiceForm({
       if (!form.getValues("deductionCategory") && invoiceRawText) {
         setClassifying(true);
         try {
-          const res = await fetch("/api/facturas/classify-category", {
+          const res = await fetch("/api/comprobantes/classify-category", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -338,7 +338,7 @@ export function InvoiceForm({
             : null,
       };
 
-      const res = await fetch(invoiceId ? `/api/facturas/${invoiceId}` : "/api/facturas", {
+      const res = await fetch(invoiceId ? `/api/comprobantes/${invoiceId}` : "/api/comprobantes", {
         method: invoiceId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
@@ -367,7 +367,7 @@ export function InvoiceForm({
       if (onSaved) {
         onSaved();
       } else {
-        router.push("/facturas");
+        router.push("/comprobantes");
       }
     } finally {
       setSaving(false);
@@ -692,7 +692,7 @@ export function InvoiceForm({
         <Button
           type="button"
           variant="outline"
-          onClick={() => (onCancel ? onCancel() : router.push("/facturas"))}
+          onClick={() => (onCancel ? onCancel() : router.push("/comprobantes"))}
         >
           Cancelar
         </Button>

@@ -33,7 +33,7 @@ describe("deriveProximoPasoState", () => {
     expect(state.title).toContain("marzo");
     expect(state.body).toContain("3 comprobantes");
     expect(state.ctas).toHaveLength(2);
-    expect(state.ctas[0].href).toBe("/facturas");
+    expect(state.ctas[0].href).toBe("/comprobantes");
     expect(state.ctas[1].action).toBe("import-comprobantes");
   });
 

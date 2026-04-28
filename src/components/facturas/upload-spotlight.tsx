@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Spotlight } from "@/components/onboarding/spotlight";
 
 /**
- * One-shot spotlight that highlights the upload action row on /facturas
+ * One-shot spotlight that highlights the upload action row on /comprobantes
  * when the user arrives via `?spotlight=upload` (e.g. from the dashboard's
  * "Cargar factura" button).
  */
@@ -20,7 +20,7 @@ export function UploadSpotlight() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("spotlight");
     const qs = params.toString();
-    router.replace(qs ? `/facturas?${qs}` : "/facturas");
+    router.replace(qs ? `/comprobantes?${qs}` : "/comprobantes");
   }
 
   if (!shown) return null;

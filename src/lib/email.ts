@@ -203,7 +203,7 @@ export async function sendBugFixPREmail(
 }
 
 export async function sendNewDeductibleInvoicesEmail(email: string): Promise<void> {
-  const url = `${getBaseUrl()}/facturas`;
+  const url = `${getBaseUrl()}/comprobantes`;
 
   await getResend().emails.send({
     from: FROM_EMAIL,

@@ -16,7 +16,7 @@ const navItems = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/credenciales", label: "Credenciales ARCA", icon: KeyRound },
   { href: "/perfil", label: "Perfil impositivo", icon: User },
-  { href: "/facturas", label: "Comprobantes deducibles", icon: FileText },
+  { href: "/comprobantes", label: "Comprobantes", icon: FileText },
   { href: "/recibos", label: "Recibos salariales", icon: Receipt },
   { href: "/presentaciones", label: "Presentaciones", icon: Send },
   { href: "/configuracion", label: "Configuracion", icon: Settings },
@@ -24,7 +24,7 @@ const navItems = [
 
 const badgeHrefs: Record<string, string> = {
   "/perfil": "/perfil",
-  "/facturas": "/facturas?filter=attention",
+  "/comprobantes": "/comprobantes?filter=attention",
   "/recibos": "/recibos?filter=attention",
 };
 
@@ -36,7 +36,7 @@ export function DashboardSidebar() {
 
   const badgeCounts: Record<string, number> = {
     "/perfil": perfil,
-    "/facturas": facturas,
+    "/comprobantes": facturas,
     "/recibos": recibos,
   };
 
@@ -58,7 +58,7 @@ export function DashboardSidebar() {
             const badgeCount = badgeCounts[item.href];
             const isDisabledRecibos = item.href === "/recibos" && !workersLoading && !hasWorkers;
             const isDisabledFacturas =
-              item.href === "/facturas" && !employersLoading && !hasEmployers;
+              item.href === "/comprobantes" && !employersLoading && !hasEmployers;
             const isDisabled = isDisabledRecibos || isDisabledFacturas;
             const disabledTooltip = isDisabledRecibos
               ? "Primero registrá trabajadores a cargo en Perfil impositivo"

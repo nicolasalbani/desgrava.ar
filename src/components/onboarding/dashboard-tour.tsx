@@ -249,7 +249,7 @@ export function DashboardTour({
             <SummaryRow
               count={summary.invoices}
               label={summary.invoices === 1 ? "comprobante importado" : "comprobantes importados"}
-              href="/facturas"
+              href="/comprobantes"
             />
             <SummaryRow
               count={summary.receipts}
