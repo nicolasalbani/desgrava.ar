@@ -6,8 +6,6 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { OnboardingStepCredentials } from "./onboarding-step-credentials";
 import { OnboardingStepProfile } from "./onboarding-step-profile";
-import { OnboardingStepInvoices } from "./onboarding-step-invoices";
-import { OnboardingStepSubmit } from "./onboarding-step-submit";
 
 interface OnboardingState {
   step: number;
@@ -16,20 +14,11 @@ interface OnboardingState {
   activePullProfileJobId: string | null;
   activePullProfileStep: string | null;
   profilePullCompleted: boolean;
-  activePullComprobantesJobId: string | null;
-  activeSubmitInvoiceJobId: string | null;
-  deducibleInvoiceCount: number;
-  hasCompletedSubmission: boolean;
   hasEmployers: boolean;
   activePushEmployersJobId: string | null;
 }
 
-const STEP_LABELS = [
-  "Credenciales ARCA",
-  "Perfil impositivo",
-  "Importar comprobantes",
-  "Primera deducción",
-];
+const STEP_LABELS = ["Credenciales ARCA", "Perfil impositivo"];
 
 export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
   const [state, setState] = useState<OnboardingState | null>(null);
@@ -39,38 +28,29 @@ export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
   // Pull profile job ID passed from step 1 → step 2
   const [pullProfileJobId, setPullProfileJobId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch("/api/onboarding/state")
-      .then((r) => r.json())
-      .then((data: OnboardingState) => {
-        setState(data);
-        const resumeStep = Math.min(data.step, 4);
-        // If we'd resume at step 3 or 4 but user has no employers,
-        // go back to step 2 if there's an active push job (user was adding employer),
-        // otherwise auto-complete
-        if (resumeStep >= 3 && !data.hasEmployers) {
-          if (data.activePushEmployersJobId) {
-            setCurrentStep(2);
-            setState(data);
-            return;
-          }
-          completeOnboarding();
-          return;
-        }
-        setCurrentStep(resumeStep);
-        if (data.activePullProfileJobId) {
-          setPullProfileJobId(data.activePullProfileJobId);
-        }
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const completeOnboarding = useCallback(async () => {
     setFading(true);
     await fetch("/api/onboarding/complete", { method: "POST" });
     // Wait for fade animation
     setTimeout(() => onComplete(), 700);
   }, [onComplete]);
+
+  useEffect(() => {
+    fetch("/api/onboarding/state")
+      .then((r) => r.json())
+      .then((data: OnboardingState) => {
+        setState(data);
+        // Cap resume at step 2 — steps 3 and 4 no longer exist. Users who
+        // were mid-flight in the old 4-step flow auto-complete here; any
+        // background jobs they had running keep going on their own.
+        const resumeStep = Math.min(data.step, 2);
+        setCurrentStep(resumeStep);
+        if (data.activePullProfileJobId) {
+          setPullProfileJobId(data.activePullProfileJobId);
+        }
+      });
+     
+  }, []);
 
   const advanceToStep = useCallback((step: number) => {
     setCurrentStep(step);
@@ -94,7 +74,7 @@ export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-center px-4 pt-6 pb-2 sm:pt-8">
         <div className="flex items-center gap-2 text-lg font-bold">
-          <Image src="/logo.png" alt="desgrava.ar" width={20} height={20} />
+          <Image src="/logo.png" alt="desgrava.ar" width={40} height={40} />
           desgrava.ar
         </div>
       </div>
@@ -157,33 +137,6 @@ export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
             <OnboardingStepProfile
               pullProfileJobId={pullProfileJobId}
               activePushEmployersJobId={state.activePushEmployersJobId}
-              onComplete={(hasEmployers) => {
-                if (hasEmployers) {
-                  advanceToStep(3);
-                } else {
-                  completeOnboarding();
-                }
-              }}
-            />
-          )}
-          {currentStep === 3 && (
-            <OnboardingStepInvoices
-              activeJobId={state.activePullComprobantesJobId}
-              onComplete={(hasDeducible) => {
-                // No need to re-check hasEmployers here — step 2 already verified
-                // employers exist before advancing to step 3. The initial `state`
-                // is stale (loaded on mount before PULL_PROFILE ran).
-                if (hasDeducible) {
-                  advanceToStep(4);
-                } else {
-                  completeOnboarding();
-                }
-              }}
-            />
-          )}
-          {currentStep === 4 && (
-            <OnboardingStepSubmit
-              activeJobId={state.activeSubmitInvoiceJobId}
               onComplete={completeOnboarding}
             />
           )}

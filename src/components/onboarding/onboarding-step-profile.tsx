@@ -70,7 +70,7 @@ type EmployerFormData = z.infer<typeof employerSchema>;
 interface Props {
   pullProfileJobId: string | null;
   activePushEmployersJobId: string | null;
-  onComplete: (hasEmployers: boolean) => void;
+  onComplete: () => void;
 }
 
 interface ProfileSummary {
@@ -200,7 +200,7 @@ export function OnboardingStepProfile({
       if (summary.employers > 0) {
         // Has employers — auto-advance after a short delay
         setPhase("done");
-        const timer = setTimeout(() => onComplete(true), 1500);
+        const timer = setTimeout(() => onComplete(), 1500);
         return () => clearTimeout(timer);
       } else if (pushJobId) {
         // Resuming with active push job
@@ -228,7 +228,7 @@ export function OnboardingStepProfile({
             if (data.status === "COMPLETED") {
               setPushStatus("COMPLETED");
               invalidateEmployerCount();
-              setTimeout(() => onComplete(true), 1500);
+              setTimeout(() => onComplete(), 1500);
             } else {
               setPushStatus("FAILED");
             }
@@ -257,7 +257,7 @@ export function OnboardingStepProfile({
         if (data.job?.status === "COMPLETED") {
           setPushStatus("COMPLETED");
           invalidateEmployerCount();
-          setTimeout(() => onComplete(true), 1500);
+          setTimeout(() => onComplete(), 1500);
         } else if (data.job?.status === "FAILED") {
           setPushStatus("FAILED");
         } else {
@@ -501,7 +501,7 @@ export function OnboardingStepProfile({
               )}
               Reintentar
             </Button>
-            <Button className="flex-1" onClick={() => onComplete(false)}>
+            <Button className="flex-1" onClick={() => onComplete()}>
               <SkipForward className="mr-2 h-4 w-4" />
               Omitir
             </Button>
@@ -533,7 +533,7 @@ export function OnboardingStepProfile({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Volver</AlertDialogCancel>
-            <AlertDialogAction onClick={() => onComplete(false)}>
+            <AlertDialogAction onClick={() => onComplete()}>
               Continuar sin empleador
             </AlertDialogAction>
           </AlertDialogFooter>

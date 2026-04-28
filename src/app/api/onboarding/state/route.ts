@@ -12,89 +12,46 @@ export async function GET() {
   const userId = session.user.id;
   const fiscalYear = new Date().getFullYear();
 
-  const [
-    credential,
-    pullProfileJob,
-    activePullProfileJob,
-    activePullComprobantesJob,
-    activeSubmitInvoiceJob,
-    invoiceCount,
-    completedSubmitJob,
-    employerCount,
-    activePushEmployersJob,
-  ] = await Promise.all([
-    prisma.arcaCredential.findUnique({
-      where: { userId },
-      select: { isValidated: true },
-    }),
-    prisma.automationJob.findFirst({
-      where: { userId, jobType: "PULL_PROFILE", status: "COMPLETED" },
-      select: { id: true },
-    }),
-    prisma.automationJob.findFirst({
-      where: {
-        userId,
-        jobType: "PULL_PROFILE",
-        status: { in: ["PENDING", "RUNNING"] },
-      },
-      select: { id: true, currentStep: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.automationJob.findFirst({
-      where: {
-        userId,
-        jobType: "PULL_COMPROBANTES",
-        status: { in: ["PENDING", "RUNNING"] },
-      },
-      select: { id: true, currentStep: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.automationJob.findFirst({
-      where: {
-        userId,
-        jobType: "SUBMIT_INVOICE",
-        status: { in: ["PENDING", "RUNNING"] },
-      },
-      select: { id: true, currentStep: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.invoice.count({
-      where: {
-        userId,
-        fiscalYear,
-        deductionCategory: { not: "NO_DEDUCIBLE" },
-      },
-    }),
-    prisma.automationJob.findFirst({
-      where: { userId, jobType: "SUBMIT_INVOICE", status: "COMPLETED" },
-      select: { id: true },
-    }),
-    prisma.employer.count({
-      where: { userId, fiscalYear, agenteRetencion: true },
-    }),
-    prisma.automationJob.findFirst({
-      where: {
-        userId,
-        jobType: "PUSH_EMPLOYERS",
-        status: { in: ["PENDING", "RUNNING"] },
-      },
-      select: { id: true },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  const [credential, pullProfileJob, activePullProfileJob, employerCount, activePushEmployersJob] =
+    await Promise.all([
+      prisma.arcaCredential.findUnique({
+        where: { userId },
+        select: { isValidated: true },
+      }),
+      prisma.automationJob.findFirst({
+        where: { userId, jobType: "PULL_PROFILE", status: "COMPLETED" },
+        select: { id: true },
+      }),
+      prisma.automationJob.findFirst({
+        where: {
+          userId,
+          jobType: "PULL_PROFILE",
+          status: { in: ["PENDING", "RUNNING"] },
+        },
+        select: { id: true, currentStep: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.employer.count({
+        where: { userId, fiscalYear, agenteRetencion: true },
+      }),
+      prisma.automationJob.findFirst({
+        where: {
+          userId,
+          jobType: "PUSH_EMPLOYERS",
+          status: { in: ["PENDING", "RUNNING"] },
+        },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
 
-  // Derive the step the user should be on.
-  // This endpoint is only called during onboarding (onboardingCompleted === false),
-  // so step 4 is always shown when invoices exist — never skip to 5.
+  // Derive the step the user should be on. Onboarding is now 2 steps:
+  //   1. Credenciales ARCA, 2. Perfil impositivo.
   let step: number;
   if (!credential) {
     step = 1;
-  } else if (activePullProfileJob || (!pullProfileJob && !activePullProfileJob)) {
-    step = 2;
-  } else if (activePullComprobantesJob || invoiceCount === 0) {
-    step = 3;
   } else {
-    step = 4;
+    step = 2;
   }
 
   return NextResponse.json({
@@ -104,10 +61,6 @@ export async function GET() {
     activePullProfileJobId: activePullProfileJob?.id ?? null,
     activePullProfileStep: activePullProfileJob?.currentStep ?? null,
     profilePullCompleted: !!pullProfileJob,
-    activePullComprobantesJobId: activePullComprobantesJob?.id ?? null,
-    activeSubmitInvoiceJobId: activeSubmitInvoiceJob?.id ?? null,
-    deducibleInvoiceCount: invoiceCount,
-    hasCompletedSubmission: !!completedSubmitJob,
     hasEmployers: employerCount > 0,
     activePushEmployersJobId: activePushEmployersJob?.id ?? null,
   });
