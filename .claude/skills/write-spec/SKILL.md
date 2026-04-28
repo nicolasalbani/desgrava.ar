@@ -28,6 +28,36 @@ Before writing anything, gather context:
 
    Don't read everything — focus on what's relevant to the feature.
 
+## Phase 1.5: Consult Domain Knowledge (Lenny's MCP)
+
+Before clarifying with the user, decide whether the feature description has a product, marketing, or pricing dimension. If so, query Lenny Rachitsky's MCP server to ground the spec in proven frameworks; if not, skip the MCP entirely so you don't waste calls.
+
+**Trigger keywords** (case-insensitive substring match on the user's request):
+
+`product`, `onboarding`, `activation`, `retention`, `churn`, `engagement`, `pricing`, `monetization`, `paywall`, `trial`, `subscription`, `positioning`, `messaging`, `copy`, `landing`, `growth`, `acquisition`, `funnel`, `conversion`, `marketing`, `channel`, `referral`, `virality`, `launch`, `PMF`, `ICP`, `persona`, `segment`
+
+If none of these appear, **explicitly note in your working summary that the MCP was skipped** (e.g., "Lenny MCP skipped — pure technical work") and continue to Phase 2.
+
+**When triggered:**
+
+1. **Discover tools at runtime** — list the available `mcp__lennys-data__*` tools at session start. Do NOT hardcode tool names; Lenny's catalog evolves. Pick the tools whose descriptions best match the request shape (e.g., onboarding tools for activation work, channels tools for acquisition work).
+
+2. **Pin product context** in every query so Lenny's frameworks come back translated for our reality. Always include this context block:
+
+   > B2C SaaS for Argentine taxpayers (ARCA / SiRADIG tax deduction automation), Spanish-only UI, currently zero paying users (just family beta-testing), goal of first 1000 users. 30-day free trial, then MercadoPago monthly/annual subscription. Target geography: Argentina only. Channels available: LinkedIn AR, Instagram AR, Twitter/X AR, WhatsApp groups, contadores (accountant) referrals.
+
+3. **Translate to Argentine context** — Lenny's content is largely US/global. When citing a framework, adapt it: ARS pricing, Spanish messaging, ARCA regulatory constraints, Argentine channels. Don't surface raw US examples without translation.
+
+4. **Cite inline** — every Acceptance Criteria item or Technical Note that came from a Lenny query gets a short trailing citation: `[Lenny: <framework or resource>]`. Keep it lightweight — traceability, not academic citation. Example: `- [ ] Show the activation milestone within 60 seconds of first login [Lenny: Sean Ellis activation framework]`.
+
+**Failure handling — never block the spec:**
+
+- **Server returns 401 / unauthenticated**: log one line ("Lenny MCP unauthenticated — skipped"), tell the user once at the end that they may want to OAuth in next time, and proceed without MCP input.
+- **Network timeout / unreachable**: log one line ("Lenny MCP unreachable — skipped") and proceed.
+- **Empty tool list**: log one line ("Lenny MCP returned no tools — skipped") and proceed.
+
+In all three cases write the spec using only the template + project context. No retry loops.
+
 ## Phase 2: Clarify
 
 Evaluate whether the feature description is clear enough to write a good spec. If any of the following are ambiguous, **ask the user before proceeding**:
