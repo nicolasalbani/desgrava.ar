@@ -74,6 +74,10 @@ export interface ProgressSnapshot {
   hasRunning: boolean;
   allDone: boolean;
   trackedCount: number;
+  /** Tracked job types currently in COMPLETED status. Consumers diff this
+   *  across renders to detect transitions and trigger side effects (e.g.,
+   *  refreshing a list when the relevant import finishes). */
+  completedTypes: ReadonlyArray<TrackedJobType>;
 }
 
 const STAGE_ORDER: Stage[] = [
@@ -130,12 +134,14 @@ export function computeProgressSnapshot(jobs: JobLite[]): ProgressSnapshot {
       hasRunning: false,
       allDone: true,
       trackedCount: 0,
+      completedTypes: [],
     };
   }
 
   let totalSteps = 0;
   let completedSteps = 0;
   const runningStages: Stage[] = [];
+  const completedTypes: TrackedJobType[] = [];
   let hasFailed = false;
   let hasRunning = false;
   let allTerminal = true;
@@ -148,6 +154,7 @@ export function computeProgressSnapshot(jobs: JobLite[]): ProgressSnapshot {
 
     if (job.status === "COMPLETED") {
       completedSteps += steps.length;
+      completedTypes.push(job.jobType);
     } else if (job.status === "FAILED" || job.status === "CANCELLED") {
       hasFailed = hasFailed || job.status === "FAILED";
       // Failed/cancelled jobs count their progress up to currentStep.
@@ -177,5 +184,6 @@ export function computeProgressSnapshot(jobs: JobLite[]): ProgressSnapshot {
     hasRunning,
     allDone,
     trackedCount: tracked.length,
+    completedTypes,
   };
 }

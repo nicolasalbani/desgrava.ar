@@ -15,11 +15,12 @@ import {
 import { ReceiptUploader } from "@/components/recibos/receipt-uploader";
 import { ReceiptForm } from "@/components/recibos/receipt-form";
 import { ReceiptList } from "@/components/recibos/receipt-list";
-import { ImportArcaReceiptsDialog } from "@/components/recibos/import-arca-dialog";
+import { ArcaImportButton } from "@/components/shared/arca-import-button";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 import { useDomesticWorkerCount } from "@/contexts/domestic-worker-count";
 import { cn } from "@/lib/utils";
 import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
+import { useArcaImportProgress } from "@/hooks/use-arca-import-progress";
 
 function ExpandingButton({
   icon: Icon,
@@ -76,32 +77,23 @@ function RecibosInner() {
   const { fiscalYear } = useFiscalYear();
   const readOnly = useFiscalYearReadOnly();
   const { hasWorkers, loading: workersLoading } = useDomesticWorkerCount();
+  const { snapshot } = useArcaImportProgress();
   const searchParams = useSearchParams();
   const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
-  const [importArcaOpen, setImportArcaOpen] = useState(false);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
-  // Check for an active PULL_DOMESTIC_RECEIPTS job on mount and when fiscal year changes
+  // Refresh the list when a PULL_DOMESTIC_RECEIPTS job transitions from
+  // running to completed. The strip handles all other progress feedback.
+  const wasReceiptsCompleted = useRef(false);
   useEffect(() => {
-    let cancelled = false;
-
-    fetch("/api/automatizacion?activeJob=PULL_DOMESTIC_RECEIPTS")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.job && !cancelled) {
-          setActiveJobId(data.job.id);
-          setImportArcaOpen(true);
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fiscalYear]);
+    const isCompleted = snapshot.completedTypes.includes("PULL_DOMESTIC_RECEIPTS");
+    if (isCompleted && !wasReceiptsCompleted.current) {
+      setRefreshKey((k) => k + 1);
+    }
+    wasReceiptsCompleted.current = isCompleted;
+  }, [snapshot.completedTypes]);
 
   const handleInitialLoad = useCallback((_count: number) => {
     if (!firstLoadDone.current) {
@@ -112,11 +104,6 @@ function RecibosInner() {
   function handleSaved() {
     setUploadOpen(false);
     setManualOpen(false);
-    setRefreshKey((k) => k + 1);
-  }
-
-  function handleImportComplete() {
-    setActiveJobId(null);
     setRefreshKey((k) => k + 1);
   }
 
@@ -137,10 +124,11 @@ function RecibosInner() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <ExpandingButton
+          <ArcaImportButton
+            mode="toolbar"
+            jobType="PULL_DOMESTIC_RECEIPTS"
+            fiscalYear={fiscalYear}
             icon={Download}
-            label="Importar desde ARCA"
-            onClick={() => setImportArcaOpen(true)}
             disabled={readOnly}
           />
           <ExpandingButton
@@ -170,13 +158,6 @@ function RecibosInner() {
           readOnly={readOnly}
         />
       </div>
-
-      <ImportArcaReceiptsDialog
-        open={importArcaOpen}
-        onOpenChange={setImportArcaOpen}
-        onImportComplete={handleImportComplete}
-        activeJobId={activeJobId}
-      />
 
       {/* Upload dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>

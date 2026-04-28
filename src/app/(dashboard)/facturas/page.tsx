@@ -14,12 +14,14 @@ import {
 import { FileUploader } from "@/components/facturas/file-uploader";
 import { InvoiceForm } from "@/components/facturas/invoice-form";
 import { InvoiceList } from "@/components/facturas/invoice-list";
-import { ImportArcaDialog } from "@/components/facturas/import-arca-dialog";
+import { ArcaImportButton } from "@/components/shared/arca-import-button";
 import { UploadSpotlight } from "@/components/facturas/upload-spotlight";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useFiscalYear } from "@/contexts/fiscal-year";
 import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
 import { useEmployerCount } from "@/contexts/employer-count";
+import { useArcaImportProgress } from "@/hooks/use-arca-import-progress";
 
 // ── Expanding icon button ────────────────────────────────────────
 
@@ -202,15 +204,27 @@ function FacturasInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const readOnly = useFiscalYearReadOnly();
+  const { fiscalYear } = useFiscalYear();
   const { hasEmployers, loading: employersLoading } = useEmployerCount();
+  const { snapshot } = useArcaImportProgress();
   const hadZeroInvoices = useRef(false);
   const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
-  const [importArcaOpen, setImportArcaOpen] = useState(false);
   const [showIntro, setShowIntro] = useState(() => searchParams.get("intro") === "1");
+
+  // Refresh the list when a PULL_COMPROBANTES job transitions from running to
+  // completed. The strip handles all other progress feedback.
+  const wasComprobantesCompleted = useRef(false);
+  useEffect(() => {
+    const isCompleted = snapshot.completedTypes.includes("PULL_COMPROBANTES");
+    if (isCompleted && !wasComprobantesCompleted.current) {
+      setRefreshKey((k) => k + 1);
+    }
+    wasComprobantesCompleted.current = isCompleted;
+  }, [snapshot.completedTypes]);
 
   function handleInitialLoad(count: number) {
     if (!firstLoadDone.current) {
@@ -279,10 +293,11 @@ function FacturasInner() {
           </p>
         </div>
         <div data-tour="facturas-actions" className="flex items-center gap-2">
-          <ExpandingButton
+          <ArcaImportButton
+            mode="toolbar"
+            jobType="PULL_COMPROBANTES"
+            fiscalYear={fiscalYear}
             icon={Download}
-            label="Importar desde ARCA"
-            onClick={() => setImportArcaOpen(true)}
             disabled={readOnly}
           />
           <ExpandingButton
@@ -327,12 +342,6 @@ function FacturasInner() {
       </div>
 
       <EmailIngestDialog open={emailOpen} onOpenChange={setEmailOpen} />
-
-      <ImportArcaDialog
-        open={importArcaOpen}
-        onOpenChange={setImportArcaOpen}
-        onImportComplete={() => setRefreshKey((k) => k + 1)}
-      />
 
       {/* Upload dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>

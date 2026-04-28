@@ -94,6 +94,64 @@ describe("aggregateImportProgress", () => {
     expect(summary.invoices).toBe(0);
   });
 
+  describe("completedTypes", () => {
+    it("is empty when no tracked jobs are completed", () => {
+      const { snapshot } = aggregateImportProgress(
+        [
+          apiJob({ jobType: "PULL_COMPROBANTES", status: "RUNNING", currentStep: "download" }),
+          apiJob({ jobType: "PULL_DOMESTIC_RECEIPTS", status: "PENDING", currentStep: null }),
+        ],
+        2026,
+      );
+      expect(snapshot.completedTypes).toEqual([]);
+    });
+
+    it("includes a single completed type", () => {
+      const { snapshot } = aggregateImportProgress(
+        [
+          apiJob({
+            jobType: "PULL_COMPROBANTES",
+            status: "COMPLETED",
+            currentStep: "classify",
+            resultData: { importedCount: 5 },
+          }),
+          apiJob({ jobType: "PULL_DOMESTIC_RECEIPTS", status: "RUNNING", currentStep: "download" }),
+        ],
+        2026,
+      );
+      expect(snapshot.completedTypes).toEqual(["PULL_COMPROBANTES"]);
+    });
+
+    it("includes multiple completed types when several finish in the same poll cycle", () => {
+      const { snapshot } = aggregateImportProgress(
+        [
+          apiJob({
+            jobType: "PULL_COMPROBANTES",
+            status: "COMPLETED",
+            currentStep: "classify",
+            resultData: { importedCount: 5 },
+          }),
+          apiJob({
+            jobType: "PULL_DOMESTIC_RECEIPTS",
+            status: "COMPLETED",
+            currentStep: "save",
+            resultData: { receiptsCount: 3 },
+          }),
+          apiJob({
+            jobType: "PULL_PRESENTACIONES",
+            status: "RUNNING",
+            currentStep: "download",
+          }),
+        ],
+        2026,
+      );
+      expect(snapshot.completedTypes).toEqual(
+        expect.arrayContaining(["PULL_COMPROBANTES", "PULL_DOMESTIC_RECEIPTS"]),
+      );
+      expect(snapshot.completedTypes).toHaveLength(2);
+    });
+  });
+
   it("handles missing or malformed resultData gracefully", () => {
     const { summary } = aggregateImportProgress(
       [

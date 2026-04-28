@@ -17,6 +17,19 @@ interface UseArcaImportProgressOptions {
   pollIntervalMs?: number;
 }
 
+// Module-level pubsub so callers that enqueue a new ARCA job (e.g. clicking
+// "Importar desde ARCA") can wake every idle hook instance — the strip,
+// the button itself, list pages — without waiting for the next 4s tick or
+// for a route change to remount them.
+const tickListeners = new Set<() => void>();
+
+/** Forces every mounted `useArcaImportProgress` instance to poll once now.
+ *  Call this after a successful `POST /api/automatizacion` so the strip and
+ *  the import button switch into running state immediately. */
+export function refreshArcaProgress() {
+  for (const fn of tickListeners) fn();
+}
+
 /**
  * Polls /api/automatizacion and exposes an aggregated progress snapshot for the
  * post-onboarding ARCA imports (PULL_COMPROBANTES, PULL_DOMESTIC_RECEIPTS,
@@ -66,9 +79,11 @@ export function useArcaImportProgress(options: UseArcaImportProgressOptions = {}
     }
 
     tick();
+    tickListeners.add(tick);
 
     return () => {
       cancelledRef.current = true;
+      tickListeners.delete(tick);
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;

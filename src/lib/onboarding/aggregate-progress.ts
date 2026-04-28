@@ -29,6 +29,7 @@ export const EMPTY_SNAPSHOT: ProgressSnapshot = {
   hasRunning: false,
   allDone: true,
   trackedCount: 0,
+  completedTypes: [],
 };
 
 export const EMPTY_SUMMARY: ArcaImportSummary = {

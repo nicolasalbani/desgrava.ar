@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronUp, ChevronDown, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,19 +12,38 @@ export function ArcaProgressStrip() {
   const { snapshot, summary } = useArcaImportProgress();
   const [collapsed, setCollapsed] = useState(false);
   const [hidden, setHidden] = useState(true);
+  // Tracks whether this strip instance has ever observed a running job. We
+  // only show the green "completa" state if a run-to-done transition happened
+  // during this mount — otherwise every page refresh would resurface the
+  // success banner from imports that finished long ago.
+  const observedRunningRef = useRef(false);
 
-  // Reveal whenever any tracked job exists. Auto-hide a few seconds after `done`.
   useEffect(() => {
     if (snapshot.trackedCount === 0) {
       setHidden(true);
+      observedRunningRef.current = false;
       return;
     }
-    setHidden(false);
-    if (snapshot.allDone) {
-      const t = setTimeout(() => setHidden(true), HIDE_AFTER_DONE_MS);
-      return () => clearTimeout(t);
+    if (snapshot.hasRunning) {
+      observedRunningRef.current = true;
+      setHidden(false);
+      return;
     }
-  }, [snapshot.trackedCount, snapshot.allDone]);
+    if (snapshot.hasFailed) {
+      // Failures are actionable — surface them on every visit.
+      setHidden(false);
+      return;
+    }
+    if (snapshot.allDone) {
+      if (observedRunningRef.current) {
+        setHidden(false);
+        const t = setTimeout(() => setHidden(true), HIDE_AFTER_DONE_MS);
+        return () => clearTimeout(t);
+      }
+      // Pre-existing completed jobs — stay hidden.
+      setHidden(true);
+    }
+  }, [snapshot.trackedCount, snapshot.hasRunning, snapshot.hasFailed, snapshot.allDone]);
 
   if (hidden) return null;
 

@@ -49,7 +49,6 @@ export function GuidedOnboarding({ onComplete }: { onComplete: () => void }) {
           setPullProfileJobId(data.activePullProfileJobId);
         }
       });
-     
   }, []);
 
   const advanceToStep = useCallback((step: number) => {
