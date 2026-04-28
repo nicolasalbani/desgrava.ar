@@ -17,7 +17,7 @@ export function AyudaCard() {
       // Hard reload — router.refresh() does not reliably re-evaluate the
       // (dashboard) layout's tourSeenAt read in Next.js 16, so the tour would
       // not mount until the user manually reloaded.
-      window.location.href = "/dashboard?replay=1";
+      window.location.href = "/panel?replay=1";
     } catch {
       toast.error("No se pudo iniciar el tour");
       setReplaying(false);

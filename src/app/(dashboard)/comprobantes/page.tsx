@@ -237,7 +237,7 @@ function FacturasInner() {
     setUploadOpen(false);
     setManualOpen(false);
     if (hadZeroInvoices.current) {
-      router.push("/dashboard");
+      router.push("/panel");
       return;
     }
     setRefreshKey((k) => k + 1);

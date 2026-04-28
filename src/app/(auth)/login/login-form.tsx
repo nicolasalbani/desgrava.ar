@@ -51,7 +51,7 @@ export function LoginForm({ initial }: { initial: LoginFormInitial }) {
       return;
     }
 
-    window.location.href = "/dashboard";
+    window.location.href = "/panel";
   }
 
   async function handleRegister() {
@@ -92,7 +92,7 @@ export function LoginForm({ initial }: { initial: LoginFormInitial }) {
   async function handleGoogleSignIn() {
     setError("");
     setLoading(true);
-    await signIn("google", { callbackUrl: "/dashboard" });
+    await signIn("google", { callbackUrl: "/panel" });
   }
 
   const canSubmitLogin = email.trim() && password.trim();
@@ -279,7 +279,7 @@ export function LoginForm({ initial }: { initial: LoginFormInitial }) {
                     redirect: false,
                   });
                   if (result?.error) throw new Error();
-                  window.location.href = "/dashboard";
+                  window.location.href = "/panel";
                 } catch {
                   setError("Error al crear cuenta dev");
                   setLoading(false);

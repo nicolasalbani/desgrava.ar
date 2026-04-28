@@ -122,7 +122,7 @@ describe("sendNewTicketNotification", () => {
       "Login broken",
       "I can't log in with Google",
       "user@test.com",
-      "/dashboard",
+      "/panel",
       "job-xyz",
     );
 
@@ -132,7 +132,7 @@ describe("sendNewTicketNotification", () => {
     expect(body.text).toContain("ticket\\-abc");
     expect(body.text).toContain("Login broken");
     expect(body.text).toContain("user@test\\.com");
-    expect(body.text).toContain("/dashboard");
+    expect(body.text).toContain("/panel");
     expect(body.text).toContain("job\\-xyz");
   });
 

@@ -13,7 +13,7 @@ import { useEmployerCount } from "@/contexts/employer-count";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 
 const navItems = [
-  { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
+  { href: "/panel", label: "Panel", icon: LayoutDashboard },
   { href: "/credenciales", label: "Credenciales ARCA", icon: KeyRound },
   { href: "/perfil", label: "Perfil impositivo", icon: User },
   { href: "/comprobantes", label: "Comprobantes", icon: FileText },
@@ -53,8 +53,7 @@ export function DashboardMobileNav({ onNavigate }: { onNavigate: () => void }) {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
-              pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+              pathname === item.href || (item.href !== "/panel" && pathname.startsWith(item.href));
             const badgeCount = badgeCounts[item.href];
             const isDisabledRecibos = item.href === "/recibos" && !workersLoading && !hasWorkers;
             const isDisabledFacturas =

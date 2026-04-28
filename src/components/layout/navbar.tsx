@@ -100,7 +100,7 @@ export function Navbar() {
               ))}
           <Button asChild size="lg">
             {session ? (
-              <Link href="/dashboard">Ir al panel</Link>
+              <Link href="/panel">Ir al panel</Link>
             ) : (
               <Link href="/login">Iniciar sesion</Link>
             )}
@@ -192,7 +192,7 @@ export function Navbar() {
                   <div className="border-border border-t p-3">
                     {session ? (
                       <Button asChild className="w-full">
-                        <Link href="/dashboard" onClick={() => setOpen(false)}>
+                        <Link href="/panel" onClick={() => setOpen(false)}>
                           <LayoutDashboard className="mr-2 h-4 w-4" />
                           Ir al panel
                         </Link>
