@@ -87,6 +87,11 @@ interface MetricsPanelProps {
   totalInvoices: number;
   submittedCount: number;
   pendingCount: number;
+  pendingInvoiceCount: number;
+  pendingReceiptCount: number;
+  totalDeducibleInvoices: number;
+  totalDeducibleReceipts: number;
+  hasUnregisteredWorker: boolean;
   monthCategoryData: MonthCategoryEntry[];
   recentInvoices: RecentInvoice[];
   allSubmitted: boolean;
@@ -123,6 +128,11 @@ export function MetricsPanel({
   totalInvoices,
   submittedCount,
   pendingCount,
+  pendingInvoiceCount,
+  pendingReceiptCount,
+  totalDeducibleInvoices,
+  totalDeducibleReceipts,
+  hasUnregisteredWorker,
   monthCategoryData,
   recentInvoices,
   allSubmitted,
@@ -499,8 +509,11 @@ export function MetricsPanel({
 
         {/* Próximo paso card */}
         <ProximoPasoCard
-          pendingCount={pendingCount}
-          totalDeducible={totalInvoices}
+          pendingInvoiceCount={pendingInvoiceCount}
+          pendingReceiptCount={pendingReceiptCount}
+          totalDeducibleInvoices={totalDeducibleInvoices}
+          totalDeducibleReceipts={totalDeducibleReceipts}
+          hasUnregisteredWorker={hasUnregisteredWorker}
           allSubmitted={allSubmitted}
           fiscalYear={fiscalYear}
         />

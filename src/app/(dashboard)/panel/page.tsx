@@ -13,10 +13,12 @@ export default async function DashboardPage() {
 
   const [
     totalInvoices,
+    totalDeducibleReceipts,
     submittedInvoiceCount,
     submittedReceiptCount,
     pendingInvoiceCount,
     pendingReceiptCount,
+    unregisteredWorkerReceipt,
     monthCategoryBreakdown,
     receiptMonthBreakdown,
     subscription,
@@ -25,6 +27,9 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     prisma.invoice.count({
       where: { userId, fiscalYear, deductionCategory: { not: "NO_DEDUCIBLE" } },
+    }),
+    prisma.domesticReceipt.count({
+      where: { userId, fiscalYear },
     }),
     prisma.invoice.count({
       where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
@@ -48,6 +53,10 @@ export default async function DashboardPage() {
         fiscalYear,
         siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING", "FAILED"] },
       },
+    }),
+    prisma.domesticReceipt.findFirst({
+      where: { userId, fiscalYear, domesticWorkerId: null },
+      select: { id: true },
     }),
     // Group by month AND category — feeds the monthly bar chart (combined with recibos below)
     prisma.invoice.groupBy({
@@ -89,6 +98,7 @@ export default async function DashboardPage() {
 
   const submittedCount = submittedInvoiceCount + submittedReceiptCount;
   const pendingCount = pendingInvoiceCount + pendingReceiptCount;
+  const hasUnregisteredWorker = unregisteredWorkerReceipt !== null;
 
   const ownsProperty = yearPreference?.ownsProperty ?? false;
 
@@ -154,8 +164,11 @@ export default async function DashboardPage() {
     siradiqStatus: invoice.siradiqStatus,
   }));
 
-  // Pending deductible invoices for the Próximo paso card state machine.
-  const allSubmitted = totalInvoices > 0 && pendingCount === 0;
+  // Próximo paso card: "all submitted" considers both invoices and receipts.
+  const allSubmitted =
+    totalInvoices + totalDeducibleReceipts > 0 &&
+    pendingInvoiceCount === 0 &&
+    pendingReceiptCount === 0;
 
   return (
     <MetricsPanel
@@ -166,6 +179,11 @@ export default async function DashboardPage() {
       totalInvoices={totalInvoices}
       submittedCount={submittedCount}
       pendingCount={pendingCount}
+      pendingInvoiceCount={pendingInvoiceCount}
+      pendingReceiptCount={pendingReceiptCount}
+      totalDeducibleInvoices={totalInvoices}
+      totalDeducibleReceipts={totalDeducibleReceipts}
+      hasUnregisteredWorker={hasUnregisteredWorker}
       monthCategoryData={monthCategoryData}
       recentInvoices={recentInvoicesSerialized}
       allSubmitted={allSubmitted}

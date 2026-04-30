@@ -11,15 +11,21 @@ import { useArcaImportProgress } from "@/hooks/use-arca-import-progress";
 import { ArcaImportButton } from "@/components/shared/arca-import-button";
 
 interface ProximoPasoCardProps {
-  pendingCount: number;
-  totalDeducible: number;
+  pendingInvoiceCount: number;
+  pendingReceiptCount: number;
+  totalDeducibleInvoices: number;
+  totalDeducibleReceipts: number;
+  hasUnregisteredWorker: boolean;
   allSubmitted: boolean;
   fiscalYear: number;
 }
 
 export function ProximoPasoCard({
-  pendingCount,
-  totalDeducible,
+  pendingInvoiceCount,
+  pendingReceiptCount,
+  totalDeducibleInvoices,
+  totalDeducibleReceipts,
+  hasUnregisteredWorker,
   allSubmitted,
   fiscalYear,
 }: ProximoPasoCardProps) {
@@ -29,8 +35,11 @@ export function ProximoPasoCard({
   const currentMonth = new Date().getMonth() + 1;
   const state: ProximoPasoCardState = deriveProximoPasoState({
     hasRunningImport,
-    pendingCount,
-    totalDeducible,
+    pendingInvoiceCount,
+    pendingReceiptCount,
+    totalDeducibleInvoices,
+    totalDeducibleReceipts,
+    hasUnregisteredWorker,
     allSubmitted,
     currentMonth,
   });
