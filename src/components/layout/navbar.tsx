@@ -5,28 +5,13 @@ import Image from "next/image";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import {
-  Menu,
-  Sun,
-  Moon,
-  Monitor,
-  Sparkles,
-  BarChart3,
-  CreditCard,
-  LogIn,
-  LayoutDashboard,
-} from "lucide-react";
+import { Menu, Sun, Moon, Monitor, LogIn, LayoutDashboard } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
+import { sectionLinks } from "@/lib/landing/section-links";
 
 const themeIcons = { light: Sun, dark: Moon, system: Monitor } as const;
-
-const sectionLinks = [
-  { label: "Cómo funciona", href: "/#desgrava", icon: Sparkles },
-  { label: "Simulador", href: "/#simulador", icon: BarChart3 },
-  { label: "Planes", href: "/#planes", icon: CreditCard },
-];
 
 export function Navbar() {
   const [open, setOpen] = useState(false);

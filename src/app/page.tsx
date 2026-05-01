@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ChevronDown, Lock, Zap, MapPin } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
-import { Footer } from "@/components/layout/footer";
+import { LandingFooter } from "@/components/layout/landing-footer";
 import { HowItWorksSection } from "@/components/landing/how-it-works-section";
 import { FeaturesBento } from "@/components/landing/features-bento";
 import { SimuladorEmbed } from "@/components/landing/simulador-embed";
@@ -144,7 +144,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <Footer />
+      <LandingFooter />
     </div>
   );
 }
