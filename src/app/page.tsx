@@ -32,8 +32,8 @@ export default function LandingPage() {
             </FadeIn>
             <FadeIn delay={150}>
               <p className="text-muted-foreground mx-auto max-w-2xl text-lg leading-relaxed">
-                Cargamos tus alquileres, gastos médicos, educación y personal doméstico en ARCA por
-                vos. En 10 minutos. Más fácil, más rápido, sin errores.
+                Deducimos tus alquileres, gastos médicos, educación y personal doméstico en ARCA por
+                vos. En minutos. Más fácil, más rápido, sin errores.
               </p>
             </FadeIn>
             {isF572CutoffWindow && (
