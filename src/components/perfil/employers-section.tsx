@@ -5,7 +5,6 @@ import { z } from "zod";
 import {
   Loader2,
   Plus,
-  Download,
   Upload,
   Pencil,
   Trash2,
@@ -298,12 +297,10 @@ function EmployerFormDialog({
 export function EmployersSection({
   fiscalYear,
   readOnly,
-  profileImporting,
   refreshKey,
 }: {
   fiscalYear: number;
   readOnly?: boolean;
-  profileImporting?: boolean;
   refreshKey?: number;
 }) {
   const [employers, setEmployers] = useState<Employer[]>([]);
@@ -313,13 +310,6 @@ export function EmployersSection({
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Import state
-  const [importing, setImporting] = useState(false);
-  const [importStep, setImportStep] = useState<string | null>(null);
-  const [highlightedIds, setHighlightedIds] = useState<Map<string, "created" | "updated">>(
-    new Map(),
-  );
-
   // Export state
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportResults, setExportResults] = useState<
@@ -327,21 +317,13 @@ export function EmployersSection({
   >(new Map());
   const [exportStep, setExportStep] = useState<string | null>(null);
 
-  const eventSourceRef = useRef<EventSource | null>(null);
   const exportEventSourceRef = useRef<EventSource | null>(null);
-  const employersRef = useRef<Employer[]>([]);
 
   const isExporting = exportingId !== null;
-
-  // Keep ref in sync
-  useEffect(() => {
-    employersRef.current = employers;
-  }, [employers]);
 
   // Cleanup SSE on unmount
   useEffect(() => {
     return () => {
-      eventSourceRef.current?.close();
       exportEventSourceRef.current?.close();
     };
   }, []);
@@ -363,70 +345,6 @@ export function EmployersSection({
       .then((r) => r.json())
       .then((d) => setEmployers(d.employers ?? []));
   }, [refreshKey, fiscalYear]);
-
-  // ── SSE for import ──
-  const connectToJobSSE = useCallback(
-    (jobId: string) => {
-      eventSourceRef.current?.close();
-
-      const es = new EventSource(`/api/automatizacion/${jobId}/logs`);
-      eventSourceRef.current = es;
-
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.step) setImportStep(data.step);
-
-          if (data.done) {
-            es.close();
-            eventSourceRef.current = null;
-
-            if (data.status === "COMPLETED") {
-              fetch(`/api/empleadores?year=${fiscalYear}`)
-                .then((r) => r.json())
-                .then((d) => {
-                  const newEmps: Employer[] = d.employers ?? [];
-                  const oldCuits = new Set(employersRef.current.map((e) => e.cuit));
-                  const highlights = new Map<string, "created" | "updated">();
-
-                  for (const emp of newEmps) {
-                    if (!oldCuits.has(emp.cuit)) {
-                      highlights.set(emp.id, "created");
-                    } else {
-                      const old = employersRef.current.find((e) => e.cuit === emp.cuit);
-                      if (old && JSON.stringify(old) !== JSON.stringify(emp)) {
-                        highlights.set(emp.id, "updated");
-                      }
-                    }
-                  }
-                  setEmployers(newEmps);
-                  setHighlightedIds(highlights);
-                  setTimeout(() => setHighlightedIds(new Map()), 3000);
-                });
-
-              toast.success("Empleadores importados desde SiRADIG");
-            } else {
-              toast.error("Error al importar empleadores");
-            }
-            setImporting(false);
-            setImportStep(null);
-          }
-        } catch {
-          /* ignore parse errors */
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        eventSourceRef.current = null;
-        setImporting(false);
-        setImportStep(null);
-        toast.error("Se perdió la conexión con el servidor");
-      };
-    },
-    [fiscalYear],
-  );
 
   // ── SSE for export ──
   const connectToExportJobSSE = useCallback((jobId: string, empId: string) => {
@@ -480,37 +398,6 @@ export function EmployersSection({
     };
   }, []);
 
-  // ── Active job recovery ──
-  useEffect(() => {
-    let cancelled = false;
-
-    async function checkActiveJob() {
-      try {
-        const res = await fetch("/api/automatizacion");
-        if (!res.ok) return;
-        const { jobs } = await res.json();
-        const activeJob = jobs.find(
-          (j: { jobType: string; fiscalYear?: number | null; status: string }) =>
-            j.jobType === "PULL_EMPLOYERS" &&
-            j.fiscalYear === fiscalYear &&
-            (j.status === "PENDING" || j.status === "RUNNING"),
-        );
-        if (activeJob && !cancelled) {
-          setImporting(true);
-          if (activeJob.currentStep) setImportStep(activeJob.currentStep);
-          connectToJobSSE(activeJob.id);
-        }
-      } catch {
-        /* best-effort */
-      }
-    }
-
-    checkActiveJob();
-    return () => {
-      cancelled = true;
-    };
-  }, [fiscalYear, connectToJobSSE]);
-
   // ── CRUD handlers ──
   function openAdd() {
     setEditing(null);
@@ -546,32 +433,6 @@ export function EmployersSection({
     } finally {
       setDeleting(false);
       setDeleteId(null);
-    }
-  }
-
-  // ── Import handler ──
-  async function handleImport() {
-    setImporting(true);
-    setImportStep(null);
-
-    try {
-      const res = await fetch("/api/automatizacion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobType: "PULL_EMPLOYERS", fiscalYear }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Error al iniciar importación");
-      }
-
-      const { job } = await res.json();
-      connectToJobSSE(job.id);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error al importar";
-      toast.error(msg);
-      setImporting(false);
     }
   }
 
@@ -629,43 +490,18 @@ export function EmployersSection({
 
   return (
     <>
-      {/* Action buttons */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={openAdd}
-          disabled={importing || isExporting || readOnly}
-        >
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
-          Agregar empleador
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleImport}
-          disabled={importing || isExporting || readOnly || profileImporting}
-        >
-          {importing ? (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-          )}
-          Importar desde SiRADIG
-        </Button>
-      </div>
-
-      {/* Import progress */}
-      {importing && importStep && (
-        <p className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          {getStepsForJobType("PULL_EMPLOYERS").find((s) => s.key === importStep)?.label ??
-            importStep}
-        </p>
+      {/* Action buttons — SiRADIG only allows one employer per period */}
+      {employers.length === 0 && (
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={openAdd} disabled={isExporting || readOnly}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Agregar empleador
+          </Button>
+        </div>
       )}
 
       {/* Employer list */}
-      {employers.length === 0 && !importing ? (
+      {employers.length === 0 ? (
         <div className="text-muted-foreground/60 flex flex-col items-center gap-2 py-8 text-center text-sm">
           <Building2 className="h-8 w-8 opacity-40" />
           <p>No hay empleadores cargados para este periodo</p>
@@ -675,7 +511,6 @@ export function EmployersSection({
           {employers.map((emp) => {
             const isExportingThis = exportingId === emp.id;
             const exportResult = exportResults.get(emp.id);
-            const highlight = highlightedIds.get(emp.id);
 
             let cardClass =
               "border-border bg-card rounded-xl border p-4 transition-all duration-300";
@@ -688,12 +523,6 @@ export function EmployersSection({
             } else if (exportResult?.status === "failed") {
               cardClass +=
                 " border-rose-300 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-950/20";
-            } else if (highlight === "created") {
-              cardClass +=
-                " border-emerald-300 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/20";
-            } else if (highlight === "updated") {
-              cardClass +=
-                " border-blue-300 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20";
             }
 
             return (
@@ -713,11 +542,6 @@ export function EmployersSection({
                           ?.label ?? exportStep}
                       </p>
                     )}
-                    {highlight && (
-                      <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                        {highlight === "created" ? "nuevo" : "actualizado"}
-                      </span>
-                    )}
                     {exportResult?.status === "failed" && (
                       <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
                         {exportResult.error}
@@ -732,7 +556,7 @@ export function EmployersSection({
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => handleExport(emp.id)}
-                      disabled={importing || isExporting || readOnly}
+                      disabled={isExporting || readOnly}
                       title="Desgravar"
                     >
                       {isExportingThis ? (
@@ -752,7 +576,7 @@ export function EmployersSection({
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => openEdit(emp)}
-                      disabled={importing || isExporting || readOnly}
+                      disabled={isExporting || readOnly}
                       title="Editar"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -764,7 +588,7 @@ export function EmployersSection({
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => setDeleteId(emp.id)}
-                      disabled={importing || isExporting || readOnly}
+                      disabled={isExporting || readOnly}
                       title="Eliminar"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

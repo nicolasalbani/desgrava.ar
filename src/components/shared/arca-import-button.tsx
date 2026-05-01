@@ -3,11 +3,15 @@
 import { useState, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Download, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { refreshArcaProgress, useArcaImportProgress } from "@/hooks/use-arca-import-progress";
 import type { TrackedJobType } from "@/lib/onboarding/progress-stages";
 
-type ImportableJobType = Extract<TrackedJobType, "PULL_COMPROBANTES" | "PULL_DOMESTIC_RECEIPTS">;
+type ImportableJobType = Extract<
+  TrackedJobType,
+  "PULL_COMPROBANTES" | "PULL_DOMESTIC_RECEIPTS" | "PULL_PRESENTACIONES" | "PULL_PROFILE"
+>;
 
 interface BaseProps {
   jobType: ImportableJobType;
@@ -41,8 +45,8 @@ export function ArcaImportButton(props: Props) {
   const { snapshot } = useArcaImportProgress();
   const [enqueueing, setEnqueueing] = useState(false);
 
-  const isRunning = snapshot.hasRunning && !snapshot.completedTypes.includes(jobType);
-  const percent = isRunning ? snapshot.percent : 0;
+  const isRunning = snapshot.runningTypes.includes(jobType);
+  const percent = isRunning ? (snapshot.percentByType[jobType] ?? 0) : 0;
   const showFill = isRunning && !props.disableFill;
   const runningLabel = "Descargando…";
 
@@ -107,7 +111,14 @@ export function ArcaImportButton(props: Props) {
             aria-hidden="true"
           />
         )}
-        <span className="relative">{isRunning ? runningLabel : label}</span>
+        <span className="relative flex items-center gap-2">
+          {isRunning ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4 shrink-0" />
+          )}
+          {isRunning ? runningLabel : label}
+        </span>
       </button>
     );
   }

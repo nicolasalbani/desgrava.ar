@@ -107,3 +107,45 @@ export const JOB_TYPE_STEPS: Record<string, StepDefinition[]> = {
 export function getStepsForJobType(jobType: string): StepDefinition[] {
   return JOB_TYPE_STEPS[jobType] ?? [];
 }
+
+/**
+ * Per-step expected duration (seconds) for the four ARCA imports tracked by the
+ * progress strip. Used by `computeProgressSnapshot` to weight progress so the
+ * percent reflects real wall-clock time rather than step-index.
+ *
+ * TODO: replace with empirical p50/p75 durations once we have enough finished-job
+ * telemetry. Today's numbers are conservative best-guesses.
+ */
+export const JOB_STEP_DURATIONS: Record<string, Record<string, number>> = {
+  PULL_COMPROBANTES: {
+    login: 5,
+    siradig: 5,
+    siradig_extract: 8,
+    navigate_comprobantes: 5,
+    download: 30,
+    classify: 12,
+  },
+  PULL_DOMESTIC_RECEIPTS: {
+    login: 5,
+    siradig: 5,
+    siradig_extract: 5,
+    download: 25,
+    save: 3,
+    done: 1,
+  },
+  PULL_PRESENTACIONES: {
+    login: 5,
+    siradig: 5,
+    download: 20,
+    done: 1,
+  },
+  PULL_PROFILE: {
+    login: 5,
+    siradig: 5,
+    datos_personales: 8,
+    empleadores: 8,
+    cargas_familia: 8,
+    casas_particulares: 15,
+    done: 1,
+  },
+};

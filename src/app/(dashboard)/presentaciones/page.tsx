@@ -4,8 +4,10 @@ import { useState, useRef, useCallback, useEffect, Suspense, type ElementType } 
 import { Download, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PresentacionesList } from "@/components/presentaciones/presentaciones-list";
-import { ImportArcaPresentacionesDialog } from "@/components/presentaciones/import-arca-dialog";
 import { SubmitPresentacionDialog } from "@/components/presentaciones/submit-presentacion-dialog";
+import { ArcaImportButton } from "@/components/shared/arca-import-button";
+import { useArcaImportProgress } from "@/hooks/use-arca-import-progress";
+import { useFiscalYear } from "@/contexts/fiscal-year";
 import { cn } from "@/lib/utils";
 import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
 
@@ -41,38 +43,28 @@ function ExpandingButton({
 
 function PresentacionesInner() {
   const readOnly = useFiscalYearReadOnly();
+  const { fiscalYear } = useFiscalYear();
+  const { snapshot } = useArcaImportProgress();
   const firstLoadDone = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [importOpen, setImportOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
-  const [activeImportJobId, setActiveImportJobId] = useState<string | null>(null);
-  const resumeCheckedRef = useRef(false);
 
-  // Check for an active PULL_PRESENTACIONES job on mount and auto-resume
+  // Refresh the list when a PULL_PRESENTACIONES job transitions to completed.
+  // The strip handles all other progress feedback.
+  const wasPresentacionesCompleted = useRef(false);
   useEffect(() => {
-    if (resumeCheckedRef.current) return;
-    resumeCheckedRef.current = true;
-
-    fetch("/api/automatizacion?activeJob=PULL_PRESENTACIONES")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.job) {
-          setActiveImportJobId(data.job.id);
-          setImportOpen(true);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    const isCompleted = snapshot.completedTypes.includes("PULL_PRESENTACIONES");
+    if (isCompleted && !wasPresentacionesCompleted.current) {
+      setRefreshKey((k) => k + 1);
+    }
+    wasPresentacionesCompleted.current = isCompleted;
+  }, [snapshot.completedTypes]);
 
   const handleInitialLoad = useCallback((_count: number) => {
     if (!firstLoadDone.current) {
       firstLoadDone.current = true;
     }
   }, []);
-
-  function handleImportComplete() {
-    setRefreshKey((k) => k + 1);
-  }
 
   function handleSubmitComplete() {
     setRefreshKey((k) => k + 1);
@@ -91,10 +83,11 @@ function PresentacionesInner() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <ExpandingButton
+          <ArcaImportButton
+            mode="toolbar"
+            jobType="PULL_PRESENTACIONES"
+            fiscalYear={fiscalYear}
             icon={Download}
-            label="Importar desde ARCA"
-            onClick={() => setImportOpen(true)}
             disabled={readOnly}
           />
           <ExpandingButton
@@ -113,13 +106,6 @@ function PresentacionesInner() {
       >
         <PresentacionesList key={refreshKey} onInitialLoad={handleInitialLoad} />
       </div>
-
-      <ImportArcaPresentacionesDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        onImportComplete={handleImportComplete}
-        activeJobId={activeImportJobId}
-      />
 
       <SubmitPresentacionDialog
         open={submitOpen}

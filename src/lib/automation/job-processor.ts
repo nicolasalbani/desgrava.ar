@@ -107,10 +107,11 @@ async function appendLog(jobId: string, message: string, onLog?: LogCallback) {
 
 async function appendStep(jobId: string, stepKey: string, _onLog?: LogCallback) {
   jobSteps.set(jobId, stepKey);
-  // Persist to DB
+  // Persist to DB. `currentStepStartedAt` is updated alongside `currentStep` so
+  // the progress strip can compute in-flight partial-step weight from wall clock.
   await prisma.automationJob.update({
     where: { id: jobId },
-    data: { currentStep: stepKey },
+    data: { currentStep: stepKey, currentStepStartedAt: new Date() },
   });
 }
 

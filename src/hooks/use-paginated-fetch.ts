@@ -104,6 +104,15 @@ export function usePaginatedFetch<T>(
   const initialLoadRef = useRef(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Stash optional callbacks in refs so unstable references from callers
+  // don't invalidate `fetchData` and cause spurious refetches.
+  const transformRef = useRef(transform);
+  const onInitialLoadRef = useRef(onInitialLoad);
+  useEffect(() => {
+    transformRef.current = transform;
+    onInitialLoadRef.current = onInitialLoad;
+  }, [transform, onInitialLoad]);
+
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -123,7 +132,7 @@ export function usePaginatedFetch<T>(
         if (!res.ok) throw new Error("Fetch failed");
         const json = await res.json();
         let items: T[] = json[dataKey] ?? [];
-        if (transform) items = transform(items);
+        if (transformRef.current) items = transformRef.current(items);
         setData(items);
         if (json.pagination) setPagination(json.pagination);
 
@@ -133,7 +142,7 @@ export function usePaginatedFetch<T>(
 
         if (!initialLoadRef.current && showLoading) {
           initialLoadRef.current = true;
-          onInitialLoad?.(json.pagination?.totalCount ?? items.length);
+          onInitialLoadRef.current?.(json.pagination?.totalCount ?? items.length);
         }
       } catch {
         // Silently fail
@@ -141,17 +150,7 @@ export function usePaginatedFetch<T>(
         if (showLoading) setLoading(false);
       }
     },
-    [
-      url,
-      dataKey,
-      transform,
-      onInitialLoad,
-      page,
-      pageSize,
-      debouncedSearch,
-      staticParams,
-      filters,
-    ],
+    [url, dataKey, page, pageSize, debouncedSearch, staticParams, filters],
   );
 
   // Fetch on dependency changes

@@ -39,12 +39,10 @@ import {
   Pencil,
   Trash2,
   Users,
-  Download,
   Upload,
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { StepProgress } from "@/components/shared/step-progress";
 import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
@@ -523,12 +521,10 @@ function DependentDialog({
 export function FamilyDependentsSection({
   fiscalYear,
   readOnly,
-  profileImporting,
   refreshKey,
 }: {
   fiscalYear: number;
   readOnly?: boolean;
-  profileImporting?: boolean;
   refreshKey?: number;
 }) {
   const [dependents, setDependents] = useState<FamilyDependent[]>([]);
@@ -538,18 +534,6 @@ export function FamilyDependentsSection({
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Import from SiRADIG state
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [importStep, setImportStep] = useState<string | null>(null);
-  const [skippedDependents, setSkippedDependents] = useState(false);
-  const skippedArcaRef = useRef<string[]>([]);
-  const [highlightedIds, setHighlightedIds] = useState<Map<string, "created" | "updated">>(
-    new Map(),
-  );
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const dependentsRef = useRef<FamilyDependent[]>([]);
-
   // Per-dependent export state
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportResults, setExportResults] = useState<
@@ -557,75 +541,6 @@ export function FamilyDependentsSection({
   >(new Map());
   const [exportStep, setExportStep] = useState<string | null>(null);
   const exportEventSourceRef = useRef<EventSource | null>(null);
-
-  // Keep ref in sync for use in SSE callbacks
-  useEffect(() => {
-    dependentsRef.current = dependents;
-  }, [dependents]);
-
-  // Connect to SSE for a given job and handle completion
-  const connectToJobSSE = useCallback(
-    (jobId: string) => {
-      eventSourceRef.current?.close();
-
-      const es = new EventSource(`/api/automatizacion/${jobId}/logs`);
-      eventSourceRef.current = es;
-
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.step) {
-            setImportStep(data.step);
-          }
-          if (data.done) {
-            es.close();
-            eventSourceRef.current = null;
-
-            if (data.status === "COMPLETED") {
-              fetch(`/api/cargas-familia?year=${fiscalYear}`)
-                .then((r) => r.json())
-                .then((d) => {
-                  const newDeps: FamilyDependent[] = d.dependents ?? [];
-                  const oldDocNums = new Set(dependentsRef.current.map((dep) => dep.numeroDoc));
-                  const highlights = new Map<string, "created" | "updated">();
-                  for (const dep of newDeps) {
-                    if (!oldDocNums.has(dep.numeroDoc)) {
-                      highlights.set(dep.id, "created");
-                    } else {
-                      const old = dependentsRef.current.find(
-                        (dd) => dd.numeroDoc === dep.numeroDoc,
-                      );
-                      if (old && JSON.stringify(old) !== JSON.stringify(dep)) {
-                        highlights.set(dep.id, "updated");
-                      }
-                    }
-                  }
-                  setDependents(newDeps);
-                  setHighlightedIds(highlights);
-                  setTimeout(() => setHighlightedIds(new Map()), 3000);
-                });
-
-              toast.success("Cargas de familia importadas desde SiRADIG");
-            } else {
-              toast.error("Error al importar cargas de familia");
-            }
-            setImporting(false);
-          }
-        } catch {
-          // ignore parse errors
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        eventSourceRef.current = null;
-        setImporting(false);
-        toast.error("Se perdio la conexion con el servidor");
-      };
-    },
-    [fiscalYear],
-  );
 
   useEffect(() => {
     setLoading(true);
@@ -643,58 +558,6 @@ export function FamilyDependentsSection({
       .then((r) => r.json())
       .then((d) => setDependents(d.dependents ?? []));
   }, [refreshKey, fiscalYear]);
-
-  // Fetch skip preference
-  useEffect(() => {
-    fetch("/api/configuracion")
-      .then((r) => r.json())
-      .then((data) => {
-        const arr: string[] = data.preference?.skippedArcaDialogs ?? [];
-        skippedArcaRef.current = arr;
-        setSkippedDependents(arr.includes("import-dependents"));
-      })
-      .catch(() => {});
-  }, []);
-
-  // On mount, check for an active PULL_FAMILY_DEPENDENTS job and reconnect
-  useEffect(() => {
-    let cancelled = false;
-
-    async function checkActiveJob() {
-      try {
-        const res = await fetch("/api/automatizacion");
-        if (!res.ok) return;
-        const { jobs } = await res.json();
-        const activeJob = jobs.find(
-          (j: { jobType: string; fiscalYear?: number | null; status: string }) =>
-            j.jobType === "PULL_FAMILY_DEPENDENTS" &&
-            j.fiscalYear === fiscalYear &&
-            (j.status === "PENDING" || j.status === "RUNNING"),
-        );
-        if (activeJob && !cancelled) {
-          setImporting(true);
-          if (activeJob.currentStep) {
-            setImportStep(activeJob.currentStep);
-          }
-          connectToJobSSE(activeJob.id);
-        }
-      } catch {
-        // Best-effort; don't block the page
-      }
-    }
-
-    checkActiveJob();
-    return () => {
-      cancelled = true;
-    };
-  }, [fiscalYear, connectToJobSSE]);
-
-  // Clean up SSE on unmount
-  useEffect(() => {
-    return () => {
-      eventSourceRef.current?.close();
-    };
-  }, []);
 
   function openAdd() {
     setEditing(null);
@@ -914,34 +777,6 @@ export function FamilyDependentsSection({
     [fiscalYear, connectToExportJobSSE],
   );
 
-  const handleImportFromSiradig = useCallback(async () => {
-    setImporting(true);
-    setImportStep(null);
-    setHighlightedIds(new Map());
-
-    try {
-      const res = await fetch("/api/automatizacion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobType: "PULL_FAMILY_DEPENDENTS",
-          fiscalYear,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Error al iniciar importacion");
-      }
-
-      const { job } = await res.json();
-      connectToJobSSE(job.id);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al importar");
-      setImporting(false);
-    }
-  }, [fiscalYear, connectToJobSSE]);
-
   const isExporting = exportingId !== null;
 
   return (
@@ -951,26 +786,13 @@ export function FamilyDependentsSection({
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Agregar carga de familia
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setImportDialogOpen(true)}
-          disabled={importing || isExporting || readOnly || profileImporting}
-        >
-          {importing ? (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-          )}
-          Importar desde SiRADIG
-        </Button>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-6">
           <Loader2 className="text-muted-foreground/60 h-5 w-5 animate-spin" />
         </div>
-      ) : dependents.length === 0 && !importing ? (
+      ) : dependents.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">
           <div className="bg-muted mb-3 flex h-10 w-10 items-center justify-center rounded-full">
             <Users className="text-muted-foreground/50 h-5 w-5" />
@@ -982,12 +804,10 @@ export function FamilyDependentsSection({
       ) : (
         <div className="space-y-2">
           {dependents.map((dep) => {
-            const highlight = highlightedIds.get(dep.id);
             const exportResult = exportResults.get(dep.id);
             const isThisExporting = exportingId === dep.id;
 
-            // Determine card styling based on state priority:
-            // exporting animation > export result > import highlight > default
+            // Determine card styling: exporting animation > export result > default
             let cardClass = "border-border bg-muted/20";
             if (isThisExporting) {
               cardClass =
@@ -996,10 +816,6 @@ export function FamilyDependentsSection({
               cardClass = "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30";
             } else if (exportResult?.status === "failed") {
               cardClass = "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30";
-            } else if (highlight === "created") {
-              cardClass = "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30";
-            } else if (highlight === "updated") {
-              cardClass = "border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30";
             }
 
             return (
@@ -1027,16 +843,6 @@ export function FamilyDependentsSection({
                           error
                         </span>
                       )}
-                      {highlight === "created" && !exportResult && !isThisExporting && (
-                        <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/50 dark:text-green-400">
-                          nuevo
-                        </span>
-                      )}
-                      {highlight === "updated" && !exportResult && !isThisExporting && (
-                        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/50 dark:text-blue-400">
-                          actualizado
-                        </span>
-                      )}
                     </div>
                     <p className="text-muted-foreground/60 mt-0.5 text-xs">
                       {parentescoLabel(dep.parentesco)} · {dep.tipoDoc} {dep.numeroDoc}
@@ -1055,7 +861,7 @@ export function FamilyDependentsSection({
                             : "text-muted-foreground hover:text-foreground"
                       }`}
                       onClick={() => handleExportDependent(dep.id)}
-                      disabled={isExporting || importing || readOnly}
+                      disabled={isExporting || readOnly}
                       title="Desgravar"
                     >
                       {isThisExporting ? (
@@ -1101,17 +907,6 @@ export function FamilyDependentsSection({
         </div>
       )}
 
-      {/* Import progress */}
-      {importing && (
-        <div className="border-border bg-muted rounded-xl border p-4">
-          <StepProgress
-            steps={JOB_TYPE_STEPS.PULL_FAMILY_DEPENDENTS}
-            currentStep={importStep}
-            status="RUNNING"
-          />
-        </div>
-      )}
-
       {/* Export progress (shown below cards while any dependent is exporting) */}
       {isExporting && (
         <div className="border-border bg-muted rounded-xl border p-4">
@@ -1122,18 +917,6 @@ export function FamilyDependentsSection({
           />
         </div>
       )}
-
-      <ImportDependentsSiradigDialog
-        open={importDialogOpen}
-        onOpenChange={setImportDialogOpen}
-        onConfirm={() => {
-          setImportDialogOpen(false);
-          handleImportFromSiradig();
-        }}
-        skipped={skippedDependents}
-        skippedArcaRef={skippedArcaRef}
-        onSkipChange={setSkippedDependents}
-      />
 
       <DependentDialog
         open={dialogOpen}
@@ -1161,92 +944,5 @@ export function FamilyDependentsSection({
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
-
-function ImportDependentsSiradigDialog({
-  open,
-  onOpenChange,
-  onConfirm,
-  skipped,
-  skippedArcaRef,
-  onSkipChange,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  onConfirm: () => void;
-  skipped: boolean;
-  skippedArcaRef: React.RefObject<string[]>;
-  onSkipChange: (v: boolean) => void;
-}) {
-  // Auto-confirm when skip preference is enabled
-  useEffect(() => {
-    if (open && skipped) {
-      onConfirm();
-    }
-  }, [open]);
-
-  async function saveSkipPreference(checked: boolean) {
-    onSkipChange(checked);
-    const key = "import-dependents";
-    const updated = checked
-      ? [...skippedArcaRef.current.filter((k) => k !== key), key]
-      : skippedArcaRef.current.filter((k) => k !== key);
-    skippedArcaRef.current = updated;
-    try {
-      await fetch("/api/configuracion", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ skippedArcaDialogs: updated }),
-      });
-    } catch {
-      // Silently fail
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Importar cargas de familia desde SiRADIG</DialogTitle>
-          <DialogDescription>
-            Se conectara a SiRADIG y descargara las cargas de familia declaradas en el formulario
-            F.572 Web.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 pt-1">
-          <div className="bg-muted/40 rounded-xl p-4 text-sm">
-            <p className="text-foreground/80 mb-2 font-medium">Esto va a:</p>
-            <ul className="text-muted-foreground space-y-1.5 text-xs">
-              <li>1. Iniciar sesión en ARCA con tus credenciales guardadas</li>
-              <li>2. Ir a SiRADIG → Carga de Formulario → Deducciones y Desgravaciones</li>
-              <li>3. Importar las cargas de familia declaradas</li>
-            </ul>
-            <p className="text-muted-foreground/70 mt-3 text-xs">
-              Las cargas de familia que ya tengas cargadas se van a actualizar con los datos mas
-              recientes.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="skip-dependents-import"
-              checked={skipped}
-              onCheckedChange={(checked) => saveSkipPreference(checked === true)}
-            />
-            <label
-              htmlFor="skip-dependents-import"
-              className="text-muted-foreground cursor-pointer text-xs"
-            >
-              No volver a mostrar este mensaje
-            </label>
-          </div>
-          <Button onClick={onConfirm} className="w-full">
-            <Download className="mr-2 h-4 w-4" />
-            Iniciar importacion
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
