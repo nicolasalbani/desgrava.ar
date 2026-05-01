@@ -626,15 +626,6 @@ async function extractReceiptsFromTable(
   // For hidden rows (client-side pagination hides via display:none), innerText
   // collapses the label and value without whitespace (e.g., "PeríodoMarzo 2026")
   // making parsePeriodo fail. Reading the value span's textContent avoids this.
-  interface RawRowData {
-    periodo: string;
-    pago: string;
-    sueldo: string;
-    estadoPago: string;
-    estadoRecibo: string;
-    reciboUrl: string | null;
-    detalleUrl: string | null;
-  }
   const rawRows = await page.evaluate(() => {
     const rows = document.querySelectorAll("#PagosTable tbody tr.f-w-400");
     const result: {

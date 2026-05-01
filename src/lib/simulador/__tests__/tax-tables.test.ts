@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import Decimal from "decimal.js";
 import { getTaxTables, TAX_TABLES_2025, CURRENT_PERIOD } from "@/lib/simulador/tax-tables";
 
 describe("getTaxTables()", () => {

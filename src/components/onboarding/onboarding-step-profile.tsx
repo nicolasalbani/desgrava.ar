@@ -28,7 +28,6 @@ import {
   RefreshCw,
   SkipForward,
   CheckCircle2,
-  Building2,
   AlertTriangle,
   Loader2,
   Plus,

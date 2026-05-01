@@ -63,21 +63,23 @@ export function CredentialsForm() {
   });
 
   useEffect(() => {
-    fetchCredential();
-  }, []);
-
-  async function fetchCredential() {
-    try {
-      const res = await fetch("/api/credenciales");
-      const data = await res.json();
-      if (data.credential) {
-        setCredential(data.credential);
-        form.setValue("cuit", formatCuit(data.credential.cuit));
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/credenciales");
+        const data = await res.json();
+        if (!cancelled && data.credential) {
+          setCredential(data.credential);
+          form.setValue("cuit", formatCuit(data.credential.cuit));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form]);
 
   async function onSubmit(data: FormData) {
     const isFirstSave = credential === null;

@@ -8,7 +8,7 @@ const reviews = [
   {
     name: "Martín L.",
     role: "Desarrollador independiente",
-    text: "Recupere mas de $180.000 en deducciones que ni sabia que podia cargar. En 10 minutos estaba todo en SiRADIG.",
+    text: "Recupere mas de $1.100.000 en deducciones que ni sabia que podia cargar. En 10 minutos estaba todo en ARCA.",
   },
   {
     name: "Carolina S.",
@@ -16,24 +16,24 @@ const reviews = [
     text: "Se lo recomiendo a todos mis clientes. Les ahorra horas de carga manual y a mi me simplifica el seguimiento.",
   },
   {
-    name: "Federico R.",
-    role: "Empleado en relacion de dependencia",
-    text: "Todos los años me olvidaba de cargar las facturas. Ahora subo los PDFs y desgrava.ar hace el resto.",
-  },
-  {
     name: "Lucía M.",
     role: "Medica",
-    text: "La automatizacion con clave fiscal me parecio increible. Cero contacto con la pagina de ARCA.",
+    text: "La descarga automática de comprobantes de ARCA me parecio mágico, no tuve que cargar nada!",
+  },
+  {
+    name: "Federico R.",
+    role: "Empleado en relacion de dependencia",
+    text: "Todos los años me olvidaba de cargar las facturas. Ahora subo los PDFs y la app hace el resto.",
   },
   {
     name: "Santiago P.",
     role: "Ingeniero",
-    text: "El simulador me mostro que estaba dejando $95.000 en la mesa. Al otro dia ya tenia todo cargado.",
+    text: "El simulador me mostro que estaba dejando $450.000 en la mesa. Al otro dia ya tenia todo cargado.",
   },
   {
     name: "Valentina G.",
     role: "Disenadora grafica",
-    text: "Nunca habia usado ARCA en mi vida. Subi las facturas y la IA detecto sola en que categoria iba cada una. No tuve que googlear nada.",
+    text: "Nunca habia usado ARCA en mi vida. Subi las facturas y la IA detecto sola en que categoria iba cada una, GRACIAS!",
   },
 ];
 
@@ -41,8 +41,9 @@ export function ReviewsCarousel() {
   const autoplayRef = useRef(Autoplay({ delay: 6000, stopOnInteraction: false }));
 
   useEffect(() => {
+    const autoplay = autoplayRef.current;
     return () => {
-      autoplayRef.current.stop();
+      autoplay.stop();
     };
   }, []);
 

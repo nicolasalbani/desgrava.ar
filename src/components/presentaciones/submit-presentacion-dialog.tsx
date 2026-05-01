@@ -124,7 +124,7 @@ export function SubmitPresentacionDialog({
         toast.error("Se perdio la conexion con el servidor");
       };
     },
-    [onSubmitComplete],
+    [onSubmitComplete, onOpenChange],
   );
 
   async function saveSkipPreference(checked: boolean) {

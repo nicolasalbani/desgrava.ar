@@ -97,7 +97,6 @@ export function ArcaImportButton(props: Props) {
         disabled={isDisabled}
         aria-disabled={isDisabled}
         aria-label={ariaLabel}
-        aria-valuenow={isRunning ? percent : undefined}
         className={cn(
           "relative flex h-11 min-h-[44px] flex-1 items-center justify-center overflow-hidden rounded-md px-4 text-sm font-medium transition-colors",
           variantClasses,
@@ -134,7 +133,6 @@ export function ArcaImportButton(props: Props) {
       disabled={isDisabled}
       aria-disabled={isDisabled}
       aria-label={ariaLabel}
-      aria-valuenow={isRunning ? percent : undefined}
       className={cn(
         "group bg-card border-border text-foreground hover:bg-muted relative inline-flex h-9 items-center overflow-hidden rounded-md border px-3 text-sm font-medium transition-colors",
         isDisabled && "cursor-not-allowed opacity-70",

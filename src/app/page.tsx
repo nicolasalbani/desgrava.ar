@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ChevronDown } from "lucide-react";
+import { ArrowRight, ChevronDown, Lock, Zap, MapPin } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { HowItWorksSection } from "@/components/landing/how-it-works-section";
@@ -11,6 +11,10 @@ import { ReviewsCarousel } from "@/components/landing/reviews-carousel";
 import { FadeIn } from "@/components/landing/fade-in";
 
 export default function LandingPage() {
+  // F.572 deadline is March 31st each year — surface an urgency line during
+  // the Jan–Mar cutoff window. Server-rendered, no hydration flash.
+  const isF572CutoffWindow = new Date().getMonth() <= 2;
+
   return (
     <div className="bg-background flex min-h-screen flex-col overflow-x-hidden">
       <Navbar />
@@ -21,28 +25,54 @@ export default function LandingPage() {
           <div className="mx-auto max-w-5xl space-y-6 px-4 pt-12 text-center md:px-6 md:pt-16">
             <FadeIn>
               <h1 className="text-foreground text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
-                Recupera la plata
+                Recuperá la plata
                 <br />
-                <span className="text-primary">que ganancias te saca</span>
+                <span className="text-primary">que Ganancias te saca</span>
               </h1>
             </FadeIn>
             <FadeIn delay={150}>
               <p className="text-muted-foreground mx-auto max-w-2xl text-lg leading-relaxed">
-                Miles de pesos en deducciones se pierden cada año porque cargarlas en SiRADIG es un
-                dolor de cabeza. desgrava.ar lo hace por vos.
+                Cargamos tus alquileres, gastos médicos, educación y personal doméstico en ARCA por
+                vos. En 10 minutos. Más fácil, más rápido, sin errores.
               </p>
             </FadeIn>
+            {isF572CutoffWindow && (
+              <FadeIn delay={225}>
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                  ⏳ El F.572 vence el 31 de marzo. Falta poco.
+                </p>
+              </FadeIn>
+            )}
             <FadeIn delay={300}>
               <div className="flex flex-col justify-center gap-3 pt-2 sm:flex-row">
                 <Button size="lg" variant="outline" asChild>
-                  <a href="#simulador">Calcula tu ahorro</a>
+                  <a href="#simulador">Calculá tu ahorro</a>
                 </Button>
                 <Button size="lg" asChild>
                   <Link href="/login">
-                    Empeza gratis
+                    Probá 30 días gratis
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
+              </div>
+              <p className="text-muted-foreground mt-3 text-center text-xs">
+                Sin tarjeta de crédito · Cancelás cuando quieras
+              </p>
+            </FadeIn>
+            <FadeIn delay={375}>
+              <div className="text-muted-foreground flex flex-col items-center justify-center gap-y-2 text-xs sm:flex-row sm:gap-x-6">
+                <span className="inline-flex items-center gap-1.5">
+                  <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                  Datos cifrados
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+                  Listo en 10 minutos
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                  Hecho en Argentina
+                </span>
               </div>
             </FadeIn>
           </div>
