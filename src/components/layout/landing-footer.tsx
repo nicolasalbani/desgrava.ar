@@ -2,12 +2,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { Twitter, MessageCircle, Mail } from "lucide-react";
 import { sectionLinks } from "@/lib/landing/section-links";
-
-const TWITTER_URL = "https://x.com/desgrava_ar";
+import { SUPPORT_EMAIL, SUPPORT_WHATSAPP, TWITTER_URL } from "@/lib/landing/contact";
 
 export function LandingFooter() {
-  const supportEmail = process.env.SUPPORT_EMAIL;
-  const supportWhatsapp = process.env.SUPPORT_WHATSAPP;
   const year = new Date().getFullYear();
 
   return (
@@ -38,28 +35,24 @@ export function LandingFooter() {
               >
                 <Twitter className="h-4 w-4" aria-hidden="true" />
               </a>
-              {supportWhatsapp && (
-                <a
-                  href={`https://wa.me/${supportWhatsapp}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="WhatsApp"
-                  className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 items-center justify-center transition-colors"
-                >
-                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
-                </a>
-              )}
-              {supportEmail && (
-                <a
-                  href={`mailto:${supportEmail}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Email"
-                  className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 items-center justify-center transition-colors"
-                >
-                  <Mail className="h-4 w-4" aria-hidden="true" />
-                </a>
-              )}
+              <a
+                href={`https://wa.me/${SUPPORT_WHATSAPP}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="WhatsApp"
+                className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 items-center justify-center transition-colors"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              </a>
+              <a
+                href={`mailto:${SUPPORT_EMAIL}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Email"
+                className="text-muted-foreground hover:text-foreground inline-flex h-11 w-11 items-center justify-center transition-colors"
+              >
+                <Mail className="h-4 w-4" aria-hidden="true" />
+              </a>
             </div>
           </div>
 
@@ -90,28 +83,24 @@ export function LandingFooter() {
           <div>
             <h3 className="text-foreground mb-3 text-sm font-semibold">Contacto</h3>
             <ul className="flex flex-col gap-y-2">
-              {supportEmail && (
-                <li>
-                  <a
-                    href={`mailto:${supportEmail}`}
-                    className="text-muted-foreground hover:text-foreground inline-flex min-h-[44px] items-center text-sm break-all transition-colors"
-                  >
-                    {supportEmail}
-                  </a>
-                </li>
-              )}
-              {supportWhatsapp && (
-                <li>
-                  <a
-                    href={`https://wa.me/${supportWhatsapp}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground inline-flex min-h-[44px] items-center text-sm transition-colors"
-                  >
-                    WhatsApp
-                  </a>
-                </li>
-              )}
+              <li>
+                <a
+                  href={`mailto:${SUPPORT_EMAIL}`}
+                  className="text-muted-foreground hover:text-foreground inline-flex min-h-[44px] items-center text-sm break-all transition-colors"
+                >
+                  {SUPPORT_EMAIL}
+                </a>
+              </li>
+              <li>
+                <a
+                  href={`https://wa.me/${SUPPORT_WHATSAPP}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground inline-flex min-h-[44px] items-center text-sm transition-colors"
+                >
+                  WhatsApp
+                </a>
+              </li>
               <li>
                 <a
                   href={TWITTER_URL}
