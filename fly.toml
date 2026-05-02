@@ -28,5 +28,5 @@ primary_region = "gru"
     path = "/api/health"
 
 [[vm]]
-  size = "performance-1x"
+  size = "shared-cpu-2x"
   memory = "2gb"

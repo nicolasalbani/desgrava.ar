@@ -192,7 +192,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 ## CI/CD & Deployment
 
-**Hosting**: Fly.io in the `gru` (São Paulo) region. Config in `fly.toml`. VM: `performance-1x` (2GB RAM) for Playwright/Chromium automation.
+**Hosting**: Fly.io in the `gru` (São Paulo) region. Config in `fly.toml`. VM: `shared-cpu-2x` (2GB RAM) — Playwright/Chromium automation runs on shared CPUs, so concurrent ARCA jobs may be slower than on dedicated CPU.
 
 **GitHub Actions** workflows:
 
