@@ -20,6 +20,11 @@ export const metadata: Metadata = {
   title: "desgrava.ar - Automatiza tus deducciones en SiRADIG",
   description:
     "Carga tus facturas en SiRADIG de forma automatica. Simula tu ahorro impositivo y gestiona tus deducciones de ganancias.",
+  alternates: {
+    types: {
+      "application/rss+xml": "https://desgrava.ar/blog/rss.xml",
+    },
+  },
   openGraph: {
     type: "website",
     url: "https://desgrava.ar",

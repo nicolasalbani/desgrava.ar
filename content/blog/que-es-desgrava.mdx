@@ -1,0 +1,57 @@
+---
+slug: que-es-desgrava
+title: ¿Qué es desgrava.ar y en qué te puede ayudar?
+description: desgrava.ar es la forma más rápida de cargar tus deducciones de Ganancias en SiRADIG y recuperar plata que de otro modo perdés todos los meses.
+date: 2026-02-10
+---
+
+Si estás en relación de dependencia y cobrás más de un cierto sueldo, ARCA te retiene Impuesto a las Ganancias todos los meses. Esa retención sale directo de tu recibo, sin que la veas pasar. Lo que casi nadie sabe — o sabe pero nunca llega a hacer — es que **una parte importante de esa plata se puede recuperar**: alquiler, prepaga, gastos médicos, intereses hipotecarios, personal doméstico, educación, cargas de familia. Todo eso es deducible. Pero para que ARCA lo descuente, tenés que cargarlo en un formulario online llamado **F.572 Web** (o SiRADIG, que es como se sigue llamando popularmente).
+
+Y ahí es donde se pierde la plata.
+
+## El problema no es Ganancias. Es la fricción.
+
+Cargar el F.572 cada mes es un proceso lento y poco intuitivo. Hay que:
+
+- Entrar al portal de ARCA con clave fiscal
+- Abrir SiRADIG en una ventana popup que parece de 2008
+- Buscar la categoría correcta para cada factura (alquiler, prepaga, salud, educación, ¿y este recibo del médico, dónde va?)
+- Cargar CUIT, monto, fecha, descripción — uno por uno
+- Volver el mes que viene y repetirlo todo
+
+El resultado conocido: la mayoría de la gente carga sus deducciones **una vez al año, en marzo, antes del cierre del F.572** — si es que las carga. El resto del año, sigue dejando plata sobre la mesa todos los meses.
+
+## Qué hace desgrava.ar
+
+desgrava.ar automatiza ese proceso de punta a punta:
+
+1. **Conectás tu cuenta de ARCA una sola vez.** Tus credenciales se guardan cifradas (AES-256-GCM) y solo se descifran en el momento exacto en que un trabajo de automatización las necesita.
+2. **Importamos tus comprobantes desde Mis Comprobantes en ARCA.** Si tenés facturas en papel o PDF, las podés subir y el OCR (con fallback a Tesseract) les saca los datos automáticamente.
+3. **Una IA clasifica cada factura por categoría de deducción.** No tenés que pensar si una consulta médica va en "Gastos médicos" o "Cuotas médico-asistenciales" — el sistema lo hace por vos, y aprende del catálogo global de proveedores que ya construimos.
+4. **Cargamos el F.572 / SiRADIG por vos.** Un robot Playwright entra a SiRADIG, navega categoría por categoría, y carga las deducciones. Lo ves en tiempo real desde un panel con barra de progreso.
+
+Lo que normalmente te lleva una hora cada mes, desgrava.ar lo hace en 10 minutos — y lo podés repetir cuantas veces quieras durante el año, sin tocar una sola pantalla de ARCA.
+
+## ¿Para quién es desgrava.ar?
+
+Para cualquier persona que:
+
+- Esté **en relación de dependencia** y cobre por encima del mínimo no imponible de Ganancias
+- Tenga **gastos deducibles** que hoy no está reportando: alquiler, prepaga, salud, educación, hipoteca, personal doméstico
+- Quiera **dejar de tercerizar** este trámite a su contador o a su empleador, o que directamente no lo esté presentando
+
+Si trabajás en relación de dependencia y nunca presentaste el F.572, casi seguro estás dejando entre **$1.000.000 y $3.000.000 al año** sin recuperar — depende de tu sueldo y de cuánto gastás en los rubros deducibles.
+
+## Lo que no hace desgrava.ar (todavía)
+
+Para ser honestos:
+
+- No es un sistema para contadores con muchos clientes. Está pensado para vos, persona física, una sola CUIT.
+- No reemplaza la liquidación anual de Ganancias (la del F.711) si tenés rentas de cuarta categoría como autónomo o monotributista — solo automatiza el F.572 web del régimen de empleados.
+- No te asesora sobre qué deducciones te conviene tomar — aplica las reglas vigentes y los topes que ARCA publica, pero la decisión sobre qué cargar es tuya.
+
+## Cómo empezar
+
+Tenés un [simulador gratis](/simulador) donde podés ver, en menos de un minuto, cuánto podrías estar recuperando con tus gastos actuales. No pide tarjeta, no pide registro. Si el número te parece interesante, [creás una cuenta gratis](/login) y probás 30 días el flujo completo — incluida la presentación automática a SiRADIG — sin tarjeta de crédito.
+
+En el próximo post te muestro cómo funciona en la práctica, con tres ejemplos concretos basados en perfiles típicos.

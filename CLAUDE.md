@@ -108,7 +108,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 **Route groups** organize the app by access level:
 
-- `(public)/` — unauthenticated pages: `/simulador` (SEO landing for the savings calculator with H1, intro copy, "¿Cómo funciona?" content, FAQ block + JSON-LD `FAQPage` schema, and CTA), `/terminos`, `/privacidad`, `/cookies`
+- `(public)/` — unauthenticated pages: `/simulador` (SEO landing for the savings calculator with H1, intro copy, "¿Cómo funciona?" content, FAQ block + JSON-LD `FAQPage` schema, and CTA), `/blog` (MDX blog index + `/blog/[slug]` post pages), `/terminos`, `/privacidad`, `/cookies`. The blog also exposes `/blog/rss.xml` (RSS 2.0 feed, route handler outside the `(public)` group).
 - `(auth)/` — login flow (Google OAuth + email/password), email verification, password reset
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
@@ -131,8 +131,9 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `mercadopago/` — MercadoPago SDK integration: client init, preapproval (subscription) creation/cancellation, webhook processing
 - `soporte/` — AI support chat: system prompt with app knowledge, OpenAI tool definitions for ticket creation and WhatsApp escalation
 - `onboarding/` — Pure helpers for the post-onboarding dashboard tour: `progress-stages.ts` maps automation job steps to a 7-stage label list (connecting/invoices/employers/dependents/receipts/classifying/done), `aggregate-progress.ts` filters and aggregates the API job list per fiscal year into `{ snapshot, summary }`, `proximo-paso-state.ts` derives the "Próximo paso" card variant (7 branches, comprobantes-priority) from invoice/receipt counts, worker registration state, and import state
+- `blog/` — File-based MDX blog. `schema.ts` (Zod frontmatter schema: slug/title/description/date/author + optional ogTitle/ogDescription) and `posts.ts` (`getAllPosts`, `getPostBySlug`, `formatBlogDate`). Posts live as `.mdx` files in `content/blog/` at the repo root (not under `src/`). Rendering uses `next-mdx-remote/rsc` from `src/app/(public)/blog/[slug]/page.tsx`; custom MDX components are exported from `mdx-components.tsx` at the project root (`mdxComponents` const + the `useMDXComponents` Next convention). Slugs are statically generated via `generateStaticParams`, the sitemap and `/blog/rss.xml` route both read from `getAllPosts()`. New posts: drop a frontmatter-validated `.mdx` into `content/blog/`, no code changes needed.
 
-**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`, `auth/`, `subscription/`, `soporte/`, `onboarding/`, `dashboard/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
+**UI components** (`src/components/`) are split by feature domain (`facturas/`, `recibos/`, `trabajadores/`, `automatizacion/`, `credenciales/`, `simulador/`, `presentaciones/`, `landing/`, `auth/`, `subscription/`, `soporte/`, `onboarding/`, `dashboard/`, `blog/`) with shared components in `shared/` (e.g., `JobStatusBadge`, `JobHistoryPanel`, `PaginationControls`), shadcn components in `ui/`, and layout components in `layout/`.
 
 **Hooks** (`src/hooks/`) contain shared React hooks:
 
@@ -164,7 +165,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 ## Testing
 
-**Framework**: Vitest with 970+ tests across 47 test files.
+**Framework**: Vitest with 990+ tests across 49 test files.
 
 **Test location**: Tests live in `__tests__/` directories alongside their modules (e.g., `src/lib/simulador/__tests__/calculator.test.ts`).
 
@@ -188,6 +189,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 - `fiscal-year` — fiscal year read-only cutoff logic, available years (18 tests)
 - `validators/` — profile update schema (12 tests)
 - `onboarding/` — progress-stages aggregator (time-weighted percent), proximo-paso state machine, aggregate-progress filter+summary (61 tests)
+- `blog/` — frontmatter Zod schema and posts loader (16 tests)
 
 **Writing new tests**: Always create tests for new `src/lib/` and `src/hooks/` modules. Place them in `__tests__/` alongside the module. Use `@/` path aliases. Run `npm run test` to validate.
 

@@ -1,0 +1,68 @@
+---
+slug: como-funciona-desgrava
+title: Cómo funciona desgrava.ar — 3 ejemplos paso a paso
+description: Tres casos típicos que muestran cómo desgrava.ar carga tus deducciones en SiRADIG y cuánto podrías recuperar de Ganancias.
+date: 2026-03-15
+---
+
+En el [post anterior](/blog/que-es-desgrava) te conté qué es desgrava.ar y por qué existe. Acá te muestro cómo funciona en la práctica, paso a paso, con tres ejemplos basados en perfiles típicos del simulador. **Los tres son ejemplos orientativos** — los números están calibrados a costos típicos de CABA en 2026 y a la escala de Ganancias vigente, pero tu caso real depende de tu sueldo, tu lugar de residencia y tus gastos efectivos. Hacé el cálculo con tu propia plata en el [simulador](/simulador).
+
+## El flujo de desgrava.ar (común a los tres casos)
+
+Antes de los ejemplos, este es el camino que todos siguen una vez creada la cuenta:
+
+1. **Conectás ARCA.** Una sola vez, con tu CUIT y clave fiscal. Se guarda cifrado.
+2. **Importás tus comprobantes.** Un click trae todo lo que ARCA tiene a tu nombre en Mis Comprobantes — alquiler facturado por tu propietario, recibos de prepaga, facturas de salud, cuotas del colegio, etc.
+3. **La IA clasifica las facturas por categoría.** Lo ves antes de que se cargue nada.
+4. **Revisás y, si querés, ajustás.** Si una factura quedó mal categorizada, la cambiás. Si hay algo que no querés deducir, lo desmarcás.
+5. **Apretás "Desgravar".** El robot abre SiRADIG y carga todo lo seleccionado. Lo ves en tiempo real con una barra de progreso.
+
+Eso es todo. La primera vez que lo hacés tarda unos 10 minutos. A partir del segundo mes, son 2 minutos para revisar lo nuevo y volver a apretar "Desgravar".
+
+## Ejemplo 1 — Soltero inquilino
+
+<PersonaExampleCard persona="soltero-inquilino" ahorroAnualAproximado={1100000} />
+
+Este caso típico es el de alguien que vive solo en un departamento alquilado en CABA o GBA. Las deducciones grandes son el **alquiler** (40% deducible con tope anual) y la **prepaga** (100% deducible con tope del 5% de la ganancia neta). Los gastos médicos sueltos del año (consultas que no cubre la prepaga, estudios, dentista) suman algo más.
+
+Sin desgrava.ar, este perfil suele pasar el año entero sin cargar absolutamente nada en SiRADIG, porque la fricción mensual no compensa el esfuerzo de cargar pocas facturas en una interfaz mala. El resultado son alrededor de **un millón de pesos** que se pierden en retenciones que nunca se recuperan.
+
+Con desgrava.ar, en la primera carga el sistema toma todas las facturas del año en curso desde Mis Comprobantes, las clasifica, y las presenta a SiRADIG en una sola corrida. Después es revisar mensualmente las facturas nuevas (típicamente 2 o 3) y volver a presentar.
+
+## Ejemplo 2 — Familia tipo
+
+<PersonaExampleCard persona="familia-tipo" ahorroAnualAproximado={1900000} />
+
+Una pareja con un hijo, alquilando, con prepaga familiar. Acá entran tres deducciones grandes:
+
+- **Alquiler** — el monto facturado mensualmente, con el tope del 40% deducible y el tope anual.
+- **Prepaga** — el plan familiar es la deducción más fuerte de este perfil: 100% deducible hasta el 5% de la ganancia neta.
+- **Cargas de familia** — el cónyuge si no supera el mínimo no imponible; el hijo menor de edad. Cada carga reduce la base imponible una cantidad fija anual.
+
+Este es el perfil donde la diferencia entre cargar y no cargar es más visible: la prepaga familiar sola implica varios cientos de miles de pesos de ahorro al año si se reporta correctamente. desgrava.ar levanta el recibo desde ARCA, lo clasifica como `CUOTAS_MEDICO_ASISTENCIALES`, y lo carga en la sección correcta de SiRADIG. La parte de cargas de familia se completa una vez en `/datos-personales` y queda guardada para todos los meses.
+
+## Ejemplo 3 — Profesional con hijos en colegio privado
+
+<PersonaExampleCard persona="profesional-hijos-colegio" ahorroAnualAproximado={2400000} />
+
+Acá las dos deducciones dominantes son la **prepaga familiar** y los **gastos educativos** (cuotas de colegio privado para los hijos). Educación es 100% deducible hasta el tope anual fijado por ARCA.
+
+El detalle importante en este perfil: las cuotas del colegio se facturan a nombre del padre o la madre que paga, y para que SiRADIG las acepte hay que vincularlas a la carga de familia correspondiente (el hijo). desgrava.ar maneja ese link automáticamente — cuando creás la carga de familia "hijo" en `/datos-personales`, las facturas educativas a su nombre se asocian solas y se presentan vinculadas a la carga correcta en SiRADIG.
+
+Sin esa vinculación correcta, SiRADIG rechaza la deducción educativa. Hacerlo a mano implica cargar la factura, ir a una segunda pantalla, buscar al hijo en una lista, vincular, guardar. desgrava.ar lo hace en una sola corrida.
+
+## ¿Qué pasa después?
+
+Una vez que ya cargaste todo el año en curso, el flujo siguiente es:
+
+- **Cada mes**, cuando hay facturas nuevas en ARCA, recibís una notificación. Entrás a desgrava.ar, revisás lo nuevo (típicamente 2 a 5 comprobantes), apretás "Desgravar". Listo.
+- **Si cambia algo** en tus deducciones (te mudás, cambiás de prepaga, cargas de familia nuevas), lo actualizás en `/datos-personales` y se refleja en la próxima presentación.
+- **El cierre del F.572** (típicamente el 31 de marzo del año siguiente) es automático: el sistema te avisa antes y, si tenés todo cargado, no tenés que hacer nada más.
+
+## Probalo gratis
+
+Si estás leyendo esto en marzo, te queda hasta el 31 para presentar el F.572 del año fiscal anterior — desgrava.ar lo carga en una corrida.
+
+[Probá desgrava.ar 30 días sin tarjeta](/login). Conectás ARCA, importás tus comprobantes, y ves el resultado antes de pagar nada. Si después no te convence, no se cobra nada — y los datos los borrás cuando quieras desde `/configuracion`.
+
+Si querés tener una idea previa del orden de magnitud para tu caso, el [simulador](/simulador) te lo muestra en menos de un minuto sin pedir registro.

@@ -71,6 +71,14 @@ export function LandingFooter() {
               ))}
               <li>
                 <Link
+                  href="/blog"
+                  className="text-muted-foreground hover:text-foreground inline-flex min-h-[44px] items-center text-sm transition-colors"
+                >
+                  Blog
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/login"
                   className="text-muted-foreground hover:text-foreground inline-flex min-h-[44px] items-center text-sm transition-colors"
                 >
