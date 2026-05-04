@@ -46,7 +46,7 @@ export default function LandingPage() {
             <FadeIn delay={300}>
               <div className="flex flex-col justify-center gap-3 pt-2 sm:flex-row">
                 <Button size="lg" variant="outline" asChild>
-                  <a href="#simulador">Calculá tu ahorro</a>
+                  <Link href="/simulador">Calculá tu ahorro</Link>
                 </Button>
                 <Button size="lg" asChild>
                   <Link href="/login">
@@ -124,7 +124,7 @@ export default function LandingPage() {
           id="simulador"
           className="border-border flex min-h-screen flex-col justify-center border-t"
         >
-          <div className="mx-auto w-full max-w-5xl px-4 py-16 md:px-6 md:py-20">
+          <div className="mx-auto w-full max-w-6xl px-4 py-16 md:px-6 md:py-20">
             <FadeIn>
               <SimuladorEmbed />
             </FadeIn>

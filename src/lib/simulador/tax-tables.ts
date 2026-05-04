@@ -133,6 +133,11 @@ export const TAX_TABLES_2025 = {
 export type TaxPeriod = "2025";
 export const CURRENT_PERIOD: TaxPeriod = "2025";
 
+// User-facing fiscal year label. Decoupled from CURRENT_PERIOD because
+// ARCA tables for the new fiscal year ship months after the year begins —
+// we still want SEO/UI to reflect the current filing year.
+export const FISCAL_YEAR_DISPLAY = 2026;
+
 export function getTaxTables(period: TaxPeriod = CURRENT_PERIOD) {
   switch (period) {
     case "2025":
