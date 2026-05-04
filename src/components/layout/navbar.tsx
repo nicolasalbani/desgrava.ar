@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Sun, Moon, Monitor, LogIn, LayoutDashboard, BookOpen } from "lucide-react";
+import { Menu, Sun, Moon, Monitor, LogIn, LayoutDashboard } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
@@ -83,12 +83,6 @@ export function Navbar() {
                   {link.label}
                 </Link>
               ))}
-          <Link
-            href="/blog"
-            className="text-muted-foreground hover:text-foreground text-lg transition-colors"
-          >
-            Blog
-          </Link>
           <Button asChild size="lg">
             {session ? (
               <Link href="/panel">Ir al panel</Link>
@@ -179,14 +173,6 @@ export function Navbar() {
                         </Link>
                       );
                     })}
-                    <Link
-                      href="/blog"
-                      onClick={() => setOpen(false)}
-                      className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150"
-                    >
-                      <BookOpen className="h-4 w-4" />
-                      Blog
-                    </Link>
                   </nav>
                   <div className="border-border border-t p-3">
                     {session ? (
