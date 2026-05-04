@@ -1,9 +1,4 @@
-import Script from "next/script";
-
-interface FaqItem {
-  q: string;
-  a: string;
-}
+import { FaqAccordion, type FaqItem } from "./faq-accordion";
 
 const FAQS: FaqItem[] = [
   {
@@ -40,52 +35,13 @@ const FAQS: FaqItem[] = [
   },
 ];
 
-function FaqJsonLd() {
-  const data = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: FAQS.map((f) => ({
-      "@type": "Question",
-      name: f.q,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: f.a,
-      },
-    })),
-  };
-  return (
-    <Script
-      id="simulador-faq-jsonld"
-      type="application/ld+json"
-      strategy="afterInteractive"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
-    />
-  );
-}
-
 export function SimuladorFaq() {
   return (
     <section className="space-y-4">
       <h2 className="text-foreground text-2xl font-bold tracking-tight md:text-3xl">
         Preguntas frecuentes
       </h2>
-      <div className="border-border divide-border bg-card divide-y rounded-2xl border">
-        {FAQS.map((item, i) => (
-          <details key={i} className="group p-4 sm:p-5">
-            <summary className="text-foreground flex cursor-pointer list-none items-start justify-between gap-3 font-medium">
-              <span>{item.q}</span>
-              <span
-                aria-hidden="true"
-                className="text-muted-foreground shrink-0 text-xl leading-none transition-transform group-open:rotate-45"
-              >
-                +
-              </span>
-            </summary>
-            <p className="text-muted-foreground mt-3 text-sm leading-relaxed">{item.a}</p>
-          </details>
-        ))}
-      </div>
-      <FaqJsonLd />
+      <FaqAccordion items={FAQS} jsonLdId="simulador-faq-jsonld" />
     </section>
   );
 }
