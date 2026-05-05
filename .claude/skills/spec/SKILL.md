@@ -1,12 +1,12 @@
 ---
-name: write-spec
+name: spec
 description: Generate a well-structured feature spec grounded in the current project state. Reads the template, understands architecture, asks clarifying questions, and writes the spec file.
 argument-hint: <feature-description>
 ---
 
 # Spec Writer
 
-You are writing a feature spec for desgrava.ar. Your goal is to produce a clear, actionable spec that can be handed to `/new-feature` for implementation.
+You are writing a feature spec for desgrava.ar. Your goal is to produce a clear, actionable spec that can be handed to `/implement` for implementation.
 
 ## Input
 
@@ -96,4 +96,4 @@ Once the user confirms:
 
 1. Derive the filename from the title using kebab-case (e.g., "Bulk Edit Category" → `bulk-edit-category.md`).
 2. Write the spec to `specs/<filename>.md`.
-3. Report the file path so the user can reference it with `/new-feature specs/<filename>.md`.
+3. Report the file path so the user can reference it with `/implement specs/<filename>.md`.

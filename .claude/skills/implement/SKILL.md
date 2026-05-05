@@ -1,5 +1,5 @@
 ---
-name: new-feature
+name: implement
 description: Plan, implement, test, and document a new feature end-to-end. Follows the full agentic workflow — clarifying questions, implementation, tests, validation, and CLAUDE.md updates.
 argument-hint: <feature-description-or-spec-file>
 ---

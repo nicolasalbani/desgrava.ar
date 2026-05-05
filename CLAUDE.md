@@ -218,17 +218,17 @@ Cron workflows require `PROD_API_URL` and `CRON_SECRET` GitHub secrets.
 
 Custom skills in `.claude/skills/`:
 
-- `/new-feature <description>` — Full workflow: plan → implement → test → validate → document
+- `/implement <description>` — Full workflow: plan → implement → test → validate → document
 - `/fix-bug <description>` — Investigate → fix → regression test → validate
 - `/implement-loop <task>` — Autonomous loop: code until lint+format+build+test all pass (max 10 iterations). For ARCA/SiRADIG automation tasks, includes a live-testing loop: run job → check logs → observe with `agent-browser` → fix → retry.
 - `/arca-assisted-navigation <flow>` — Record a live ARCA/SiRADIG browsing session, then generate Playwright automation code, tests, and docs. Auto-triggers when working on automation tasks.
-- `/write-spec <description>` — Generate a feature spec grounded in the current project state. Reads `specs/_template.md`, understands architecture, asks clarifying questions, and writes to `specs/`. When the request mentions product, marketing, or pricing concepts (`onboarding`, `activation`, `retention`, `pricing`, `positioning`, `growth`, `acquisition`, `channel`, `PMF`, `landing`, `conversion`, etc.), the skill consults Lenny Rachitsky's MCP server (`https://mcp.lennysdata.com/mcp`, configured in `.mcp.json` as `lennys-data`) and cites Lenny-derived frameworks inline as `[Lenny: <framework>]`. The MCP is skipped for purely technical work and falls back gracefully on auth/network failure.
+- `/spec <description>` — Generate a feature spec grounded in the current project state. Reads `specs/_template.md`, understands architecture, asks clarifying questions, and writes to `specs/`. When the request mentions product, marketing, or pricing concepts (`onboarding`, `activation`, `retention`, `pricing`, `positioning`, `growth`, `acquisition`, `channel`, `PMF`, `landing`, `conversion`, etc.), the skill consults Lenny Rachitsky's MCP server (`https://mcp.lennysdata.com/mcp`, configured in `.mcp.json` as `lennys-data`) and cites Lenny-derived frameworks inline as `[Lenny: <framework>]`. The MCP is skipped for purely technical work and falls back gracefully on auth/network failure.
 - `/fix-ticket [--env dev|prod]` — Scheduled bug fix agent: fetches open support tickets, classifies bugs via AI, fixes them with `/fix-bug`, creates `fix/<ticket-id>` branches and PRs, updates ticket status to `IN_PROGRESS`, and emails the developer.
 - `/seo-audit` — Built-in skill (not in `.claude/skills/`). Audits the marketing site for technical SEO, on-page SEO, meta tags, Core Web Vitals, crawl/indexing issues, and ranking diagnostics. Use when asked to "audit SEO", "check SEO", "diagnose SEO issues", "improve rankings", or when investigating traffic/ranking drops on the landing page (`src/app/page.tsx` + `(public)` routes).
 
 ## Acceptance Criteria
 
-Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_template.md` as a starting point. Reference specs when using `/new-feature`: `/new-feature specs/my-feature.md`.
+Feature specs live in `specs/` as markdown with YAML frontmatter. Use `specs/_template.md` as a starting point. Reference specs when using `/implement`: `/implement specs/my-feature.md`.
 
 ## Environment Variables
 

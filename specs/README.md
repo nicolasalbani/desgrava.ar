@@ -35,7 +35,7 @@ What this feature explicitly does NOT include.
 ## Usage
 
 - Create a spec before starting work: `specs/my-feature.md`
-- Reference it when using `/new-feature`: `/new-feature specs/my-feature.md`
+- Reference it when using `/implement`: `/implement specs/my-feature.md`
 - The agent will read the spec and validate against the acceptance criteria
 - Mark status as `implemented` when done
 
