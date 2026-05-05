@@ -15,6 +15,7 @@ import { SupportChatButton } from "@/components/soporte/support-chat-button";
 import { GuidedOnboarding } from "@/components/onboarding/guided-onboarding";
 import { DashboardTour } from "@/components/onboarding/dashboard-tour";
 import { TourReplayButton } from "@/components/onboarding/tour-replay-button";
+import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import { cn } from "@/lib/utils";
 
 export function DashboardShell({
@@ -31,6 +32,7 @@ export function DashboardShell({
   const router = useRouter();
   const [onboardingCompleted, setOnboardingCompleted] = useState(initialOnboardingCompleted);
   const [showDashboard, setShowDashboard] = useState(initialOnboardingCompleted);
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar } = useSidebarCollapsed();
 
   function handleOnboardingComplete() {
     setOnboardingCompleted(true);
@@ -59,7 +61,7 @@ export function DashboardShell({
             >
               <ArcaProgressStrip />
               <div className="flex min-h-0 flex-1 overflow-hidden">
-                <DashboardSidebar />
+                <DashboardSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
                 <div className="flex flex-1 flex-col overflow-hidden">
                   <DashboardHeader />
                   <SubscriptionBanner />

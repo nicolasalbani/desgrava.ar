@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, User, KeyRound, FileText, Receipt, Send, Settings } from "lucide-react";
+import {
+  LayoutDashboard,
+  User,
+  KeyRound,
+  FileText,
+  Receipt,
+  Send,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AttentionBadge } from "@/components/shared/attention-badge";
@@ -28,7 +38,12 @@ const badgeHrefs: Record<string, string> = {
   "/recibos": "/recibos?filter=attention",
 };
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+export function DashboardSidebar({ collapsed, onToggle }: DashboardSidebarProps) {
   const pathname = usePathname();
   const { facturas, recibos, perfil } = useAttentionCounts();
   const { hasWorkers, loading: workersLoading } = useDomesticWorkerCount();
@@ -40,67 +55,124 @@ export function DashboardSidebar() {
     "/recibos": recibos,
   };
 
-  return (
-    <aside className="border-border bg-background hidden h-full w-64 flex-col border-r md:flex">
-      <div className="border-border flex h-16 items-center border-b px-6">
-        <Link href="/" className="flex items-center gap-2 text-lg font-bold">
-          <Image src="/logo.png" alt="desgrava.ar" width={40} height={40} />
-          desgrava.ar
-        </Link>
-      </div>
-      <ScrollArea className="flex-1 px-3 py-4">
-        <nav className="flex flex-col gap-0.5">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              pathname === item.href || (item.href !== "/panel" && pathname.startsWith(item.href));
-            const badgeCount = badgeCounts[item.href];
-            const isDisabledRecibos = item.href === "/recibos" && !workersLoading && !hasWorkers;
-            const isDisabledFacturas =
-              item.href === "/comprobantes" && !employersLoading && !hasEmployers;
-            const isDisabled = isDisabledRecibos || isDisabledFacturas;
-            const disabledTooltip = isDisabledRecibos
-              ? "Primero registrá trabajadores a cargo en Perfil impositivo"
-              : "Primero importá tu perfil impositivo con al menos un empleador";
+  const toggleButton = (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={collapsed ? "Expandir barra lateral" : "Contraer barra lateral"}
+      className={cn(
+        "hover:bg-muted text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-md transition-colors",
+        "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
+      )}
+    >
+      {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+    </button>
+  );
 
-            if (isDisabled) {
-              return (
-                <TooltipProvider key={item.href}>
-                  <Tooltip>
+  return (
+    <TooltipProvider delayDuration={150}>
+      <aside
+        className={cn(
+          "border-border bg-background hidden h-full flex-col border-r transition-[width] duration-200 ease-in-out md:flex",
+          collapsed ? "w-16" : "w-64",
+        )}
+      >
+        <div
+          className={cn(
+            "border-border flex h-16 items-center border-b",
+            collapsed ? "justify-center px-2" : "justify-between px-4",
+          )}
+        >
+          {!collapsed && (
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-lg font-bold"
+              aria-label="desgrava.ar"
+            >
+              <Image src="/logo.png" alt="desgrava.ar" width={32} height={32} />
+              <span>desgrava.ar</span>
+            </Link>
+          )}
+          {toggleButton}
+        </div>
+        <ScrollArea className={cn("flex-1 py-4", collapsed ? "px-2" : "px-3")}>
+          <nav className="flex flex-col gap-0.5">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/panel" && pathname.startsWith(item.href));
+              const badgeCount = badgeCounts[item.href];
+              const isDisabledRecibos = item.href === "/recibos" && !workersLoading && !hasWorkers;
+              const isDisabledFacturas =
+                item.href === "/comprobantes" && !employersLoading && !hasEmployers;
+              const isDisabled = isDisabledRecibos || isDisabledFacturas;
+              const disabledTooltip = isDisabledRecibos
+                ? "Primero registrá trabajadores a cargo en Perfil impositivo"
+                : "Primero importá tu perfil impositivo con al menos un empleador";
+
+              if (isDisabled) {
+                return (
+                  <Tooltip key={item.href}>
                     <TooltipTrigger asChild>
-                      <span className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm opacity-50">
+                      <span
+                        className={cn(
+                          "flex cursor-not-allowed items-center rounded-lg text-sm opacity-50",
+                          collapsed ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5",
+                        )}
+                      >
                         <Icon className="h-4 w-4" />
-                        {item.label}
+                        {!collapsed && item.label}
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="right">{disabledTooltip}</TooltipContent>
                   </Tooltip>
-                </TooltipProvider>
-              );
-            }
+                );
+              }
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                data-tour={item.href === "/presentaciones" ? "nav-presentaciones" : undefined}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150",
-                  isActive
-                    ? "bg-primary text-primary-foreground font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-                {badgeCount > 0 && (
-                  <AttentionBadge count={badgeCount} href={badgeHrefs[item.href]} />
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-      </ScrollArea>
-    </aside>
+              const linkContent = (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  data-tour={item.href === "/presentaciones" ? "nav-presentaciones" : undefined}
+                  aria-label={collapsed ? item.label : undefined}
+                  className={cn(
+                    "relative flex items-center rounded-lg text-sm transition-colors duration-150",
+                    collapsed ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5",
+                    isActive
+                      ? "bg-primary text-primary-foreground font-medium"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {!collapsed && item.label}
+                  {badgeCount > 0 &&
+                    (collapsed ? (
+                      <AttentionBadge
+                        count={badgeCount}
+                        href={badgeHrefs[item.href]}
+                        variant="compact"
+                      />
+                    ) : (
+                      <AttentionBadge count={badgeCount} href={badgeHrefs[item.href]} />
+                    ))}
+                </Link>
+              );
+
+              if (collapsed) {
+                return (
+                  <Tooltip key={item.href}>
+                    <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+                    <TooltipContent side="right">{item.label}</TooltipContent>
+                  </Tooltip>
+                );
+              }
+
+              return linkContent;
+            })}
+          </nav>
+        </ScrollArea>
+      </aside>
+    </TooltipProvider>
   );
 }

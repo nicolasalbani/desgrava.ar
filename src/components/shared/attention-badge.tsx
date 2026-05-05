@@ -7,9 +7,10 @@ interface AttentionBadgeProps {
   count: number;
   href: string;
   onClick?: () => void;
+  variant?: "inline" | "compact";
 }
 
-export function AttentionBadge({ count, href, onClick }: AttentionBadgeProps) {
+export function AttentionBadge({ count, href, onClick, variant = "inline" }: AttentionBadgeProps) {
   const router = useRouter();
 
   if (count === 0) return null;
@@ -33,9 +34,12 @@ export function AttentionBadge({ count, href, onClick }: AttentionBadgeProps) {
         }
       }}
       className={cn(
-        "ml-auto flex h-5 min-w-5 cursor-pointer items-center justify-center rounded-full px-1.5",
-        "bg-red-500 text-[11px] leading-none font-semibold text-white",
+        "flex cursor-pointer items-center justify-center rounded-full",
+        "bg-red-500 leading-none font-semibold text-white",
         "animate-in fade-in zoom-in-75 transition-all duration-300",
+        variant === "inline" && "ml-auto h-5 min-w-5 px-1.5 text-[11px]",
+        variant === "compact" &&
+          "ring-background absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] ring-2",
       )}
     >
       {count > 99 ? "99+" : count}
