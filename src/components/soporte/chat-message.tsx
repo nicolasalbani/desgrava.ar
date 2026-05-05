@@ -2,7 +2,8 @@
 
 import { cn } from "@/lib/utils";
 import type { SupportEvent } from "@/lib/soporte/types";
-import { MessageCircle, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
+import { GanancioAvatar } from "./ganancio-avatar";
 
 /** Render simple markdown: **bold**, *italic*, `code`, bullet lists, and line breaks. */
 function renderMarkdown(text: string) {
@@ -80,15 +81,11 @@ export function ChatMessage({ role, content, events }: ChatMessageProps) {
 
   return (
     <div className={cn("flex gap-2", isUser ? "justify-end" : "justify-start")}>
-      {!isUser && (
-        <div className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-full">
-          <MessageCircle className="size-3.5" />
-        </div>
-      )}
-      <div className="flex max-w-[85%] flex-col gap-2">
+      {!isUser && <GanancioAvatar size="sm" />}
+      <div className="flex max-w-[85%] min-w-0 flex-col gap-2">
         <div
           className={cn(
-            "rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+            "rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed [overflow-wrap:anywhere]",
             isUser
               ? "bg-primary text-primary-foreground rounded-br-md"
               : "bg-muted text-foreground rounded-bl-md",

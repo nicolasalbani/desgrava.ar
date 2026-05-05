@@ -46,6 +46,23 @@ describe("SUPPORT_SYSTEM_PROMPT", () => {
     expect(SUPPORT_SYSTEM_PROMPT).toContain("español");
   });
 
+  it("should identify the assistant as Ganancio", () => {
+    expect(SUPPORT_SYSTEM_PROMPT).toContain("Ganancio");
+  });
+
+  it("should instruct the AI on duplicate tickets per conversation", () => {
+    expect(SUPPORT_SYSTEM_PROMPT.toLowerCase()).toContain("nueva conversación");
+    expect(SUPPORT_SYSTEM_PROMPT).toMatch(/un ticket por conversación/i);
+  });
+
+  it("should forbid recommending an accountant and route escalation to WhatsApp", () => {
+    // Must explicitly tell the model not to recommend an accountant
+    expect(SUPPORT_SYSTEM_PROMPT).toMatch(/nunca.*(contador|contable|asesor)/i);
+    // The fallback escalation must be WhatsApp via offer_whatsapp
+    expect(SUPPORT_SYSTEM_PROMPT).toContain("offer_whatsapp");
+    expect(SUPPORT_SYSTEM_PROMPT.toLowerCase()).toContain("whatsapp");
+  });
+
   it("should mention all major app features", () => {
     const features = [
       "Simulador",

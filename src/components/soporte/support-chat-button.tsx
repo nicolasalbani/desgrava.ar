@@ -4,13 +4,15 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MessageCircleQuestion } from "lucide-react";
 import { SupportChatPanel } from "./support-chat-panel";
+import { useConversation } from "@/hooks/use-conversation";
 
 export function SupportChatButton() {
   const [open, setOpen] = useState(false);
+  const conversation = useConversation(open);
 
   return (
     <>
-      <SupportChatPanel open={open} onClose={() => setOpen(false)} />
+      <SupportChatPanel open={open} onClose={() => setOpen(false)} conversation={conversation} />
       {!open && (
         <Button
           onClick={() => setOpen(true)}

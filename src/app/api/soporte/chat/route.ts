@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { sendNewTicketEmail } from "@/lib/email";
 import OpenAI from "openai";
 import { SUPPORT_SYSTEM_PROMPT, SUPPORT_TOOLS, JOB_TYPE_LABELS } from "@/lib/soporte/system-prompt";
+import { generateConversationTitle, shouldGenerateTitle } from "@/lib/soporte/conversation-title";
+import type { ChatMessage, SupportEvent } from "@/lib/soporte/types";
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -14,10 +16,7 @@ function getOpenAI(): OpenAI {
   return _openai;
 }
 
-interface IncomingMessage {
-  role: "user" | "assistant";
-  content: string;
-}
+const MAX_HISTORY_TURNS = 40;
 
 function formatJobForAI(job: {
   id: string;
@@ -70,7 +69,6 @@ function formatJobForAI(job: {
   };
 }
 
-/** Validate that an automation job ID exists and belongs to the user. Returns the ID if valid, null otherwise. */
 async function resolveAutomationJobId(
   jobId: string | undefined | null,
   userId: string,
@@ -96,15 +94,37 @@ async function handleToolCall(
   userId: string,
   userEmail: string,
   pageUrl: string | null,
-  messages: IncomingMessage[],
+  conversationId: string,
   events: ToolEvent[],
-  existingTicketId: string | undefined,
 ): Promise<OpenAI.ChatCompletionToolMessageParam | null> {
   if (toolCall.type !== "function") return null;
   const args = JSON.parse(toolCall.function.arguments);
 
   if (toolCall.function.name === "create_ticket") {
+    const existingTicket = await prisma.supportTicket.findUnique({
+      where: { conversationId },
+      select: { id: true },
+    });
+    if (existingTicket) {
+      return {
+        role: "tool",
+        tool_call_id: toolCall.id,
+        content: JSON.stringify({
+          success: false,
+          message:
+            "Ya existe un ticket para esta conversación. Iniciá una nueva conversación si querés reportar otro problema.",
+          existingTicketId: existingTicket.id,
+        }),
+      };
+    }
+
     const automationJobId = await resolveAutomationJobId(args.automation_job_id, userId);
+
+    const conversation = await prisma.supportConversation.findUnique({
+      where: { id: conversationId },
+      select: { messages: true },
+    });
+    const messagesForLog = (conversation?.messages as unknown as ChatMessage[]) ?? [];
 
     const ticket = await prisma.supportTicket.create({
       data: {
@@ -112,8 +132,9 @@ async function handleToolCall(
         subject: args.subject,
         description: args.description,
         pageUrl,
-        conversationLog: JSON.parse(JSON.stringify(messages)),
+        conversationLog: JSON.parse(JSON.stringify(messagesForLog)),
         automationJobId,
+        conversationId,
       },
     });
 
@@ -146,7 +167,14 @@ async function handleToolCall(
   if (toolCall.function.name === "offer_whatsapp") {
     const whatsappNumber = process.env.SUPPORT_WHATSAPP || "";
     const ticketEvent = events.find((e) => e.type === "ticket_created");
-    const resolvedTicketId = ticketEvent?.ticketId || existingTicketId;
+    let resolvedTicketId = ticketEvent?.ticketId;
+    if (!resolvedTicketId) {
+      const existingTicket = await prisma.supportTicket.findUnique({
+        where: { conversationId },
+        select: { id: true },
+      });
+      resolvedTicketId = existingTicket?.id;
+    }
     let whatsappText = `Hola, necesito ayuda con desgrava.ar.\n\n${args.summary}`;
     if (resolvedTicketId) {
       whatsappText += `\n\nTicket: ${resolvedTicketId}`;
@@ -205,6 +233,22 @@ async function handleToolCall(
   return null;
 }
 
+function toEvents(toolEvents: ToolEvent[]): SupportEvent[] {
+  const events: SupportEvent[] = [];
+  for (const e of toolEvents) {
+    if (e.type === "ticket_created" && e.ticketId && e.subject) {
+      events.push({ type: "ticket_created", ticketId: e.ticketId, subject: e.subject });
+    } else if (e.type === "whatsapp_offer" && e.summary) {
+      events.push({
+        type: "whatsapp_offer",
+        whatsappUrl: e.whatsappUrl ?? "",
+        summary: e.summary,
+      });
+    }
+  }
+  return events;
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -213,30 +257,73 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const {
-    messages,
+    message,
+    conversationId: incomingConversationId,
     pageUrl,
-    ticketId: existingTicketId,
   } = body as {
-    messages: IncomingMessage[];
+    message?: string;
+    conversationId?: string;
     pageUrl?: string;
-    ticketId?: string;
   };
 
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    return new Response("messages is required", { status: 400 });
+  if (typeof message !== "string" || message.trim().length === 0) {
+    return new Response("message is required", { status: 400 });
   }
 
   const userId = session.user.id;
   const userEmail = session.user.email ?? "unknown";
   const resolvedPageUrl = pageUrl || null;
 
+  // Load or create the conversation
+  let conversation: {
+    id: string;
+    title: string | null;
+    messages: ChatMessage[];
+  };
+
+  if (incomingConversationId) {
+    const existing = await prisma.supportConversation.findFirst({
+      where: { id: incomingConversationId, userId },
+      select: { id: true, title: true, messages: true },
+    });
+    if (!existing) {
+      return new Response("Conversación no encontrada", { status: 404 });
+    }
+    conversation = {
+      id: existing.id,
+      title: existing.title,
+      messages: (existing.messages as unknown as ChatMessage[]) ?? [],
+    };
+  } else {
+    const created = await prisma.supportConversation.create({
+      data: {
+        userId,
+        pageUrl: resolvedPageUrl,
+        messages: [],
+      },
+      select: { id: true, title: true, messages: true },
+    });
+    conversation = {
+      id: created.id,
+      title: created.title,
+      messages: [],
+    };
+  }
+
+  const userMessage: ChatMessage = { role: "user", content: message };
+  const historyWithUser = [...conversation.messages, userMessage];
+  const trimmedForModel = historyWithUser.slice(-MAX_HISTORY_TURNS);
+
   const openaiMessages: OpenAI.ChatCompletionMessageParam[] = [
     { role: "system", content: SUPPORT_SYSTEM_PROMPT },
-    ...messages.map((m) => ({
+    ...trimmedForModel.map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     })),
   ];
+
+  const toolEvents: ToolEvent[] = [];
+  let assistantContent = "";
 
   // First call — may trigger tool use
   const response = await getOpenAI().chat.completions.create({
@@ -252,10 +339,8 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "No response from AI" }, { status: 500 });
   }
 
-  // Handle tool calls
   const toolCalls = choice.message.tool_calls;
   if (toolCalls && toolCalls.length > 0) {
-    const events: ToolEvent[] = [];
     const toolResults: OpenAI.ChatCompletionMessageParam[] = [
       choice.message as OpenAI.ChatCompletionMessageParam,
     ];
@@ -266,14 +351,12 @@ export async function POST(req: NextRequest) {
         userId,
         userEmail,
         resolvedPageUrl,
-        messages,
-        events,
-        existingTicketId,
+        conversation.id,
+        toolEvents,
       );
       if (result) toolResults.push(result);
     }
 
-    // Second call — get the AI's response after tool execution
     const followUp = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
       messages: [...openaiMessages, ...toolResults],
@@ -282,7 +365,6 @@ export async function POST(req: NextRequest) {
       max_tokens: 1000,
     });
 
-    // Handle second-round tool calls (e.g. create_ticket after lookup)
     const followUpChoice = followUp.choices[0];
     const followUpToolCalls = followUpChoice?.message?.tool_calls;
 
@@ -297,14 +379,12 @@ export async function POST(req: NextRequest) {
           userId,
           userEmail,
           resolvedPageUrl,
-          messages,
-          events,
-          existingTicketId,
+          conversation.id,
+          toolEvents,
         );
         if (result) secondToolResults.push(result);
       }
 
-      // Third call — final response after second-round tools
       const thirdResponse = await getOpenAI().chat.completions.create({
         model: "gpt-4o-mini",
         messages: [...openaiMessages, ...toolResults, ...secondToolResults],
@@ -312,23 +392,42 @@ export async function POST(req: NextRequest) {
         max_tokens: 1000,
       });
 
-      return Response.json({
-        content: thirdResponse.choices[0]?.message?.content ?? "Lo siento, ocurrió un error.",
-        events,
-      });
+      assistantContent =
+        thirdResponse.choices[0]?.message?.content ?? "Lo siento, ocurrió un error.";
+    } else {
+      assistantContent = followUpChoice?.message?.content ?? "Lo siento, ocurrió un error.";
     }
-
-    const followUpContent = followUpChoice?.message?.content ?? "Lo siento, ocurrió un error.";
-
-    return Response.json({
-      content: followUpContent,
-      events,
-    });
+  } else {
+    assistantContent = choice.message.content ?? "Lo siento, ocurrió un error.";
   }
 
-  // No tool calls — just return the text response
+  const events = toEvents(toolEvents);
+  const assistantMessage: ChatMessage = {
+    role: "assistant",
+    content: assistantContent,
+    ...(events.length > 0 ? { events } : {}),
+  };
+
+  const updatedMessages = [...historyWithUser, assistantMessage];
+
+  await prisma.supportConversation.update({
+    where: { id: conversation.id },
+    data: {
+      messages: JSON.parse(JSON.stringify(updatedMessages)),
+      lastMessageAt: new Date(),
+      ...(resolvedPageUrl ? { pageUrl: resolvedPageUrl } : {}),
+    },
+  });
+
+  if (shouldGenerateTitle(updatedMessages.length, conversation.title)) {
+    generateConversationTitle(conversation.id, updatedMessages, getOpenAI()).catch((err) =>
+      console.error("Failed to generate conversation title:", err),
+    );
+  }
+
   return Response.json({
-    content: choice.message.content ?? "Lo siento, ocurrió un error.",
-    events: [],
+    conversationId: conversation.id,
+    content: assistantContent,
+    events,
   });
 }

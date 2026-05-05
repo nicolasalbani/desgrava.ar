@@ -1,6 +1,7 @@
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  events?: SupportEvent[];
 }
 
 export interface TicketCreatedEvent {
@@ -16,3 +17,12 @@ export interface WhatsAppOfferEvent {
 }
 
 export type SupportEvent = TicketCreatedEvent | WhatsAppOfferEvent;
+
+export interface ConversationSummary {
+  id: string;
+  title: string | null;
+  preview: string | null;
+  lastMessageAt: string;
+  createdAt: string;
+  hasTicket: boolean;
+}

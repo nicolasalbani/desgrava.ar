@@ -36,9 +36,10 @@ model User {
   personalData     PersonalData[]
   domesticWorkers  DomesticWorker[]
   domesticReceipts DomesticReceipt[]
-  presentaciones   Presentacion[]
-  subscription     Subscription?
-  supportTickets   SupportTicket[]
+  presentaciones        Presentacion[]
+  subscription          Subscription?
+  supportTickets        SupportTicket[]
+  supportConversations  SupportConversation[]
 }
 
 model Account {
@@ -555,6 +556,7 @@ model SupportTicket {
   id              String              @id @default(cuid())
   userId          String
   automationJobId String?
+  conversationId  String?             @unique
   status          SupportTicketStatus @default(OPEN)
   subject         String
   description     String              @db.Text
@@ -564,10 +566,27 @@ model SupportTicket {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  automationJob AutomationJob?  @relation(fields: [automationJobId], references: [id], onDelete: SetNull)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  automationJob AutomationJob?       @relation(fields: [automationJobId], references: [id], onDelete: SetNull)
+  conversation  SupportConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
+}
+
+model SupportConversation {
+  id            String   @id @default(cuid())
+  userId        String
+  title         String?
+  pageUrl       String?
+  messages      Json     @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastMessageAt DateTime @default(now())
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket SupportTicket?
+
+  @@index([userId, lastMessageAt])
 }
 
 enum SupportTicketStatus {
