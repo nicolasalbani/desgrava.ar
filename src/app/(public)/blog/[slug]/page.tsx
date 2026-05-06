@@ -114,7 +114,17 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       <section>
         <div className="mx-auto w-full max-w-3xl px-4 py-10 md:px-6 md:py-14">
           <article className="prose prose-neutral dark:prose-invert max-w-none">
-            <MDXRemote source={content} components={mdxComponents} />
+            <MDXRemote
+              source={content}
+              components={mdxComponents}
+              // next-mdx-remote v6 strips ALL JS expressions by default
+              // (`blockJS: true`), which removes innocuous JSX expression
+              // attributes like `ahorroAnualAproximado={1100000}`. Blog content
+              // lives in this repo (not user-generated), so allowing JS
+              // expressions is safe. `blockDangerousJS` (still default true)
+              // keeps the strip for calls like `process.exit()`.
+              options={{ blockJS: false }}
+            />
           </article>
           <BlogPostCta />
         </div>
