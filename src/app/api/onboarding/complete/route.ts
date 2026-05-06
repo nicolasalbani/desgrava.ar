@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { processJob } from "@/lib/automation/job-processor";
+import { publishJob } from "@/lib/queue/redis-queue";
 
 export async function POST() {
   const session = await getServerSession(authOptions);
@@ -52,9 +52,9 @@ export async function POST() {
         });
 
         try {
-          await processJob(job.id);
+          await publishJob(job.id);
         } catch (err) {
-          console.error(`Post-onboarding ${jobType} error:`, err);
+          console.error(`Post-onboarding ${jobType} enqueue error:`, err);
         }
       }
 

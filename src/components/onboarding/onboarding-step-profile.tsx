@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useJobStatus } from "@/hooks/use-job-status";
 
 import {
   Dialog,
@@ -87,20 +88,16 @@ export function OnboardingStepProfile({
   onComplete,
 }: Props) {
   const [jobId, setJobId] = useState<string | null>(pullProfileJobId);
-  const [currentStep, setCurrentStep] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string>("PENDING");
   const [summary, setSummary] = useState<ProfileSummary | null>(null);
   const [retrying, setRetrying] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   // Employer registration state
   const [phase, setPhase] = useState<Phase>("pulling");
   const [employerDialogOpen, setEmployerDialogOpen] = useState(false);
   const [skipDialogOpen, setSkipDialogOpen] = useState(false);
   const [pushJobId, setPushJobId] = useState<string | null>(activePushEmployersJobId);
-  const [pushStep, setPushStep] = useState<string | null>(null);
   const [pushStatus, setPushStatus] = useState<string | null>(null);
-  const pushEventSourceRef = useRef<EventSource | null>(null);
   const [savedEmployerId, setSavedEmployerId] = useState<string | null>(null);
 
   const { invalidate: invalidateEmployerCount } = useEmployerCount();
@@ -131,67 +128,25 @@ export function OnboardingStepProfile({
     }
   }, []);
 
-  const connectToSSE = useCallback(
-    (id: string) => {
-      eventSourceRef.current?.close();
-      const es = new EventSource(`/api/automatizacion/${id}/logs`);
-      eventSourceRef.current = es;
-
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.step) setCurrentStep(data.step);
-          if (data.done) {
-            es.close();
-            eventSourceRef.current = null;
-            if (data.status === "COMPLETED") {
-              fetchSummary().then(() => setJobStatus("COMPLETED"));
-            } else {
-              setJobStatus("FAILED");
-            }
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        eventSourceRef.current = null;
+  const pullJobState = useJobStatus(jobId, {
+    onTerminal: ({ status }) => {
+      if (status === "COMPLETED") {
+        fetchSummary().then(() => setJobStatus("COMPLETED"));
+      } else {
         setJobStatus("FAILED");
-      };
+      }
     },
-    [fetchSummary],
-  );
+  });
+  const currentStep = pullJobState.currentStep;
 
-  // ── Connect to pull profile job ──
+  // Auto-resolve when there's no jobId to track (nothing to pull).
   useEffect(() => {
-    if (jobId) {
-      fetch(`/api/automatizacion/${jobId}`)
-        .then((r) => r.json())
-        .then(async (data) => {
-          if (data.job?.status === "COMPLETED") {
-            await fetchSummary();
-            setJobStatus("COMPLETED");
-          } else if (data.job?.status === "FAILED") {
-            setJobStatus("FAILED");
-          } else {
-            setJobStatus("RUNNING");
-            if (data.job?.currentStep) setCurrentStep(data.job.currentStep);
-            connectToSSE(jobId);
-          }
-        })
-        .catch(() => {
-          setJobStatus("RUNNING");
-          connectToSSE(jobId);
-        });
-    } else {
+    if (!jobId) {
       fetchSummary().then(() => setJobStatus("COMPLETED"));
+      return;
     }
-    return () => {
-      eventSourceRef.current?.close();
-    };
-  }, [jobId, connectToSSE, fetchSummary]);
+    setJobStatus("RUNNING");
+  }, [jobId, fetchSummary]);
 
   // ── Determine phase after profile pull completes ──
   useEffect(() => {
@@ -210,77 +165,32 @@ export function OnboardingStepProfile({
     }
   }, [jobStatus, summary, onComplete, pushJobId]);
 
-  // ── Push job SSE ──
-  const connectToPushSSE = useCallback(
-    (id: string) => {
-      pushEventSourceRef.current?.close();
-      const es = new EventSource(`/api/automatizacion/${id}/logs`);
-      pushEventSourceRef.current = es;
-
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.step) setPushStep(data.step);
-          if (data.done) {
-            es.close();
-            pushEventSourceRef.current = null;
-            if (data.status === "COMPLETED") {
-              setPushStatus("COMPLETED");
-              invalidateEmployerCount();
-              setTimeout(() => onComplete(), 1500);
-            } else {
-              setPushStatus("FAILED");
-            }
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        pushEventSourceRef.current = null;
+  // ── Track push job via polling ──
+  const pushJobState = useJobStatus(phase === "pushing" ? pushJobId : null, {
+    onTerminal: ({ status }) => {
+      if (status === "COMPLETED") {
+        setPushStatus("COMPLETED");
+        invalidateEmployerCount();
+        setTimeout(() => onComplete(), 1500);
+      } else {
         setPushStatus("FAILED");
-      };
+      }
     },
-    [onComplete, invalidateEmployerCount],
-  );
+  });
+  const pushStep = pushJobState.currentStep;
 
-  // ── Connect to push job (initial or resume) ──
   useEffect(() => {
-    if (phase !== "pushing" || !pushJobId) return;
-
-    fetch(`/api/automatizacion/${pushJobId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.job?.status === "COMPLETED") {
-          setPushStatus("COMPLETED");
-          invalidateEmployerCount();
-          setTimeout(() => onComplete(), 1500);
-        } else if (data.job?.status === "FAILED") {
-          setPushStatus("FAILED");
-        } else {
-          setPushStatus("RUNNING");
-          if (data.job?.currentStep) setPushStep(data.job.currentStep);
-          connectToPushSSE(pushJobId);
-        }
-      })
-      .catch(() => {
-        setPushStatus("RUNNING");
-        connectToPushSSE(pushJobId);
-      });
-
-    return () => {
-      pushEventSourceRef.current?.close();
-    };
-  }, [phase, pushJobId, connectToPushSSE, onComplete, invalidateEmployerCount]);
+    if (phase === "pushing" && pushJobId && pushStatus === null) {
+      setPushStatus("RUNNING");
+    }
+  }, [phase, pushJobId, pushStatus]);
 
   // ── Handlers ──
 
   async function handleRetry() {
     setRetrying(true);
     setJobStatus("PENDING");
-    setCurrentStep(null);
+    setJobId(null);
     setSummary(null);
     setPhase("pulling");
     try {
@@ -306,7 +216,7 @@ export function OnboardingStepProfile({
   async function handlePushEmployer(employerId: string) {
     setPhase("pushing");
     setPushStatus("RUNNING");
-    setPushStep(null);
+    setPushJobId(null);
 
     try {
       const res = await fetch("/api/automatizacion", {
@@ -324,7 +234,6 @@ export function OnboardingStepProfile({
       }
       const { job } = await res.json();
       setPushJobId(job.id);
-      connectToPushSSE(job.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error al enviar empleador a SiRADIG";
       toast.error(msg);
@@ -335,7 +244,7 @@ export function OnboardingStepProfile({
   async function handleRetryPush() {
     if (!savedEmployerId) return;
     setPushStatus(null);
-    setPushStep(null);
+    setPushJobId(null);
     await handlePushEmployer(savedEmployerId);
   }
 

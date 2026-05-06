@@ -6,6 +6,7 @@ import { updateInvoiceSchema } from "@/lib/validators/invoice";
 import { Prisma } from "@/generated/prisma/client";
 import { matchDependent, buildInvoiceText } from "@/lib/matching/dependent-matcher";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
+import { deleteFile } from "@/lib/storage/supabase-storage";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -111,7 +112,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const existing = await prisma.invoice.findFirst({
     where: { id, userId: session.user.id },
-    select: { id: true },
+    select: { id: true, fileStorageKey: true },
   });
 
   if (!existing) {
@@ -121,6 +122,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // Delete linked automation jobs first, then the invoice
   await prisma.automationJob.deleteMany({ where: { invoiceId: id } });
   await prisma.invoice.delete({ where: { id } });
+
+  // Best-effort: drop the underlying Storage object too. `deleteFile`
+  // swallows errors internally, so a transient Supabase failure can't roll
+  // back the row delete the user already saw succeed.
+  if (existing.fileStorageKey) {
+    void deleteFile(existing.fileStorageKey);
+  }
 
   return NextResponse.json({ success: true });
 }

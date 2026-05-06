@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { processJob } from "@/lib/automation/job-processor";
+import { publishJob } from "@/lib/queue/redis-queue";
+import { verifyCronAuth } from "@/lib/cron-auth";
 
-export async function POST(req: NextRequest) {
-  const cronSecret = req.headers.get("x-cron-secret");
-  if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+async function handle(): Promise<NextResponse> {
   const today = new Date().getDate();
 
   // Find users with auto-submit enabled and matching day
@@ -55,19 +50,27 @@ export async function POST(req: NextRequest) {
     jobs.push(job);
   }
 
-  // Process all jobs in background
-  after(async () => {
-    for (const job of jobs) {
-      try {
-        await processJob(job.id);
-      } catch (err) {
-        console.error(`Cron job processing error for job ${job.id}:`, err);
-      }
-    }
-  });
+  // Enqueue every job for the worker pool to consume.
+  for (const job of jobs) {
+    await publishJob(job.id);
+  }
 
   return NextResponse.json({
     message: `Created ${jobs.length} presentación jobs`,
     count: jobs.length,
   });
+}
+
+export async function POST(req: NextRequest) {
+  if (!verifyCronAuth(req)) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  return handle();
+}
+
+export async function GET(req: NextRequest) {
+  if (!verifyCronAuth(req)) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  return handle();
 }

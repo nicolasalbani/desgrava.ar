@@ -10,6 +10,7 @@ import {
   DEDUCTION_CATEGORY_LABELS as CATEGORY_LABELS,
   INVOICE_TYPE_LABELS,
 } from "@/lib/validators/invoice";
+import { buildStorageKey, inferExtension, uploadFile } from "@/lib/storage/supabase-storage";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
@@ -528,8 +529,10 @@ export async function processInboundEmail(
             : "FACTURA_B"
         ) as InvoiceType;
 
-        // Create the invoice
-        await prisma.invoice.create({
+        // Create the invoice. The file is uploaded to Storage after the row
+        // exists so we can key it by the new invoice id.
+        const originalFilename = attachment.filename || `email-attachment-${emailId}`;
+        const createdInvoice = await prisma.invoice.create({
           data: {
             userId: user.id,
             deductionCategory: category,
@@ -544,11 +547,27 @@ export async function processInboundEmail(
             description,
             source: "EMAIL",
             ocrConfidence: ocrResult.fields.confidence,
-            originalFilename: attachment.filename || `email-attachment-${emailId}`,
-            fileData: Buffer.from(buffer),
-            fileMimeType: attachment.contentType,
+            originalFilename,
           },
         });
+
+        try {
+          const ext = inferExtension(originalFilename, attachment.contentType ?? null);
+          const storageKey = buildStorageKey(user.id, createdInvoice.id, ext);
+          await uploadFile(
+            storageKey,
+            Buffer.from(buffer),
+            attachment.contentType ?? "application/octet-stream",
+          );
+          await prisma.invoice.update({
+            where: { id: createdInvoice.id },
+            data: { fileStorageKey: storageKey },
+          });
+        } catch (err) {
+          // Email-ingest is fire-and-forget; we don't bubble upload errors
+          // up to the caller. The invoice row stays without an attachment.
+          console.error(`[email-ingest] storage upload failed for ${emailId}:`, err);
+        }
 
         result.invoicesCreated++;
         result.createdInvoices.push({

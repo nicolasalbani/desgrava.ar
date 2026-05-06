@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { processJob } from "@/lib/automation/job-processor";
+import { publishJob } from "@/lib/queue/redis-queue";
 import { isCreditNoteType } from "@/lib/automation/deduction-mapper";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 import { isFiscalYearReadOnly } from "@/lib/fiscal-year";
@@ -69,13 +68,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
-        }
-      });
+      await publishJob(job.id);
 
       return NextResponse.json({ job }, { status: 201 });
     }
@@ -95,13 +88,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
-        }
-      });
+      await publishJob(job.id);
 
       return NextResponse.json({ job }, { status: 201 });
     }
@@ -149,13 +136,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
-        }
-      });
+      await publishJob(job.id);
 
       return NextResponse.json({ job }, { status: 201 });
     }
@@ -175,13 +156,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
-        }
-      });
+      await publishJob(job.id);
 
       return NextResponse.json({ job }, { status: 201 });
     }
@@ -201,13 +176,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
-        }
-      });
+      await publishJob(job.id);
 
       return NextResponse.json({ job }, { status: 201 });
     }
@@ -253,13 +222,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
-        }
-      });
+      await publishJob(job.id);
 
       return NextResponse.json({ job }, { status: 201 });
     }
@@ -294,13 +257,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
-        }
-      });
+      await publishJob(job.id);
 
       return NextResponse.json({ job }, { status: 201 });
     }
@@ -334,13 +291,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
-        }
-      });
+      await publishJob(job.id);
 
       return NextResponse.json({ job }, { status: 201 });
     }
@@ -375,13 +326,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      after(async () => {
-        try {
-          await processJob(job.id);
-        } catch (err) {
-          console.error("Job processing error:", err);
-        }
-      });
+      await publishJob(job.id);
 
       return NextResponse.json({ job }, { status: 201 });
     }
@@ -452,16 +397,9 @@ export async function POST(req: NextRequest) {
         data: { siradiqStatus: "QUEUED" },
       });
 
-      const jobIds = jobs.map((j) => j.id);
-      after(async () => {
-        for (const jobId of jobIds) {
-          try {
-            await processJob(jobId);
-          } catch (err) {
-            console.error("Job processing error:", err);
-          }
-        }
-      });
+      for (const j of jobs) {
+        await publishJob(j.id);
+      }
 
       return NextResponse.json({ jobs }, { status: 201 });
     }
@@ -551,16 +489,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Run in background after response is sent.
-    // processJob uses prismaDirectClient (direct PG, not Accelerate)
-    // so it won't hit P6000 connection errors.
-    after(async () => {
-      try {
-        await processJob(job.id);
-      } catch (err) {
-        console.error("Job processing error:", err);
-      }
-    });
+    await publishJob(job.id);
 
     return NextResponse.json({ job }, { status: 201 });
   } catch (error) {

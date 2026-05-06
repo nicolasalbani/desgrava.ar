@@ -45,6 +45,19 @@ export async function getContext(userId: string): Promise<BrowserContext> {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   });
 
+  // tsx/esbuild rewrites named function expressions to call `__name(fn, "name")`
+  // so the function preserves its `.name` property at runtime. When such a
+  // function is shipped to `page.evaluate`, the browser context has no
+  // `__name` and throws ReferenceError. Provide a no-op shim. Harmless under
+  // any other compiler.
+  await context.addInitScript(() => {
+    type Globalish = { __name?: <T>(target: T) => T };
+    const g = globalThis as Globalish;
+    if (typeof g.__name !== "function") {
+      g.__name = (target) => target;
+    }
+  });
+
   context.setDefaultTimeout(BROWSER_TIMEOUT);
   contextMap.set(userId, context);
 

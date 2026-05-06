@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Eye, EyeOff, KeyRound, Lock, Check } from "lucide-react";
 import { formatCuit, validateCuit } from "@/lib/validators/cuit";
 import { toast } from "sonner";
+import { useJobStatus } from "@/hooks/use-job-status";
 
 const formSchema = z.object({
   cuit: z
@@ -35,6 +36,16 @@ interface Props {
   onComplete: (pullProfileJobId: string | null) => void;
 }
 
+// Once any of these steps is reached, ARCA login + SiRADIG are done and we can
+// advance to the next onboarding step in parallel with the rest of the import.
+const PROFILE_READY_STEPS = new Set([
+  "datos_personales",
+  "empleadores",
+  "cargas_familia",
+  "casas_particulares",
+  "done",
+]);
+
 export function OnboardingStepCredentials({ hasCredentials, onComplete }: Props) {
   const [saving, setSaving] = useState(false);
   const [showClave, setShowClave] = useState(false);
@@ -42,72 +53,41 @@ export function OnboardingStepCredentials({ hasCredentials, onComplete }: Props)
   const [connectingPhase, setConnectingPhase] = useState<"login" | "siradig" | "ready" | null>(
     null,
   );
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const pendingJobId = useRef<string | null>(null);
+  const [pendingJobId, setPendingJobId] = useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: { cuit: "", clave: "" },
   });
 
-  // Connect to SSE and wait for datos_personales step before advancing
-  const waitForProfileReady = useCallback(
-    (jobId: string) => {
-      pendingJobId.current = jobId;
-      setConnectingPhase("login");
-
-      const es = new EventSource(`/api/automatizacion/${jobId}/logs`);
-      eventSourceRef.current = es;
-
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.step === "login") setConnectingPhase("login");
-          if (data.step === "siradig") setConnectingPhase("siradig");
-
-          // Once we reach datos_personales (or beyond), login+SiRADIG are done
-          if (
-            data.step === "datos_personales" ||
-            data.step === "empleadores" ||
-            data.step === "cargas_familia" ||
-            data.step === "casas_particulares" ||
-            data.step === "done"
-          ) {
-            es.close();
-            eventSourceRef.current = null;
-            setConnectingPhase("ready");
-            onComplete(jobId);
-            return;
-          }
-
-          // If job completes/fails before reaching datos_personales, advance anyway
-          if (data.done) {
-            es.close();
-            eventSourceRef.current = null;
-            setConnectingPhase("ready");
-            onComplete(jobId);
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        eventSourceRef.current = null;
-        // On SSE error, advance anyway to not block the user
-        onComplete(jobId);
-      };
+  const { currentStep } = useJobStatus(pendingJobId, {
+    onTerminal: () => {
+      // Job finished before we observed datos_personales — advance anyway.
+      if (pendingJobId && connectingPhase !== "ready") {
+        setConnectingPhase("ready");
+        onComplete(pendingJobId);
+        setPendingJobId(null);
+      }
     },
-    [onComplete],
-  );
+  });
 
   useEffect(() => {
-    return () => {
-      eventSourceRef.current?.close();
-    };
-  }, []);
+    if (!pendingJobId || !currentStep || connectingPhase === "ready") return;
+    if (currentStep === "siradig") {
+      setConnectingPhase("siradig");
+      return;
+    }
+    if (PROFILE_READY_STEPS.has(currentStep)) {
+      setConnectingPhase("ready");
+      onComplete(pendingJobId);
+      setPendingJobId(null);
+    }
+  }, [currentStep, pendingJobId, connectingPhase, onComplete]);
+
+  function waitForProfileReady(jobId: string) {
+    setPendingJobId(jobId);
+    setConnectingPhase("login");
+  }
 
   // If user already has credentials, skip to validation
   if (hasCredentials) {

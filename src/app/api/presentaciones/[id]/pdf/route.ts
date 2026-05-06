@@ -1,7 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSignedUrl } from "@/lib/storage/supabase-storage";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -13,19 +14,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const presentacion = await prisma.presentacion.findFirst({
     where: { id, userId: session.user.id },
-    select: { fileData: true, fileMimeType: true, originalFilename: true },
+    select: { fileStorageKey: true },
   });
 
-  if (!presentacion || !presentacion.fileData) {
+  if (!presentacion?.fileStorageKey) {
     return new Response("Archivo no encontrado", { status: 404 });
   }
 
-  const filename = presentacion.originalFilename ?? `presentacion-${id}.pdf`;
-
-  return new Response(presentacion.fileData, {
-    headers: {
-      "Content-Type": presentacion.fileMimeType ?? "application/pdf",
-      "Content-Disposition": `inline; filename="${filename}"`,
-    },
-  });
+  const signedUrl = await getSignedUrl(presentacion.fileStorageKey, 60);
+  return NextResponse.redirect(signedUrl, 302);
 }

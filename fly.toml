@@ -1,32 +1,27 @@
+# Fly.io config — runs the desgrava.ar worker pool.
+#
+# The Vercel-hosted Next.js app publishes jobs to Redis. Fly machines run
+# `worker/index.ts`, BRPOPing the queue and dispatching to `processJob`. There
+# is no public HTTP port; health is process-level (Fly's restart policy
+# auto-restarts a crashed worker, and the Redis user-lock TTL keeps a stuck
+# worker from blocking other workers).
+#
+# CI builds the worker image once on every push to `main` and pushes it to
+# GHCR (see `.github/workflows/deploy-worker.yml`). Fly is then deployed with
+# `flyctl deploy --image ghcr.io/<owner>/desgrava-worker:<sha>` so the same
+# artifact runs on Fly and on any self-hosted box.
+#
+# A local `fly deploy` (no flags) falls back to building from `worker/Dockerfile`
+# directly via Fly's remote builder.
+
 app = "desgrava-ar"
 primary_region = "gru"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "worker/Dockerfile"
 
-[env]
-  PORT = "3000"
-  HOSTNAME = "0.0.0.0"
-
-[http_service]
-  internal_port = 3000
-  force_https = true
-  auto_stop_machines = "stop"
-  auto_start_machines = true
-  min_machines_running = 1
-
-  [http_service.concurrency]
-    type = "requests"
-    hard_limit = 250
-    soft_limit = 200
-
-  [[http_service.checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "10s"
-    method = "GET"
-    path = "/api/health"
-
+# Pull-based queue ⇒ no inbound HTTP traffic. Always-on, no auto-stop.
+# `min_machines_running` keeps at least one worker draining the queue.
 [[vm]]
   size = "shared-cpu-2x"
   memory = "2gb"

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createDomesticReceiptSchema } from "@/lib/validators/domestic";
 import { Prisma } from "@/generated/prisma/client";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
+import { buildStorageKey, inferExtension, uploadFile } from "@/lib/storage/supabase-storage";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -130,7 +131,7 @@ export async function GET(req: NextRequest) {
           source: true,
           siradiqStatus: true,
           originalFilename: true,
-          fileMimeType: true,
+          fileStorageKey: true,
           createdAt: true,
           domesticWorker: {
             select: { id: true, apellidoNombre: true, cuil: true },
@@ -171,7 +172,7 @@ export async function GET(req: NextRequest) {
     const { automationJobs, ...rest } = r;
     return {
       ...rest,
-      hasFile: !!r.fileMimeType,
+      hasFile: !!r.fileStorageKey,
       latestJob: automationJobs[0] ?? null,
     };
   });
@@ -227,7 +228,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const receipt = await prisma.domesticReceipt.create({
+    const filePayload = fileBase64
+      ? {
+          buffer: Buffer.from(fileBase64, "base64"),
+          mimeType: (fileMimeType as string | undefined) || "application/octet-stream",
+          originalFilename: (originalFilename as string | null | undefined) ?? null,
+        }
+      : null;
+
+    let receipt = await prisma.domesticReceipt.create({
       data: {
         userId: session.user.id,
         domesticWorkerId: parsed.data.domesticWorkerId || null,
@@ -250,16 +259,24 @@ export async function POST(req: NextRequest) {
           ? new Prisma.Decimal(parsed.data.contributionAmount)
           : null,
         contributionDate: parsed.data.contributionDate,
-        source: fileBase64 ? "PDF" : "MANUAL",
-        ...(fileBase64
-          ? {
-              fileData: Buffer.from(fileBase64, "base64"),
-              fileMimeType: fileMimeType || "application/octet-stream",
-              originalFilename: originalFilename || null,
-            }
-          : {}),
+        source: filePayload ? "PDF" : "MANUAL",
       },
     });
+
+    if (filePayload) {
+      const ext = inferExtension(filePayload.originalFilename, filePayload.mimeType);
+      const storageKey = buildStorageKey(session.user.id, receipt.id, ext);
+      try {
+        await uploadFile(storageKey, filePayload.buffer, filePayload.mimeType);
+      } catch (err) {
+        await prisma.domesticReceipt.delete({ where: { id: receipt.id } }).catch(() => {});
+        throw err;
+      }
+      receipt = await prisma.domesticReceipt.update({
+        where: { id: receipt.id },
+        data: { fileStorageKey: storageKey, originalFilename: filePayload.originalFilename },
+      });
+    }
 
     return NextResponse.json({ receipt }, { status: 201 });
   } catch (error) {

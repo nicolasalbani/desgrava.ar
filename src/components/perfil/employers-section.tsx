@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useJobStatus } from "@/hooks/use-job-status";
 import { z } from "zod";
 import {
   Loader2,
@@ -315,18 +316,36 @@ export function EmployersSection({
   const [exportResults, setExportResults] = useState<
     Map<string, { status: "success" | "failed"; error?: string }>
   >(new Map());
-  const [exportStep, setExportStep] = useState<string | null>(null);
-
-  const exportEventSourceRef = useRef<EventSource | null>(null);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
 
   const isExporting = exportingId !== null;
 
-  // Cleanup SSE on unmount
-  useEffect(() => {
-    return () => {
-      exportEventSourceRef.current?.close();
-    };
-  }, []);
+  const exportJobState = useJobStatus(exportJobId, {
+    onTerminal: ({ status, errorMessage }) => {
+      const empId = exportingId;
+      setExportingId(null);
+      setExportJobId(null);
+      if (!empId) return;
+
+      if (status === "COMPLETED") {
+        setExportResults((prev) => {
+          const next = new Map(prev);
+          next.set(empId, { status: "success" });
+          return next;
+        });
+        toast.success("Empleador exportado a SiRADIG");
+      } else {
+        const error = errorMessage ?? "Error al exportar";
+        setExportResults((prev) => {
+          const next = new Map(prev);
+          next.set(empId, { status: "failed", error });
+          return next;
+        });
+        toast.error("Error al exportar empleador");
+      }
+    },
+  });
+  const exportStep = exportJobState.currentStep;
 
   // ── Data loading ──
   useEffect(() => {
@@ -345,58 +364,6 @@ export function EmployersSection({
       .then((r) => r.json())
       .then((d) => setEmployers(d.employers ?? []));
   }, [refreshKey, fiscalYear]);
-
-  // ── SSE for export ──
-  const connectToExportJobSSE = useCallback((jobId: string, empId: string) => {
-    exportEventSourceRef.current?.close();
-
-    const es = new EventSource(`/api/automatizacion/${jobId}/logs`);
-    exportEventSourceRef.current = es;
-
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.step) setExportStep(data.step);
-
-        if (data.done) {
-          es.close();
-          exportEventSourceRef.current = null;
-          setExportingId(null);
-          setExportStep(null);
-
-          if (data.status === "COMPLETED") {
-            setExportResults((prev) => {
-              const next = new Map(prev);
-              next.set(empId, { status: "success" });
-              return next;
-            });
-            toast.success("Empleador exportado a SiRADIG");
-          } else {
-            setExportResults((prev) => {
-              const next = new Map(prev);
-              next.set(empId, {
-                status: "failed",
-                error: data.errorMessage || "Error al exportar",
-              });
-              return next;
-            });
-            toast.error("Error al exportar empleador");
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    };
-
-    es.onerror = () => {
-      es.close();
-      exportEventSourceRef.current = null;
-      setExportingId(null);
-      setExportStep(null);
-      toast.error("Se perdió la conexión con el servidor");
-    };
-  }, []);
 
   // ── CRUD handlers ──
   function openAdd() {
@@ -440,7 +407,7 @@ export function EmployersSection({
   const handleExport = useCallback(
     async (empId: string) => {
       setExportingId(empId);
-      setExportStep(null);
+      setExportJobId(null);
       setExportResults((prev) => {
         const next = new Map(prev);
         next.delete(empId);
@@ -464,7 +431,7 @@ export function EmployersSection({
         }
 
         const { job } = await res.json();
-        connectToExportJobSSE(job.id, empId);
+        setExportJobId(job.id);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Error al exportar";
         toast.error(errorMsg);
@@ -476,7 +443,7 @@ export function EmployersSection({
         });
       }
     },
-    [fiscalYear, connectToExportJobSSE],
+    [fiscalYear],
   );
 
   // ── Render ──

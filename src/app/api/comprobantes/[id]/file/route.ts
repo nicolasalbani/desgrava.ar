@@ -1,7 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSignedUrl } from "@/lib/storage/supabase-storage";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -13,19 +14,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const invoice = await prisma.invoice.findFirst({
     where: { id, userId: session.user.id },
-    select: { fileData: true, fileMimeType: true, originalFilename: true },
+    select: { fileStorageKey: true },
   });
 
-  if (!invoice || !invoice.fileData) {
+  if (!invoice?.fileStorageKey) {
     return new Response("Archivo no encontrado", { status: 404 });
   }
 
-  const filename = invoice.originalFilename ?? `factura-${id}`;
-
-  return new Response(invoice.fileData, {
-    headers: {
-      "Content-Type": invoice.fileMimeType ?? "application/octet-stream",
-      "Content-Disposition": `inline; filename="${filename}"`,
-    },
-  });
+  // Signed URLs are valid for 60s. Bandwidth bypasses Vercel.
+  const signedUrl = await getSignedUrl(invoice.fileStorageKey, 60);
+  return NextResponse.redirect(signedUrl, 302);
 }

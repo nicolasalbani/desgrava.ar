@@ -27,7 +27,6 @@ interface PresentacionRow {
   montoTotal: string | null;
   source: string;
   siradiqStatus: string;
-  fileMimeType: string | null;
   originalFilename: string | null;
   hasFile: boolean;
   createdAt: string;

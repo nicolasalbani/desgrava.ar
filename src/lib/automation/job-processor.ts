@@ -45,6 +45,7 @@ import { parseComprobantesCSV, mapComprobantesToInvoices, invoiceDedupeKey } fro
 import { isCreditNoteType } from "./deduction-mapper";
 import { ARCA_SELECTORS } from "./selectors";
 import { resolveCategory } from "@/lib/catalog/provider-catalog";
+import { buildStorageKey, inferExtension, uploadFile } from "@/lib/storage/supabase-storage";
 
 export type LogCallback = (jobId: string, message: string) => void;
 
@@ -56,59 +57,32 @@ async function jqValAndTrigger(page: Page, selector: string, value: string): Pro
   await page.evaluate(`jQuery("${selector}").val("${value}").trigger("change")`);
 }
 
-// In-memory log storage for SSE streaming
-const jobLogs = new Map<string, string[]>();
-const jobStatuses = new Map<string, string>();
-const jobSteps = new Map<string, string>();
-export function getJobLogs(jobId: string): string[] {
-  return jobLogs.get(jobId) ?? [];
-}
-
-export function getJobStatus(jobId: string): string | undefined {
-  return jobStatuses.get(jobId);
-}
-
-export function getJobStep(jobId: string): string | undefined {
-  return jobSteps.get(jobId);
-}
-
-export function clearJobLogs(jobId: string): void {
-  jobLogs.delete(jobId);
-  jobStatuses.delete(jobId);
-  jobSteps.delete(jobId);
-}
-
-function setJobStatus(jobId: string, status: string) {
-  jobStatuses.set(jobId, status);
-  if (status === "COMPLETED") {
-    jobSteps.set(jobId, "done");
-  }
-}
-
 async function appendLog(jobId: string, message: string, onLog?: LogCallback) {
   const timestamp = new Date().toLocaleTimeString("es-AR");
   const entry = `[${timestamp}] ${message}`;
 
-  const logs = jobLogs.get(jobId) ?? [];
-  logs.push(entry);
-  jobLogs.set(jobId, logs);
-
   console.log(`[job:${jobId.slice(0, 8)}] ${message}`);
   onLog?.(jobId, entry);
 
-  // Also persist to DB
+  // Read-modify-write the JSON column. The DB is the source of truth for logs;
+  // there's no in-memory cache anymore so the worker pool can be sharded across
+  // hosts without losing log lines.
+  const existingRow = await prisma.automationJob.findUnique({
+    where: { id: jobId },
+    select: { logs: true },
+  });
+  const existing = Array.isArray(existingRow?.logs) ? (existingRow.logs as string[]) : [];
+  existing.push(entry);
+
   await prisma.automationJob.update({
     where: { id: jobId },
-    data: {
-      logs: logs,
-    },
+    data: { logs: existing },
   });
 }
 
 async function appendStep(jobId: string, stepKey: string, _onLog?: LogCallback) {
-  jobSteps.set(jobId, stepKey);
-  // Persist to DB. `currentStepStartedAt` is updated alongside `currentStep` so
-  // the progress strip can compute in-flight partial-step weight from wall clock.
+  // `currentStepStartedAt` is updated alongside `currentStep` so the progress
+  // strip can compute in-flight partial-step weight from wall clock.
   await prisma.automationJob.update({
     where: { id: jobId },
     data: { currentStep: stepKey, currentStepStartedAt: new Date() },
@@ -190,7 +164,6 @@ async function processPullFamilyDependents(
   );
 
   if (!navResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
@@ -204,7 +177,6 @@ async function processPullFamilyDependents(
   );
 
   if (!cfNavResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: cfNavResult.error, completedAt: new Date() },
@@ -218,7 +190,6 @@ async function processPullFamilyDependents(
   );
 
   if (!extractResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: extractResult.error, completedAt: new Date() },
@@ -237,7 +208,6 @@ async function processPullFamilyDependents(
   const summary = `Importacion completada: ${created} creadas, ${updated} actualizadas`;
   await appendLogFn(jobId, summary, onLog);
 
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -271,7 +241,6 @@ async function processPushFamilyDependents(
   // Load the specific dependent to export
   if (!job.familyDependentId) {
     await appendLogFn(jobId, "Falta el ID de la carga de familia", onLog);
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -289,7 +258,6 @@ async function processPushFamilyDependents(
 
   if (!dependent) {
     await appendLogFn(jobId, "Carga de familia no encontrada", onLog);
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -314,7 +282,6 @@ async function processPushFamilyDependents(
   );
 
   if (!navResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
@@ -328,7 +295,6 @@ async function processPushFamilyDependents(
   );
 
   if (!cfNavResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: cfNavResult.error, completedAt: new Date() },
@@ -371,7 +337,6 @@ async function processPushFamilyDependents(
   );
 
   if (!pushResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -391,7 +356,6 @@ async function processPushFamilyDependents(
 
   // If some dependents failed but the job itself didn't crash, still mark as COMPLETED
   // but include the failure details in resultData for the UI to show
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -420,7 +384,6 @@ async function processPullPersonalData(
   );
 
   if (!navResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
@@ -499,7 +462,6 @@ async function processPullPersonalData(
 
   // Mark job complete
   await appendStep(jobId, "done", onLog);
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -529,7 +491,6 @@ async function processPullEmployers(
   );
 
   if (!navResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
@@ -640,7 +601,6 @@ async function processPullEmployers(
   const summary = `Importacion completada: ${created} creados, ${updated} actualizados (${agenteCount} agente${agenteCount !== 1 ? "s" : ""} de retencion)`;
   await appendLogFn(jobId, summary, onLog);
 
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -666,7 +626,6 @@ async function processPushEmployers(
 ): Promise<void> {
   if (!job.employerId) {
     await appendLogFn(jobId, "Falta el ID del empleador", onLog);
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -681,7 +640,6 @@ async function processPushEmployers(
   const employer = await prisma.employer.findUnique({ where: { id: job.employerId } });
   if (!employer) {
     await appendLogFn(jobId, "Empleador no encontrado", onLog);
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -701,7 +659,6 @@ async function processPushEmployers(
   );
 
   if (!navResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
@@ -816,7 +773,6 @@ async function processPushEmployers(
   if (errorEl) {
     const errorText = (await errorEl.textContent())?.trim() ?? "Error desconocido";
     await appendLogFn(jobId, `Error al guardar: ${errorText}`, onLog);
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: errorText, completedAt: new Date() },
@@ -827,7 +783,6 @@ async function processPushEmployers(
   const action = isNewEmployer ? "creado" : "actualizado";
   await appendLogFn(jobId, `Empleador ${action} exitosamente`, onLog);
 
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -917,7 +872,6 @@ async function processPullDomesticWorkers(
     onLog,
   );
 
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -954,7 +908,6 @@ async function processPullProfile(
   );
 
   if (!navResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -1293,7 +1246,6 @@ async function processPullProfile(
     await appendLogFn(jobId, summary, onLog);
   }
 
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -1333,7 +1285,6 @@ async function processPullDomesticReceipts(
       "No hay trabajadores registrados para este año fiscal. Importa trabajadores primero desde Perfil Impositivo.",
       onLog,
     );
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -1446,19 +1397,19 @@ async function processPullDomesticReceipts(
     };
 
     if (r.pdfBuffer) {
-      receiptData.fileData = Buffer.from(r.pdfBuffer);
-      receiptData.fileMimeType = "application/pdf";
       receiptData.originalFilename = r.pdfFilename;
     }
 
+    let receiptId: string;
     if (existing) {
       await prisma.domesticReceipt.update({
         where: { id: existing.id },
         data: receiptData,
       });
+      receiptId = existing.id;
       receiptsUpdated++;
     } else {
-      await prisma.domesticReceipt.create({
+      const created = await prisma.domesticReceipt.create({
         data: {
           userId: job.userId,
           domesticWorkerId,
@@ -1467,7 +1418,29 @@ async function processPullDomesticReceipts(
           ...receiptData,
         },
       });
+      receiptId = created.id;
       receiptsCreated++;
+    }
+
+    if (r.pdfBuffer) {
+      const ext = inferExtension(r.pdfFilename, "application/pdf");
+      const storageKey = buildStorageKey(job.userId, receiptId, ext);
+      try {
+        await uploadFile(storageKey, Buffer.from(r.pdfBuffer), "application/pdf");
+        await prisma.domesticReceipt.update({
+          where: { id: receiptId },
+          data: { fileStorageKey: storageKey },
+        });
+      } catch (err) {
+        // Best-effort: row stays valid, just without the PDF attachment.
+        await appendLogFn(
+          jobId,
+          `Error subiendo PDF del recibo ${r.fiscalMonth}/${r.fiscalYear}: ${
+            err instanceof Error ? err.message : "error desconocido"
+          }`,
+          onLog,
+        );
+      }
     }
   }
 
@@ -1477,7 +1450,6 @@ async function processPullDomesticReceipts(
     onLog,
   );
 
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -1509,7 +1481,6 @@ async function processPullComprobantes(
   );
 
   if (!result.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: result.error, completedAt: new Date() },
@@ -1522,7 +1493,6 @@ async function processPullComprobantes(
 
   if (!result.csvContent || result.csvContent.trim() === "") {
     await appendLogFn(jobId, "No se encontraron comprobantes para importar", onLog);
-    setJobStatus(jobId, "COMPLETED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -1543,7 +1513,6 @@ async function processPullComprobantes(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error procesando CSV";
     await appendLogFn(jobId, `Error al parsear CSV: ${msg}`, onLog);
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: msg, completedAt: new Date() },
@@ -1744,7 +1713,6 @@ async function processPullComprobantes(
   const summary = `Importacion completada: ${imported} importadas, ${skipped} duplicadas, ${errors} errores de ${comprobantes.length} total. ${totalDeducible} deducibles en total.`;
   await appendLogFn(jobId, summary, onLog);
 
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -1791,7 +1759,6 @@ async function runSiradigExtractionPhase(
   if (!siradigPage) {
     const error = "No se pudo abrir SiRADIG";
     await appendLogFn(jobId, error, onLog);
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: error, completedAt: new Date() },
@@ -1808,7 +1775,6 @@ async function runSiradigExtractionPhase(
     if (!navResult.success) {
       const error = `No se pudo navegar a deducciones en SiRADIG: ${navResult.error}`;
       await appendLogFn(jobId, error, onLog);
-      setJobStatus(jobId, "FAILED");
       await prisma.automationJob.update({
         where: { id: jobId },
         data: { status: "FAILED", errorMessage: error, completedAt: new Date() },
@@ -2464,7 +2430,6 @@ async function processSubmitDomesticDeduction(
   );
 
   if (!navResult.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
@@ -2497,7 +2462,6 @@ async function processSubmitDomesticDeduction(
 
   if (workersWithReceipts.length === 0) {
     await appendLogFn(jobId, "No hay recibos pendientes para desgravar", onLog);
-    setJobStatus(jobId, "COMPLETED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "COMPLETED", completedAt: new Date() },
@@ -2619,7 +2583,6 @@ async function processSubmitDomesticDeduction(
   );
 
   const finalStatus = totalFailed > 0 && totalSubmitted === 0 ? "FAILED" : "COMPLETED";
-  setJobStatus(jobId, finalStatus);
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -2648,7 +2611,6 @@ async function processPullPresentaciones(
   );
 
   if (!result.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: result.error, completedAt: new Date() },
@@ -2674,8 +2636,6 @@ async function processPullPresentaciones(
       },
     });
 
-    const pdfData = p.pdfBuffer ? new Uint8Array(p.pdfBuffer) : null;
-
     // Extract monto total from PDF if available
     let montoTotal: string | null = null;
     if (p.pdfBuffer) {
@@ -2689,6 +2649,8 @@ async function processPullPresentaciones(
       }
     }
 
+    const originalFilename = p.pdfBuffer ? `presentacion-${fiscalYear}-${p.numero}.pdf` : null;
+    let presentacionId: string;
     if (existing) {
       await prisma.presentacion.update({
         where: { id: existing.id },
@@ -2699,18 +2661,13 @@ async function processPullPresentaciones(
           source: "ARCA_IMPORT",
           siradiqStatus: "SUBMITTED",
           ...(montoTotal ? { montoTotal: new Prisma.Decimal(montoTotal) } : {}),
-          ...(pdfData
-            ? {
-                fileData: pdfData,
-                fileMimeType: "application/pdf",
-                originalFilename: `presentacion-${fiscalYear}-${p.numero}.pdf`,
-              }
-            : {}),
+          ...(originalFilename ? { originalFilename } : {}),
         },
       });
+      presentacionId = existing.id;
       updated++;
     } else {
-      await prisma.presentacion.create({
+      const createdRow = await prisma.presentacion.create({
         data: {
           userId: job.userId,
           fiscalYear,
@@ -2721,16 +2678,31 @@ async function processPullPresentaciones(
           source: "ARCA_IMPORT",
           siradiqStatus: "SUBMITTED",
           ...(montoTotal ? { montoTotal: new Prisma.Decimal(montoTotal) } : {}),
-          ...(pdfData
-            ? {
-                fileData: pdfData,
-                fileMimeType: "application/pdf",
-                originalFilename: `presentacion-${fiscalYear}-${p.numero}.pdf`,
-              }
-            : {}),
+          ...(originalFilename ? { originalFilename } : {}),
         },
       });
+      presentacionId = createdRow.id;
       created++;
+    }
+
+    if (p.pdfBuffer) {
+      const ext = inferExtension(originalFilename, "application/pdf");
+      const storageKey = buildStorageKey(job.userId, presentacionId, ext);
+      try {
+        await uploadFile(storageKey, Buffer.from(p.pdfBuffer), "application/pdf");
+        await prisma.presentacion.update({
+          where: { id: presentacionId },
+          data: { fileStorageKey: storageKey },
+        });
+      } catch (err) {
+        await appendLogFn(
+          jobId,
+          `Error subiendo PDF de presentacion ${p.numero}: ${
+            err instanceof Error ? err.message : "error desconocido"
+          }`,
+          onLog,
+        );
+      }
     }
   }
 
@@ -2740,7 +2712,6 @@ async function processPullPresentaciones(
     onLog,
   );
 
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: {
@@ -2768,7 +2739,6 @@ async function processSubmitPresentacion(
   );
 
   if (!result.success) {
-    setJobStatus(jobId, "FAILED");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: { status: "FAILED", errorMessage: result.error, completedAt: new Date() },
@@ -2780,7 +2750,7 @@ async function processSubmitPresentacion(
   const numero = result.numero ?? (await getNextPresentacionNumero(job.userId, fiscalYear));
   const descripcion =
     result.descripcion ?? (numero === 1 ? "Original" : `Rectificativa ${numero - 1}`);
-  const submitPdfData = result.pdfBuffer ? new Uint8Array(result.pdfBuffer) : null;
+  const originalFilename = result.pdfBuffer ? `presentacion-${fiscalYear}-${numero}.pdf` : null;
 
   const presentacion = await prisma.presentacion.create({
     data: {
@@ -2791,15 +2761,29 @@ async function processSubmitPresentacion(
       fechaEnvio: new Date(),
       source: "AUTOMATION",
       siradiqStatus: "SUBMITTED",
-      ...(submitPdfData
-        ? {
-            fileData: submitPdfData,
-            fileMimeType: "application/pdf",
-            originalFilename: `presentacion-${fiscalYear}-${numero}.pdf`,
-          }
-        : {}),
+      ...(originalFilename ? { originalFilename } : {}),
     },
   });
+
+  if (result.pdfBuffer) {
+    const ext = inferExtension(originalFilename, "application/pdf");
+    const storageKey = buildStorageKey(job.userId, presentacion.id, ext);
+    try {
+      await uploadFile(storageKey, Buffer.from(result.pdfBuffer), "application/pdf");
+      await prisma.presentacion.update({
+        where: { id: presentacion.id },
+        data: { fileStorageKey: storageKey },
+      });
+    } catch (err) {
+      await appendLogFn(
+        jobId,
+        `Error subiendo PDF de presentacion: ${
+          err instanceof Error ? err.message : "error desconocido"
+        }`,
+        onLog,
+      );
+    }
+  }
 
   // Link the automation job to the presentacion
   await prisma.automationJob.update({
@@ -2827,7 +2811,6 @@ async function processSubmitPresentacion(
 
   await appendLogFn(jobId, `Presentacion ${numero} (${descripcion}) enviada exitosamente`, onLog);
 
-  setJobStatus(jobId, "COMPLETED");
   await prisma.automationJob.update({
     where: { id: jobId },
     data: { status: "COMPLETED", completedAt: new Date() },
@@ -2891,7 +2874,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
 
     if (!job) throw new Error("Job no encontrado");
     if (!job.user.arcaCredential) {
-      setJobStatus(jobId, "FAILED");
       await prisma.automationJob.update({
         where: { id: jobId },
         data: { status: "FAILED", errorMessage: "No hay credenciales ARCA configuradas" },
@@ -2903,7 +2885,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
     const userId = job.userId;
 
     // Update status
-    setJobStatus(jobId, "RUNNING");
     await prisma.automationJob.update({
       where: { id: jobId },
       data: {
@@ -2934,7 +2915,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         );
 
         if (!loginResult.success) {
-          setJobStatus(jobId, "FAILED");
           await prisma.automationJob.update({
             where: { id: jobId },
             data: {
@@ -2980,7 +2960,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
                 where: { id: jobId },
                 data: { status: "RUNNING", errorMessage: null, completedAt: null },
               });
-              setJobStatus(jobId, "RUNNING");
             }
           }
 
@@ -3020,7 +2999,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
               where: { id: jobId },
               data: { status: "RUNNING", errorMessage: null, completedAt: null },
             });
-            setJobStatus(jobId, "RUNNING");
           }
 
           // Phase 2: Import receipts from ARCA
@@ -3034,7 +3012,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
         const siradigPage = await navigateToSiradig(page, (msg) => appendLog(jobId, msg, onLog));
 
         if (!siradigPage) {
-          setJobStatus(jobId, "FAILED");
           await prisma.automationJob.update({
             where: { id: jobId },
             data: {
@@ -3100,7 +3077,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             (msg) => appendLog(jobId, msg, onLog),
           );
           if (!navResult.success) {
-            setJobStatus(jobId, "FAILED");
             await prisma.automationJob.update({
               where: { id: jobId },
               data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
@@ -3121,7 +3097,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             (msg) => appendLog(jobId, msg, onLog),
           );
           if (!navResult.success) {
-            setJobStatus(jobId, "FAILED");
             await prisma.automationJob.update({
               where: { id: jobId },
               data: { status: "FAILED", errorMessage: navResult.error, completedAt: new Date() },
@@ -3142,7 +3117,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             const msg =
               "Las notas de crédito no se pueden enviar a SiRADIG como deducciones independientes";
             await appendLog(jobId, msg, onLog);
-            setJobStatus(jobId, "FAILED");
             await prisma.automationJob.update({
               where: { id: jobId },
               data: { status: "FAILED", errorMessage: msg, completedAt: new Date() },
@@ -3156,7 +3130,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           );
 
           if (!navResult.success) {
-            setJobStatus(jobId, "FAILED");
             await prisma.automationJob.update({
               where: { id: jobId },
               data: {
@@ -3197,7 +3170,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
           );
 
           if (!fillResult.success) {
-            setJobStatus(jobId, "FAILED");
             await prisma.automationJob.update({
               where: { id: jobId },
               data: {
@@ -3214,7 +3186,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
             appendLog(jobId, msg, onLog),
           );
 
-          setJobStatus(jobId, submitResult.success ? "COMPLETED" : "FAILED");
           await prisma.automationJob.update({
             where: { id: jobId },
             data: {
@@ -3242,7 +3213,6 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Error desconocido";
       await appendLog(jobId, `Error: ${msg}`, onLog);
-      setJobStatus(jobId, "FAILED");
       await prisma.automationJob.update({
         where: { id: jobId },
         data: {
@@ -3255,8 +3225,11 @@ export async function processJob(jobId: string, onLog?: LogCallback): Promise<vo
       // On failure, release context immediately (session may be corrupted).
       // On success, keep context alive for a while so the next job can reuse
       // the ARCA session without re-authenticating (saves ~15s per job).
-      const finalStatus = getJobStatus(jobId);
-      if (finalStatus === "FAILED") {
+      const finalRow = await prisma.automationJob.findUnique({
+        where: { id: jobId },
+        select: { status: true },
+      });
+      if (finalRow?.status === "FAILED") {
         await releaseContext(userId);
       } else {
         scheduleContextRelease(userId);

@@ -60,7 +60,6 @@ interface ReceiptRow {
   source: string;
   siradiqStatus: string;
   originalFilename: string | null;
-  fileMimeType: string | null;
   hasFile: boolean;
   createdAt: string;
   domesticWorker: {

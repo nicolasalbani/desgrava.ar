@@ -6,6 +6,12 @@ import { createInvoiceSchema } from "@/lib/validators/invoice";
 import { Prisma } from "@/generated/prisma/client";
 import { matchDependent, buildInvoiceText } from "@/lib/matching/dependent-matcher";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
+import {
+  buildStorageKey,
+  deleteFile,
+  inferExtension,
+  uploadFile,
+} from "@/lib/storage/supabase-storage";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -137,7 +143,7 @@ export async function GET(req: NextRequest) {
           source: true,
           siradiqStatus: true,
           originalFilename: true,
-          fileMimeType: true,
+          fileStorageKey: true,
           contractStartDate: true,
           contractEndDate: true,
           familyDependentId: true,
@@ -181,7 +187,7 @@ export async function GET(req: NextRequest) {
     const { automationJobs, ...rest } = inv;
     return {
       ...rest,
-      hasFile: !!inv.fileMimeType,
+      hasFile: !!inv.fileStorageKey,
       latestJob: automationJobs[0] ?? null,
     };
   });
@@ -264,30 +270,79 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const invoiceData = {
+    const filePayload = fileBase64
+      ? {
+          buffer: Buffer.from(fileBase64, "base64"),
+          mimeType: (fileMimeType as string | undefined) || "application/octet-stream",
+          originalFilename: (originalFilename as string | null | undefined) ?? null,
+        }
+      : null;
+
+    const invoiceBaseData = {
       ...parsed.data,
       amount: new Prisma.Decimal(parsed.data.amount),
       familyDependentId,
-      source: fileBase64 ? ("PDF" as const) : ("MANUAL" as const),
-      ...(fileBase64
-        ? {
-            fileData: Buffer.from(fileBase64, "base64"),
-            fileMimeType: fileMimeType || "application/octet-stream",
-            originalFilename: originalFilename || null,
-          }
-        : {}),
+      source: filePayload ? ("PDF" as const) : ("MANUAL" as const),
     };
 
-    // Overwrite existing NO_DEDUCIBLE invoice, or create new
-    const invoice = existingNoDeducible
+    // Create or update the row first (so we get a stable record id), then
+    // upload the file to Storage keyed by `<userId>/<recordId>.<ext>`, then
+    // patch the row with the resulting `fileStorageKey`.
+    let oldStorageKey: string | null = null;
+    let invoice = existingNoDeducible
       ? await prisma.invoice.update({
           where: { id: existingNoDeducible.id },
-          data: invoiceData,
+          data: { ...invoiceBaseData, fileStorageKey: null, originalFilename: null },
+          select: { id: true, fileStorageKey: true },
         })
       : await prisma.invoice.create({
-          data: { userId: session.user.id, ...invoiceData },
+          data: { userId: session.user.id, ...invoiceBaseData },
+          select: { id: true, fileStorageKey: true },
         });
-    return NextResponse.json({ invoice }, { status: 201 });
+
+    // For the NO_DEDUCIBLE overwrite path, capture the previous storage key
+    // (if any) so we can delete it after the new file is in place.
+    if (existingNoDeducible) {
+      const previous = await prisma.invoice.findUnique({
+        where: { id: existingNoDeducible.id },
+        select: { fileStorageKey: true },
+      });
+      oldStorageKey = previous?.fileStorageKey ?? null;
+    }
+
+    if (filePayload) {
+      const ext = inferExtension(filePayload.originalFilename, filePayload.mimeType);
+      const storageKey = buildStorageKey(session.user.id, invoice.id, ext);
+      try {
+        await uploadFile(storageKey, filePayload.buffer, filePayload.mimeType);
+      } catch (err) {
+        // Roll back the row we just created to avoid an orphan with source=PDF
+        // and no file. Skip rollback on the overwrite path — the row predates
+        // this request.
+        if (!existingNoDeducible) {
+          await prisma.invoice.delete({ where: { id: invoice.id } }).catch(() => {});
+        }
+        throw err;
+      }
+      invoice = await prisma.invoice.update({
+        where: { id: invoice.id },
+        data: { fileStorageKey: storageKey, originalFilename: filePayload.originalFilename },
+        select: { id: true, fileStorageKey: true },
+      });
+    }
+
+    // Best-effort cleanup of the prior file (different extension or no new
+    // file at all). `deleteFile` swallows errors internally.
+    if (oldStorageKey && oldStorageKey !== invoice.fileStorageKey) {
+      // Don't await — fire-and-forget. The row is the source of truth; an
+      // orphaned object in Storage gets cleaned up by the next overwrite or
+      // a future cleanup pass.
+      void deleteFile(oldStorageKey);
+    }
+
+    // Re-read the full invoice to return the same shape callers expect.
+    const fullInvoice = await prisma.invoice.findUnique({ where: { id: invoice.id } });
+    return NextResponse.json({ invoice: fullInvoice }, { status: 201 });
   } catch (error) {
     console.error("Error creating invoice:", error);
     return NextResponse.json({ error: "Error al crear factura" }, { status: 500 });

@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendTrialReminderEmail } from "@/lib/email";
+import { verifyCronAuth } from "@/lib/cron-auth";
 
-export async function POST(req: NextRequest) {
-  const cronSecret = req.headers.get("x-cron-secret");
-  if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-
+async function handle(): Promise<NextResponse> {
   const now = new Date();
   const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const in1Day = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
@@ -85,4 +81,18 @@ export async function POST(req: NextRequest) {
     trialsExpired: expired.count,
     cancelledExpired: expiredCancelled.count,
   });
+}
+
+export async function POST(req: NextRequest) {
+  if (!verifyCronAuth(req)) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  return handle();
+}
+
+export async function GET(req: NextRequest) {
+  if (!verifyCronAuth(req)) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  return handle();
 }

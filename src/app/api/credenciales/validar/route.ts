@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { after } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
-import { processJob } from "@/lib/automation/job-processor";
+import { publishJob } from "@/lib/queue/redis-queue";
 import { isFiscalYearReadOnly } from "@/lib/fiscal-year";
 
 export async function POST() {
@@ -54,13 +53,7 @@ export async function POST() {
       });
       pullProfileJobId = pullJob.id;
 
-      after(async () => {
-        try {
-          await processJob(pullJob.id);
-        } catch (err) {
-          console.error("PULL_PROFILE auto-trigger error:", err);
-        }
-      });
+      await publishJob(pullJob.id);
     }
   }
 

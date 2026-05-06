@@ -3,12 +3,17 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+// Migrations need DDL, which the Supabase pgbouncer transaction-mode pooler
+// (port 6543) doesn't support. When `DIRECT_URL` is set, use it for
+// migrations and fall back to `DATABASE_URL` for environments without a
+// pooler. Runtime queries always go through the adapter in `src/lib/prisma.ts`
+// using `DATABASE_URL`.
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });

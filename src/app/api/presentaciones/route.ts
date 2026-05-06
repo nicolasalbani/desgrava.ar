@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         montoTotal: true,
         source: true,
         siradiqStatus: true,
-        fileMimeType: true,
+        fileStorageKey: true,
         originalFilename: true,
         createdAt: true,
         automationJobs: {
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     const { automationJobs, ...rest } = p;
     return {
       ...rest,
-      hasFile: !!p.fileMimeType,
+      hasFile: !!p.fileStorageKey,
       latestJob: automationJobs[0] ?? null,
     };
   });

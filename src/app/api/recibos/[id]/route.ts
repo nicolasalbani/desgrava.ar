@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { updateDomesticReceiptSchema } from "@/lib/validators/domestic";
 import { Prisma } from "@/generated/prisma/client";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
+import { deleteFile } from "@/lib/storage/supabase-storage";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -102,6 +103,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     where: { id, userId: session.user.id },
     select: {
       id: true,
+      fileStorageKey: true,
       automationJobs: { select: { id: true } },
     },
   });
@@ -113,6 +115,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const linkedJobIds = existing.automationJobs.map((j) => j.id);
 
   await prisma.domesticReceipt.delete({ where: { id } });
+
+  if (existing.fileStorageKey) {
+    void deleteFile(existing.fileStorageKey);
+  }
 
   // Clean up orphaned jobs (jobs that no longer have any linked receipts or invoices)
   if (linkedJobIds.length > 0) {

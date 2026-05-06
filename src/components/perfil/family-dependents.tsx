@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useJobStatus } from "@/hooks/use-job-status";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -539,8 +540,51 @@ export function FamilyDependentsSection({
   const [exportResults, setExportResults] = useState<
     Map<string, { status: "success" | "failed"; error?: string }>
   >(new Map());
-  const [exportStep, setExportStep] = useState<string | null>(null);
-  const exportEventSourceRef = useRef<EventSource | null>(null);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
+
+  const exportJobState = useJobStatus(exportJobId, {
+    onTerminal: ({ status, errorMessage, resultData }) => {
+      const dependentId = exportingId;
+      setExportingId(null);
+      setExportJobId(null);
+      if (!dependentId) return;
+
+      if (status === "COMPLETED") {
+        // PUSH_FAMILY_DEPENDENTS may complete with per-dependent failures.
+        const failedArr =
+          resultData &&
+          typeof resultData === "object" &&
+          Array.isArray((resultData as { failed?: unknown }).failed)
+            ? (resultData as { failed: Array<{ error?: string }> }).failed
+            : [];
+        if (failedArr.length > 0) {
+          const errorMsg = failedArr[0]?.error ?? "Error de validacion en SiRADIG";
+          setExportResults((prev) => {
+            const next = new Map(prev);
+            next.set(dependentId, { status: "failed", error: errorMsg });
+            return next;
+          });
+          toast.error(`Error al exportar: ${errorMsg}`);
+        } else {
+          setExportResults((prev) => {
+            const next = new Map(prev);
+            next.set(dependentId, { status: "success" });
+            return next;
+          });
+          toast.success("Carga exportada a SiRADIG");
+        }
+      } else {
+        const errorMsg = errorMessage ?? "Error al exportar carga de familia";
+        setExportResults((prev) => {
+          const next = new Map(prev);
+          next.set(dependentId, { status: "failed", error: errorMsg });
+          return next;
+        });
+        toast.error(errorMsg);
+      }
+    },
+  });
+  const exportStep = exportJobState.currentStep;
 
   useEffect(() => {
     setLoading(true);
@@ -596,99 +640,7 @@ export function FamilyDependentsSection({
     }
   }
 
-  // Connect to SSE for a per-dependent export job
-  const connectToExportJobSSE = useCallback((jobId: string, dependentId: string) => {
-    exportEventSourceRef.current?.close();
-
-    const es = new EventSource(`/api/automatizacion/${jobId}/logs`);
-    exportEventSourceRef.current = es;
-
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.step) {
-          setExportStep(data.step);
-        }
-        if (data.done) {
-          es.close();
-          exportEventSourceRef.current = null;
-          setExportingId(null);
-
-          if (data.status === "COMPLETED") {
-            // Fetch result to check for per-dependent failures
-            fetch(`/api/automatizacion/${jobId}`)
-              .then((r) => r.json())
-              .then((jobData) => {
-                const result = jobData.job?.resultData;
-                const failedArr = Array.isArray(result?.failed) ? result.failed : [];
-                if (failedArr.length > 0) {
-                  const errorMsg = failedArr[0]?.error ?? "Error de validacion en SiRADIG";
-                  setExportResults((prev) => {
-                    const next = new Map(prev);
-                    next.set(dependentId, { status: "failed", error: errorMsg });
-                    return next;
-                  });
-                  toast.error(`Error al exportar: ${errorMsg}`);
-                } else {
-                  setExportResults((prev) => {
-                    const next = new Map(prev);
-                    next.set(dependentId, { status: "success" });
-                    return next;
-                  });
-                  toast.success("Carga exportada a SiRADIG");
-                }
-              })
-              .catch(() => {
-                setExportResults((prev) => {
-                  const next = new Map(prev);
-                  next.set(dependentId, { status: "success" });
-                  return next;
-                });
-                toast.success("Carga exportada a SiRADIG");
-              });
-          } else {
-            // FAILED status
-            fetch(`/api/automatizacion/${jobId}`)
-              .then((r) => r.json())
-              .then((jobData) => {
-                const errorMsg = jobData.job?.errorMessage ?? "Error al exportar carga de familia";
-                setExportResults((prev) => {
-                  const next = new Map(prev);
-                  next.set(dependentId, { status: "failed", error: errorMsg });
-                  return next;
-                });
-                toast.error(errorMsg);
-              })
-              .catch(() => {
-                setExportResults((prev) => {
-                  const next = new Map(prev);
-                  next.set(dependentId, { status: "failed", error: "Error desconocido" });
-                  return next;
-                });
-                toast.error("Error al exportar carga de familia");
-              });
-          }
-        }
-      } catch {
-        // ignore parse errors
-      }
-    };
-
-    es.onerror = () => {
-      es.close();
-      exportEventSourceRef.current = null;
-      setExportingId(null);
-      setExportResults((prev) => {
-        const next = new Map(prev);
-        next.set(dependentId, { status: "failed", error: "Se perdio la conexion con el servidor" });
-        return next;
-      });
-      toast.error("Se perdio la conexion con el servidor");
-    };
-  }, []);
-
-  // On mount, check for an active PUSH_FAMILY_DEPENDENTS job and reconnect
+  // On mount, check for an active PUSH_FAMILY_DEPENDENTS job and resume tracking it
   useEffect(() => {
     let cancelled = false;
 
@@ -711,10 +663,7 @@ export function FamilyDependentsSection({
         );
         if (activeJob && !cancelled) {
           setExportingId(activeJob.familyDependentId);
-          if (activeJob.currentStep) {
-            setExportStep(activeJob.currentStep);
-          }
-          connectToExportJobSSE(activeJob.id, activeJob.familyDependentId);
+          setExportJobId(activeJob.id);
         }
       } catch {
         // Best-effort
@@ -725,19 +674,12 @@ export function FamilyDependentsSection({
     return () => {
       cancelled = true;
     };
-  }, [fiscalYear, connectToExportJobSSE]);
-
-  // Clean up export SSE on unmount
-  useEffect(() => {
-    return () => {
-      exportEventSourceRef.current?.close();
-    };
-  }, []);
+  }, [fiscalYear]);
 
   const handleExportDependent = useCallback(
     async (dependentId: string) => {
       setExportingId(dependentId);
-      setExportStep(null);
+      setExportJobId(null);
       // Clear previous result for this dependent
       setExportResults((prev) => {
         const next = new Map(prev);
@@ -762,7 +704,7 @@ export function FamilyDependentsSection({
         }
 
         const { job } = await res.json();
-        connectToExportJobSSE(job.id, dependentId);
+        setExportJobId(job.id);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Error al exportar";
         toast.error(errorMsg);
@@ -774,7 +716,7 @@ export function FamilyDependentsSection({
         });
       }
     },
-    [fiscalYear, connectToExportJobSSE],
+    [fiscalYear],
   );
 
   const isExporting = exportingId !== null;

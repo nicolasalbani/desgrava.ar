@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 import { StepProgress } from "@/components/shared/step-progress";
 import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
+import { useJobStatus } from "@/hooks/use-job-status";
 
 type Status = "idle" | "running" | "completed" | "failed";
 
@@ -31,21 +32,30 @@ export function SubmitPresentacionDialog({
   const year = fiscalYear ?? new Date().getFullYear();
 
   const [status, setStatus] = useState<Status>("idle");
-  const [currentStep, setCurrentStep] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [skipped, setSkipped] = useState(false);
   const skippedBoolRef = useRef(false);
   const [skipPrefLoaded, setSkipPrefLoaded] = useState(false);
   const skippedRef = useRef<string[]>([]);
   const autoStartedRef = useRef(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const connectedJobRef = useRef<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
-  useEffect(() => {
-    return () => {
-      eventSourceRef.current?.close();
-    };
-  }, []);
+  const jobState = useJobStatus(activeJobId, {
+    onTerminal: ({ status: finalStatus, errorMessage: finalError }) => {
+      setActiveJobId(null);
+      if (finalStatus === "COMPLETED") {
+        setStatus("completed");
+        toast.success("Presentacion enviada al empleador");
+        onSubmitComplete();
+        setTimeout(() => onOpenChange(false), 1500);
+      } else {
+        if (finalError) setErrorMessage(finalError);
+        setStatus("failed");
+        toast.error("Error al enviar presentacion");
+      }
+    },
+  });
+  const currentStep = jobState.currentStep;
 
   // Fetch skip preference on mount
   useEffect(() => {
@@ -65,67 +75,10 @@ export function SubmitPresentacionDialog({
   useEffect(() => {
     if (open && status !== "running") {
       setStatus("idle");
-      setCurrentStep(null);
       setErrorMessage(null);
       autoStartedRef.current = false;
     }
   }, [open, status]);
-
-  const connectToSSE = useCallback(
-    (jobId: string) => {
-      if (connectedJobRef.current === jobId) return;
-
-      eventSourceRef.current?.close();
-      connectedJobRef.current = jobId;
-      setStatus("running");
-
-      const es = new EventSource(`/api/automatizacion/${jobId}/logs`);
-      eventSourceRef.current = es;
-
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.step) {
-            setCurrentStep(data.step);
-          }
-          if (data.done) {
-            es.close();
-            eventSourceRef.current = null;
-            connectedJobRef.current = null;
-            if (data.status === "COMPLETED") {
-              setStatus("completed");
-              toast.success("Presentacion enviada al empleador");
-              onSubmitComplete();
-              setTimeout(() => onOpenChange(false), 1500);
-            } else {
-              // Fetch error message for failed state
-              fetch(`/api/automatizacion/${jobId}`)
-                .then((r) => r.json())
-                .then((d) => {
-                  if (d.job?.errorMessage) {
-                    setErrorMessage(d.job.errorMessage);
-                  }
-                })
-                .catch(() => {});
-              setStatus("failed");
-              toast.error("Error al enviar presentacion");
-            }
-          }
-        } catch {
-          // ignore
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        eventSourceRef.current = null;
-        connectedJobRef.current = null;
-        setStatus("failed");
-        toast.error("Se perdio la conexion con el servidor");
-      };
-    },
-    [onSubmitComplete, onOpenChange],
-  );
 
   async function saveSkipPreference(checked: boolean) {
     setSkipped(checked);
@@ -147,8 +100,8 @@ export function SubmitPresentacionDialog({
 
   const handleStart = useCallback(async () => {
     setStatus("running");
-    setCurrentStep(null);
     setErrorMessage(null);
+    setActiveJobId(null);
 
     try {
       const res = await fetch("/api/presentaciones/enviar", {
@@ -163,12 +116,12 @@ export function SubmitPresentacionDialog({
       }
 
       const { job } = await res.json();
-      connectToSSE(job.id);
+      setActiveJobId(job.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al enviar");
       setStatus("failed");
     }
-  }, [year, connectToSSE]);
+  }, [year]);
 
   // Auto-start when skip preference is enabled (only on dialog open, not on checkbox change)
   useEffect(() => {
@@ -183,37 +136,6 @@ export function SubmitPresentacionDialog({
       handleStart();
     }
   }, [open, skipPrefLoaded, status, handleStart]);
-
-  // Poll job status as fallback for SSE step events
-  useEffect(() => {
-    if (status !== "running" || !connectedJobRef.current) return;
-    const interval = setInterval(() => {
-      const jobId = connectedJobRef.current;
-      if (!jobId) return;
-      fetch(`/api/automatizacion/${jobId}`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.job?.currentStep) {
-            setCurrentStep(d.job.currentStep);
-          }
-          if (d.job?.status === "COMPLETED") {
-            eventSourceRef.current?.close();
-            eventSourceRef.current = null;
-            connectedJobRef.current = null;
-            setStatus("completed");
-            onSubmitComplete();
-          } else if (d.job?.status === "FAILED") {
-            eventSourceRef.current?.close();
-            eventSourceRef.current = null;
-            connectedJobRef.current = null;
-            if (d.job.errorMessage) setErrorMessage(d.job.errorMessage);
-            setStatus("failed");
-          }
-        })
-        .catch(() => {});
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [status, onSubmitComplete]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

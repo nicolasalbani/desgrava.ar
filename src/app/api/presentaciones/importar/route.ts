@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { after } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { processJob } from "@/lib/automation/job-processor";
+import { publishJob } from "@/lib/queue/redis-queue";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 
 export async function POST(req: NextRequest) {
@@ -47,13 +46,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    after(async () => {
-      try {
-        await processJob(job.id);
-      } catch (err) {
-        console.error("Job processing error:", err);
-      }
-    });
+    await publishJob(job.id);
 
     return NextResponse.json({ job }, { status: 201 });
   } catch (error) {
