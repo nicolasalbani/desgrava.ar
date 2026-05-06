@@ -14,7 +14,7 @@
 # A local `fly deploy` (no flags) falls back to building from `worker/Dockerfile`
 # directly via Fly's remote builder.
 
-app = "desgrava-ar"
+app = "desgrava-worker"
 primary_region = "gru"
 
 [build]
