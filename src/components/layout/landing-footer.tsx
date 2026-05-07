@@ -85,14 +85,6 @@ export function LandingFooter() {
                   Blog
                 </Link>
               </li>
-              <li>
-                <Link
-                  href="/login"
-                  className="text-muted-foreground hover:text-foreground inline-flex min-h-[44px] items-center text-sm transition-colors"
-                >
-                  Iniciar sesión
-                </Link>
-              </li>
             </ul>
           </div>
 
