@@ -2,9 +2,25 @@ import type { Metadata } from "next";
 
 const LAST_UPDATED = "2026-05-01";
 
+const TITLE = "Política de cookies · desgrava.ar";
+const DESCRIPTION = "Cómo desgrava.ar usa cookies y tecnologías similares.";
+const URL = "https://desgrava.ar/cookies";
+
 export const metadata: Metadata = {
-  title: "Política de cookies · desgrava.ar",
-  description: "Cómo desgrava.ar usa cookies y tecnologías similares.",
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: { canonical: URL },
+  openGraph: {
+    type: "website",
+    url: URL,
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function CookiesPage() {

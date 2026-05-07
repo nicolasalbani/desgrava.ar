@@ -6,6 +6,34 @@ import { HowItWorksSection } from "@/components/landing/how-it-works-section";
 import { FeaturesBento } from "@/components/landing/features-bento";
 import { LandingFaq } from "@/components/landing/landing-faq";
 
+const HOWTO_JSONLD = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  name: "Cómo automatizar tus deducciones de Ganancias con desgrava.ar",
+  description:
+    "Conectás tu CUIT, importamos tus comprobantes desde ARCA, los clasifica nuestra IA y presentamos tu F.572 / SiRADIG por vos — todos los meses.",
+  step: [
+    {
+      "@type": "HowToStep",
+      name: "Creá tu cuenta y conectá ARCA",
+      text: "Creás tu cuenta en desgrava.ar y conectás tu CUIT y clave fiscal una sola vez. Las credenciales se guardan cifradas con AES-256-GCM y solo se descifran cuando un trabajo de automatización las necesita.",
+      url: "https://desgrava.ar/como-funciona#step-1",
+    },
+    {
+      "@type": "HowToStep",
+      name: "Importá tus comprobantes desde ARCA",
+      text: "Importamos automáticamente tus comprobantes de Mis Comprobantes en ARCA. Si tenés facturas en papel o PDF, las subís y nuestro OCR (con fallback a Tesseract) extrae los datos. La IA clasifica cada comprobante en una categoría deducible.",
+      url: "https://desgrava.ar/como-funciona#step-2",
+    },
+    {
+      "@type": "HowToStep",
+      name: "Presentá tu F.572 / SiRADIG con un click",
+      text: "Apretás Desgravar y un browser headless inicia sesión en SiRADIG por vos, navega cada categoría y carga las deducciones respetando los topes de ARCA. Lo ves en tiempo real con una barra de progreso y se reflejan en tu próximo recibo.",
+      url: "https://desgrava.ar/como-funciona#step-3",
+    },
+  ],
+};
+
 export const metadata: Metadata = {
   title: "Cómo funciona desgrava.ar · Automatizá tus deducciones de Ganancias",
   description:
@@ -27,11 +55,22 @@ export const metadata: Metadata = {
     description:
       "Conectás tu CUIT, importamos tus comprobantes desde ARCA, los clasifica nuestra IA y presentamos tu F.572 / SiRADIG por vos — todos los meses.",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Cómo funciona desgrava.ar",
+    description:
+      "Conectás tu CUIT, importamos tus comprobantes desde ARCA, los clasifica nuestra IA y presentamos tu F.572 / SiRADIG por vos — todos los meses.",
+  },
 };
 
 export default function ComoFuncionaPage() {
   return (
     <div className="bg-background overflow-x-hidden">
+      <script
+        id="como-funciona-howto-jsonld"
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(HOWTO_JSONLD) }}
+      />
       {/* Hero */}
       <section className="border-border border-b">
         <div className="mx-auto w-full max-w-5xl px-4 pt-10 pb-8 md:px-6 md:pt-16 md:pb-12">

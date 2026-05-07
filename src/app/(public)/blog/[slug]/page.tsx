@@ -80,6 +80,40 @@ function ArticleJsonLd({
   );
 }
 
+function BreadcrumbJsonLd({ slug, title }: { slug: string; title: string }) {
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Inicio",
+        item: "https://desgrava.ar/",
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Blog",
+        item: "https://desgrava.ar/blog",
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: title,
+        item: `https://desgrava.ar/blog/${slug}`,
+      },
+    ],
+  };
+  return (
+    <script
+      id={`blog-breadcrumb-jsonld-${slug}`}
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
+}
+
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const { slug } = await params;
   const post = getPostBySlug(slug);
@@ -95,6 +129,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         description={frontmatter.description}
         date={frontmatter.date}
       />
+      <BreadcrumbJsonLd slug={frontmatter.slug} title={frontmatter.title} />
 
       <section className="border-border border-b">
         <div className="mx-auto w-full max-w-3xl px-4 pt-10 pb-6 md:px-6 md:pt-16 md:pb-8">

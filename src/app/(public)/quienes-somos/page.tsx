@@ -21,6 +21,12 @@ export const metadata: Metadata = {
     description:
       "desgrava.ar fue fundado por Nicolás Albani con la lógica fiscal validada por el contador Nicolás Barbolla — para que recuperes lo que Ganancias te saca, todos los meses.",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Quiénes somos · desgrava.ar",
+    description:
+      "desgrava.ar fue fundado por Nicolás Albani con la lógica fiscal validada por el contador Nicolás Barbolla — para que recuperes lo que Ganancias te saca, todos los meses.",
+  },
 };
 
 interface TeamLink {
@@ -41,7 +47,7 @@ const TEAM: TeamMember[] = [
   {
     name: "Nicolás Albani",
     role: "Fundador",
-    bio: "Construye software y lidera equipos de ingeniería hace más de 15 años, trabajando con empresas líderes de América Latina, Estados Unidos y Europa. Diseña y construye el producto end-to-end: la integración con ARCA, la automatización del SiRADIG y toda la experiencia de uso.",
+    bio: "Ingeniero de software (ITBA), construye productos digitales y lidera equipos de ingeniería hace más de 15 años, trabajando con empresas líderes de América Latina, Estados Unidos y Europa. Diseña y construye el producto end-to-end: la integración con ARCA, la automatización del SiRADIG y toda la experiencia de uso.",
     photoSrc: "/images/team/nicolas-albani.jpg",
     links: [
       {
@@ -54,12 +60,12 @@ const TEAM: TeamMember[] = [
   {
     name: "Nicolás Barbolla",
     role: "Asesor contable",
-    bio: "Contador público especialista en tributación, con más de 20 años de experiencia. Dirige el Estudio Barbolla y Asociados. Supervisa la lógica tributaria de desgrava.ar para garantizar que cada deducción se calcule según la normativa vigente de ARCA.",
+    bio: "Contador público (UNLZ), especialista en tributación, con más de 15 años de experiencia. Dirige el Estudio ByA. Supervisa la lógica tributaria de desgrava.ar para garantizar que cada deducción se calcule según la normativa vigente de ARCA.",
     photoSrc: "/images/team/nicolas-barbolla.jpg",
     links: [
       {
         href: "https://estudiobya.com.ar/",
-        label: "Estudio Barbolla y Asociados",
+        label: "Estudio ByA",
         icon: ExternalLink,
       },
       {

@@ -25,6 +25,11 @@ export const metadata: Metadata = {
     title: "Planes y precios · desgrava.ar",
     description: `${TRIAL_DURATION_DAYS} días gratis sin tarjeta. Suscripción mensual o anual con descuento. Pagás en pesos a través de MercadoPago. Cancelás cuando quieras.`,
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Planes y precios · desgrava.ar",
+    description: `${TRIAL_DURATION_DAYS} días gratis sin tarjeta. Suscripción mensual o anual con descuento. Pagás en pesos a través de MercadoPago. Cancelás cuando quieras.`,
+  },
 };
 
 export default function PlanesPage() {

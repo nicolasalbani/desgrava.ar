@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { SiteJsonLd } from "@/components/seo/site-jsonld";
 import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
@@ -42,6 +43,7 @@ export default function RootLayout({
   return (
     <html lang="es-AR" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <SiteJsonLd />
         <Providers>
           {children}
           <Toaster />

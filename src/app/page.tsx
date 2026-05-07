@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ChevronDown, Lock, Zap, MapPin } from "lucide-react";
@@ -9,6 +10,29 @@ import { SimuladorEmbed } from "@/components/landing/simulador-embed";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { ReviewsCarousel } from "@/components/landing/reviews-carousel";
 import { FadeIn } from "@/components/landing/fade-in";
+
+const HOME_TITLE = "desgrava.ar — Recuperá la plata que Ganancias te saca";
+const HOME_DESCRIPTION =
+  "Automatizá tus deducciones de F.572 / SiRADIG: alquiler, prepaga, salud, educación, personal doméstico. Probá 30 días gratis, sin tarjeta.";
+
+export const metadata: Metadata = {
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
+  alternates: {
+    canonical: "https://desgrava.ar/",
+  },
+  openGraph: {
+    type: "website",
+    url: "https://desgrava.ar/",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+  },
+};
 
 export default function LandingPage() {
   // F.572 deadline is March 31st each year — surface an urgency line during

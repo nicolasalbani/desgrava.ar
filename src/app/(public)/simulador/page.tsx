@@ -27,6 +27,11 @@ export const metadata: Metadata = {
     title: `Simulador Ganancias ${FISCAL_YEAR_DISPLAY} · desgrava.ar`,
     description: `Calculá cuánto podés recuperar de Ganancias ${FISCAL_YEAR_DISPLAY} cargando tus deducciones de F.572 / SiRADIG. Gratis, sin registro.`,
   },
+  twitter: {
+    card: "summary_large_image",
+    title: `Simulador Ganancias ${FISCAL_YEAR_DISPLAY} · desgrava.ar`,
+    description: `Calculá cuánto podés recuperar de Ganancias ${FISCAL_YEAR_DISPLAY} cargando tus deducciones de F.572 / SiRADIG. Gratis, sin registro.`,
+  },
 };
 
 export default function SimuladorPage() {

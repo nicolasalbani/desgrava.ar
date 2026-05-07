@@ -3,8 +3,15 @@ import { getAllPosts } from "@/lib/blog/posts";
 
 const BASE_URL = "https://desgrava.ar";
 
+// Captured once at module load. Stable across requests within a deploy —
+// Google ignores `<lastmod>` values that change on every fetch.
+const SITE_LAST_BUILT = new Date();
+
+// Mirrors the `LAST_UPDATED` constants in the legal pages. Bump together when
+// the legal copy changes.
+const LAST_LEGAL_UPDATE = new Date("2026-05-01");
+
 export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date();
   const posts = getAllPosts();
 
   const postEntries: MetadataRoute.Sitemap = posts.map((post) => ({
@@ -14,59 +21,64 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.6,
   }));
 
+  const blogIndexLastModified =
+    posts.length > 0
+      ? new Date(Math.max(...posts.map((p) => p.frontmatter.date.getTime())))
+      : SITE_LAST_BUILT;
+
   return [
     {
       url: `${BASE_URL}/`,
-      lastModified,
+      lastModified: SITE_LAST_BUILT,
       changeFrequency: "weekly",
       priority: 1.0,
     },
     {
       url: `${BASE_URL}/simulador`,
-      lastModified,
+      lastModified: SITE_LAST_BUILT,
       changeFrequency: "weekly",
       priority: 0.9,
     },
     {
       url: `${BASE_URL}/como-funciona`,
-      lastModified,
+      lastModified: SITE_LAST_BUILT,
       changeFrequency: "monthly",
       priority: 0.9,
     },
     {
       url: `${BASE_URL}/planes`,
-      lastModified,
+      lastModified: SITE_LAST_BUILT,
       changeFrequency: "monthly",
       priority: 0.9,
     },
     {
       url: `${BASE_URL}/blog`,
-      lastModified,
+      lastModified: blogIndexLastModified,
       changeFrequency: "weekly",
       priority: 0.7,
     },
     {
       url: `${BASE_URL}/quienes-somos`,
-      lastModified,
+      lastModified: SITE_LAST_BUILT,
       changeFrequency: "yearly",
       priority: 0.4,
     },
     ...postEntries,
     {
       url: `${BASE_URL}/terminos`,
-      lastModified,
+      lastModified: LAST_LEGAL_UPDATE,
       changeFrequency: "yearly",
       priority: 0.3,
     },
     {
       url: `${BASE_URL}/privacidad`,
-      lastModified,
+      lastModified: LAST_LEGAL_UPDATE,
       changeFrequency: "yearly",
       priority: 0.3,
     },
     {
       url: `${BASE_URL}/cookies`,
-      lastModified,
+      lastModified: LAST_LEGAL_UPDATE,
       changeFrequency: "yearly",
       priority: 0.3,
     },

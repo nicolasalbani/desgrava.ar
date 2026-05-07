@@ -2,10 +2,26 @@ import type { Metadata } from "next";
 
 const LAST_UPDATED = "2026-05-01";
 
+const TITLE = "Términos y condiciones · desgrava.ar";
+const DESCRIPTION =
+  "Términos y condiciones de uso del servicio desgrava.ar para contribuyentes argentinos.";
+const URL = "https://desgrava.ar/terminos";
+
 export const metadata: Metadata = {
-  title: "Términos y condiciones · desgrava.ar",
-  description:
-    "Términos y condiciones de uso del servicio desgrava.ar para contribuyentes argentinos.",
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: { canonical: URL },
+  openGraph: {
+    type: "website",
+    url: URL,
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function TerminosPage() {

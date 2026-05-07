@@ -19,6 +19,12 @@ export const metadata: Metadata = {
     description:
       "Cómo funciona Ganancias en Argentina, qué podés deducir, y cómo desgrava.ar te ayuda a recuperar lo que es tuyo.",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Blog · desgrava.ar",
+    description:
+      "Cómo funciona Ganancias en Argentina, qué podés deducir, y cómo desgrava.ar te ayuda a recuperar lo que es tuyo.",
+  },
 };
 
 export default function BlogIndexPage() {

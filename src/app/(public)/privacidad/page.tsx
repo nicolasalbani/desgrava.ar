@@ -2,10 +2,26 @@ import type { Metadata } from "next";
 
 const LAST_UPDATED = "2026-05-01";
 
+const TITLE = "Política de privacidad · desgrava.ar";
+const DESCRIPTION =
+  "Cómo desgrava.ar recolecta, usa, almacena y protege los datos personales de sus usuarios.";
+const URL = "https://desgrava.ar/privacidad";
+
 export const metadata: Metadata = {
-  title: "Política de privacidad · desgrava.ar",
-  description:
-    "Cómo desgrava.ar recolecta, usa, almacena y protege los datos personales de sus usuarios.",
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: { canonical: URL },
+  openGraph: {
+    type: "website",
+    url: URL,
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function PrivacidadPage() {
