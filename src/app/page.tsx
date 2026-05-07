@@ -5,7 +5,6 @@ import { Navbar } from "@/components/layout/navbar";
 import { LandingFooter } from "@/components/layout/landing-footer";
 import { HowItWorksSection } from "@/components/landing/how-it-works-section";
 import { FeaturesBento } from "@/components/landing/features-bento";
-import { LandingFaq } from "@/components/landing/landing-faq";
 import { SimuladorEmbed } from "@/components/landing/simulador-embed";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { ReviewsCarousel } from "@/components/landing/reviews-carousel";
@@ -116,10 +115,15 @@ export default function LandingPage() {
               <FadeIn delay={150}>
                 <FeaturesBento />
               </FadeIn>
-            </div>
-            <div className="border-border border-t pt-16">
-              <FadeIn>
-                <LandingFaq />
+              <FadeIn delay={300}>
+                <p className="text-muted-foreground mt-10 text-center text-sm">
+                  <Link
+                    href="/como-funciona"
+                    className="hover:text-foreground underline-offset-4 transition-colors hover:underline"
+                  >
+                    Ver más detalle de cómo funciona y preguntas frecuentes →
+                  </Link>
+                </p>
               </FadeIn>
             </div>
           </div>
@@ -145,6 +149,16 @@ export default function LandingPage() {
           <div className="mx-auto w-full max-w-5xl space-y-16 px-4 py-16 md:px-6 md:py-20">
             <FadeIn>
               <PricingSection />
+            </FadeIn>
+            <FadeIn delay={150}>
+              <p className="text-muted-foreground -mt-6 text-center text-sm">
+                <Link
+                  href="/planes"
+                  className="hover:text-foreground underline-offset-4 transition-colors hover:underline"
+                >
+                  Ver detalle de planes y preguntas frecuentes →
+                </Link>
+              </p>
             </FadeIn>
           </div>
         </section>

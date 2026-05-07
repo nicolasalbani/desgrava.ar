@@ -8,7 +8,14 @@ describe("sectionLinks", () => {
 
   it("uses anchor hrefs that resolve from any route", () => {
     for (const link of sectionLinks) {
-      expect(link.href.startsWith("/#")).toBe(true);
+      expect(link.anchorHref.startsWith("/#")).toBe(true);
+    }
+  });
+
+  it("uses absolute page hrefs for dedicated pages", () => {
+    for (const link of sectionLinks) {
+      expect(link.pageHref.startsWith("/")).toBe(true);
+      expect(link.pageHref.startsWith("/#")).toBe(false);
     }
   });
 

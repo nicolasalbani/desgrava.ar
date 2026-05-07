@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/check-db.mjs && npx prisma migrate deploy && NODE_OPTIONS='--disable-warning=DEP0169' next dev",
-    "dev:fresh": "node scripts/check-db.mjs && npx prisma migrate reset --force && NODE_OPTIONS='--disable-warning=DEP0169' next dev",
+    "dev": "node scripts/check-db.mjs && node scripts/check-redis.mjs && npx prisma migrate deploy && NODE_OPTIONS='--disable-warning=DEP0169' next dev",
+    "dev:fresh": "node scripts/check-db.mjs && node scripts/check-redis.mjs && npx prisma migrate reset --force && NODE_OPTIONS='--disable-warning=DEP0169' next dev",
+    "dev:worker": "node scripts/check-db.mjs && node scripts/check-redis.mjs && npx tsx watch --env-file=.env worker/index.ts",
     "postinstall": "prisma generate",
     "build": "next build",
     "start": "next start",

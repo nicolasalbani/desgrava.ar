@@ -49,6 +49,13 @@ next-env.d.ts
 /.pgdata
 /.pgdata.log
 
+# local Redis data
+/.redisdata
+/.redisdata.log
+
+# local file storage (fallback when SUPABASE_URL is unset)
+/.storage
+
 # dev session logs
 /logs
 

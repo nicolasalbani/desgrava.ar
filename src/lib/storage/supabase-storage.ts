@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { localDelete, localDownload, localSignedUrl, localUpload } from "./local-fs-storage";
 
 /**
  * Thin wrapper around Supabase Storage for the `comprobantes` bucket.
@@ -12,9 +13,20 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  *
  * Storage keys follow `<userId>/<recordId>.<ext>` so a user's files are
  * trivially listable by prefix and so a row's path is derivable from its id.
+ *
+ * **Local-fs fallback**: when `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are
+ * absent (dev/CI), every method dispatches to the local-fs driver instead. See
+ * `local-fs-storage.ts` and `/api/storage/[...key]/route.ts`. This lets the dev
+ * loop work without Supabase Cloud, mirroring the brew-managed local Postgres
+ * and Redis pattern.
  */
 
 export const STORAGE_BUCKET = "comprobantes";
+
+/** True when no Supabase credentials are present — fall back to local fs. */
+function isLocalMode(): boolean {
+  return !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY;
+}
 
 /**
  * Build the canonical storage key for a record.
@@ -80,6 +92,10 @@ export async function uploadFile(
   body: Buffer | Uint8Array,
   mimeType: string,
 ): Promise<void> {
+  if (isLocalMode()) {
+    await localUpload(key, body);
+    return;
+  }
   const { error } = await getClient()
     .storage.from(STORAGE_BUCKET)
     .upload(key, body, { contentType: mimeType, upsert: true });
@@ -94,6 +110,9 @@ export async function uploadFile(
  * preview PDFs / images inline.
  */
 export async function getSignedUrl(key: string, ttlSec: number = 60): Promise<string> {
+  if (isLocalMode()) {
+    return localSignedUrl(key, ttlSec);
+  }
   const { data, error } = await getClient()
     .storage.from(STORAGE_BUCKET)
     .createSignedUrl(key, ttlSec);
@@ -109,6 +128,9 @@ export async function getSignedUrl(key: string, ttlSec: number = 60): Promise<st
  * (e.g. OCR re-runs). Most user-facing reads should use `getSignedUrl`.
  */
 export async function downloadFile(key: string): Promise<Buffer> {
+  if (isLocalMode()) {
+    return localDownload(key);
+  }
   const { data, error } = await getClient().storage.from(STORAGE_BUCKET).download(key);
   if (error || !data) {
     throw new Error(`Storage download failed for ${key}: ${error?.message ?? "unknown"}`);
@@ -123,6 +145,14 @@ export async function downloadFile(key: string): Promise<Buffer> {
  * caller from completing the row delete.
  */
 export async function deleteFile(key: string): Promise<void> {
+  if (isLocalMode()) {
+    try {
+      await localDelete(key);
+    } catch (err) {
+      console.error(`Storage delete failed for ${key} (best-effort, swallowed):`, err);
+    }
+    return;
+  }
   try {
     await getClient().storage.from(STORAGE_BUCKET).remove([key]);
   } catch (err) {

@@ -67,8 +67,8 @@ export function Navbar() {
           {isLanding
             ? sectionLinks.map((link) => (
                 <a
-                  key={link.href}
-                  href={link.href}
+                  key={link.label}
+                  href={link.anchorHref}
                   className="text-muted-foreground hover:text-foreground text-lg transition-colors"
                 >
                   {link.label}
@@ -76,8 +76,8 @@ export function Navbar() {
               ))
             : sectionLinks.map((link) => (
                 <Link
-                  key={link.href}
-                  href={link.href}
+                  key={link.label}
+                  href={link.pageHref}
                   className="text-muted-foreground hover:text-foreground text-lg transition-colors"
                 >
                   {link.label}
@@ -153,8 +153,8 @@ export function Navbar() {
                       const Icon = link.icon;
                       return isLanding ? (
                         <a
-                          key={link.href}
-                          href={link.href}
+                          key={link.label}
+                          href={link.anchorHref}
                           onClick={() => setOpen(false)}
                           className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150"
                         >
@@ -163,8 +163,8 @@ export function Navbar() {
                         </a>
                       ) : (
                         <Link
-                          key={link.href}
-                          href={link.href}
+                          key={link.label}
+                          href={link.pageHref}
                           onClick={() => setOpen(false)}
                           className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150"
                         >

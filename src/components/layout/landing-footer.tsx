@@ -60,9 +60,9 @@ export function LandingFooter() {
             <h3 className="text-foreground mb-3 text-sm font-semibold">Producto</h3>
             <ul className="flex flex-col gap-y-2">
               {sectionLinks.map((link) => (
-                <li key={link.href}>
+                <li key={link.label}>
                   <Link
-                    href={link.href}
+                    href={link.pageHref}
                     className="text-muted-foreground hover:text-foreground inline-flex min-h-[44px] items-center text-sm transition-colors"
                   >
                     {link.label}

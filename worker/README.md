@@ -27,10 +27,19 @@ from the queue. They need only outbound network access to Redis and Postgres.
 
 ## Running locally
 
+The simplest path — picks up env from `.env`, ensures local Postgres + Redis are
+running (same `check-db.mjs` / `check-redis.mjs` scripts as `npm run dev`), and
+hot-reloads on source changes via `tsx watch`:
+
 ```bash
-npm install
+npm run dev:worker
+```
+
+Or, if you want to run with explicit env vars and no watcher:
+
+```bash
 REDIS_URL=redis://localhost:6379 \
-DATABASE_URL=... DIRECT_URL=... ENCRYPTION_KEY=... OPENAI_API_KEY=... \
+DATABASE_URL=... ENCRYPTION_KEY=... OPENAI_API_KEY=... \
 npx tsx worker/index.ts
 ```
 
@@ -39,6 +48,15 @@ worker picked up which job in the DB logs:
 
 ```
 [worker:my-laptop.local] started — concurrency=10, brpop_timeout=5s
+```
+
+### One-time setup
+
+Playwright Chromium is baked into the Docker image but needs to be installed
+locally the first time:
+
+```bash
+npx playwright install chromium
 ```
 
 ## Running via Docker
