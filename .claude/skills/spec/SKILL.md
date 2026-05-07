@@ -58,6 +58,31 @@ If none of these appear, **explicitly note in your working summary that the MCP 
 
 In all three cases write the spec using only the template + project context. No retry loops.
 
+## Phase 1.6: Audit current SEO state (`/seo-audit`)
+
+If the feature has a technical SEO dimension — touches public-facing pages, meta tags, structured data, sitemap, indexing, page speed, or specifically targets search visibility — run the `/seo-audit` skill to ground the spec's acceptance criteria in the site's current state. Skip otherwise.
+
+**Trigger keywords** (case-insensitive substring match on the user's request):
+
+`SEO`, `ranking`, `rankings`, `organic traffic`, `Google search`, `meta tags`, `meta description`, `title tag`, `OpenGraph`, `OG image`, `Twitter card`, `sitemap`, `robots.txt`, `structured data`, `schema markup`, `JSON-LD`, `FAQPage`, `rich snippet`, `rich result`, `keyword research`, `keywords`, `crawl`, `crawling`, `indexing`, `noindex`, `core web vitals`, `page speed`, `LCP`, `CLS`, `INP`, `Search Console`, `GSC`, `canonical`, `pSEO`, `programmatic SEO`
+
+If none of these appear, **note in your working summary that the audit was skipped** (e.g., "SEO audit skipped — feature is not SEO-relevant") and continue to Phase 2.
+
+This phase is independent of Phase 1.5 — both can fire for the same request (e.g., a new SEO landing page triggers Lenny for positioning + `/seo-audit` for technical hygiene). Run them in either order.
+
+**When triggered:**
+
+1. **Invoke `/seo-audit` via the Skill tool.** The audit runs independently and returns its findings (current meta tag coverage, sitemap state, schema gaps, Core Web Vitals issues, indexing problems, etc.).
+2. **Use the findings to inform the spec** — convert audit findings that are relevant to the feature being specced into Acceptance Criteria items. For example, if the audit reports "no canonical URLs on `/blog/[slug]`" and the spec is about new blog pages, add a criterion like `[ ] Each blog post emits a canonical link tag pointing at its absolute URL`.
+3. **Don't blindly copy** — the audit reports the entire current-state surface; only findings relevant to the feature in this spec should turn into criteria. Out-of-scope audit findings (e.g., performance issues on the dashboard when the spec is about a marketing page) stay out of the spec.
+4. **Cite inline** — every Acceptance Criteria item that came from the audit gets a short trailing citation: `[SEO audit]`. Keep it lightweight — traceability, not academic citation. Example: `- [ ] Page emits OpenGraph type, url, title, description, and image tags [SEO audit]`.
+
+**Failure handling — never block the spec:**
+
+- **`/seo-audit` errors out, returns no actionable findings, or times out**: log one line ("SEO audit unavailable — skipped") and proceed using only the project context.
+
+In failure cases, fall back to the standard SEO defaults already established in CLAUDE.md and existing specs: per-page metadata (title, description, canonical), OpenGraph block, sitemap entry, JSON-LD per surface where appropriate, no `noindex` unless explicitly required.
+
 ## Phase 2: Clarify
 
 Evaluate whether the feature description is clear enough to write a good spec. If any of the following are ambiguous, **ask the user before proceeding**:
