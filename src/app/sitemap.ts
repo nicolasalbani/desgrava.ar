@@ -45,6 +45,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.7,
     },
+    {
+      url: `${BASE_URL}/quienes-somos`,
+      lastModified,
+      changeFrequency: "yearly",
+      priority: 0.4,
+    },
     ...postEntries,
     {
       url: `${BASE_URL}/terminos`,

@@ -108,7 +108,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 
 **Route groups** organize the app by access level:
 
-- `(public)/` — unauthenticated pages: `/simulador` (SEO landing for the savings calculator with H1, intro copy, "¿Cómo funciona?" content, FAQ block + JSON-LD `FAQPage` schema, and CTA), `/como-funciona` (dedicated SEO page mounting `<HowItWorksSection>` + `<FeaturesBento>` + `<LandingFaq>` plus expanded prose), `/planes` (dedicated SEO page mounting `<PricingSection>` + new `<PricingFaq>` plus expanded prose), `/blog` (MDX blog index + `/blog/[slug]` post pages), `/terminos`, `/privacidad`, `/cookies`. The blog also exposes `/blog/rss.xml` (RSS 2.0 feed, route handler outside the `(public)` group).
+- `(public)/` — unauthenticated pages: `/simulador` (SEO landing for the savings calculator with H1, intro copy, "¿Cómo funciona?" content, FAQ block + JSON-LD `FAQPage` schema, and CTA), `/como-funciona` (dedicated SEO page mounting `<HowItWorksSection>` + `<FeaturesBento>` + `<LandingFaq>` plus expanded prose), `/planes` (dedicated SEO page mounting `<PricingSection>` + new `<PricingFaq>` plus expanded prose), `/quienes-somos` (footer-only About page: mission paragraph + 2-person team grid for Nicolás Albani + Nicolás Barbolla, photos in `public/images/team/<slug>.jpg` overwriting the committed placeholder), `/blog` (MDX blog index + `/blog/[slug]` post pages), `/terminos`, `/privacidad`, `/cookies`. The blog also exposes `/blog/rss.xml` (RSS 2.0 feed, route handler outside the `(public)` group).
 - `(auth)/` — login flow (Google OAuth + email/password), email verification, password reset
 - `(dashboard)/` — protected routes, checked via `getServerSession()` in layout
 
