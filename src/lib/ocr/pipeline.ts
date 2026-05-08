@@ -51,11 +51,8 @@ export async function processDocument(buffer: Buffer, mimeType: string): Promise
 
   if (mimeType === "application/pdf") {
     try {
-      const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      const doc = await pdfjsLib.getDocument({
-        data: new Uint8Array(buffer),
-        standardFontDataUrl: "node_modules/pdfjs-dist/standard_fonts/",
-      }).promise;
+      const { getDocumentProxy } = await import("unpdf");
+      const doc = await getDocumentProxy(new Uint8Array(buffer));
 
       const pageTexts: string[] = [];
       for (let i = 1; i <= doc.numPages; i++) {
@@ -86,6 +83,18 @@ export async function processDocument(buffer: Buffer, mimeType: string): Promise
   }
 
   method = "tesseract";
+
+  // On Vercel, tesseract.js's worker thread crashes uncatchably with
+  // `Cannot find module '..'` — its worker-script does a relative require
+  // that the lambda bundler doesn't include. The error escapes try/catch
+  // because it happens in a separate thread. Worker-pool hosts (Docker)
+  // don't have this problem.
+  if (process.env.VERCEL === "1" && mimeType === "application/pdf") {
+    throw new Error(
+      "No pudimos extraer el texto del PDF. Si es un PDF escaneado, subilo como JPG/PNG.",
+    );
+  }
+
   try {
     const { createWorker } = await import("tesseract.js");
     const worker = await createWorker("spa");

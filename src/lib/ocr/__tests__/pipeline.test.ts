@@ -94,3 +94,25 @@ describe.skipIf(!afip.exists)("processDocument — AFIP Factura C (afip-factura-
     expect(result.fields.confidence).toBe(1);
   }, 30_000);
 });
+
+// ---------------------------------------------------------------------------
+// Regression: on Vercel, tesseract.js crashes uncatchably when its worker
+// thread does `require('..')`. The pipeline must short-circuit BEFORE
+// touching tesseract for PDFs and surface a Spanish hint instead.
+// ---------------------------------------------------------------------------
+describe("processDocument — Vercel skip-tesseract guard", () => {
+  it("throws a Spanish JPG/PNG hint instead of running tesseract for PDFs when VERCEL=1", async () => {
+    const original = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    try {
+      // Empty buffer fails text extraction → falls through to tesseract path.
+      // The Vercel guard must intercept before tesseract is loaded.
+      await expect(processDocument(Buffer.from(""), "application/pdf")).rejects.toThrow(
+        /escaneado, subilo como JPG\/PNG/,
+      );
+    } finally {
+      if (original === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = original;
+    }
+  });
+});
