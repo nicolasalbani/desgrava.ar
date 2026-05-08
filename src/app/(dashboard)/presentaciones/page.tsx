@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, Suspense, type ElementType } from "react";
-import { Download, Send } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useRef, useCallback, useEffect, Suspense } from "react";
+import { Download, Send, Loader2 } from "lucide-react";
 import { PresentacionesList } from "@/components/presentaciones/presentaciones-list";
 import { SubmitPresentacionDialog } from "@/components/presentaciones/submit-presentacion-dialog";
 import { ArcaImportButton } from "@/components/shared/arca-import-button";
@@ -12,33 +11,74 @@ import { useFiscalYear } from "@/contexts/fiscal-year";
 import { cn } from "@/lib/utils";
 import { useFiscalYearReadOnly } from "@/hooks/use-fiscal-year-read-only";
 
-function ExpandingButton({
-  icon: Icon,
-  label,
+/**
+ * "Crear nueva presentacion" toolbar button. Mirrors `<ArcaImportButton>`'s
+ * toolbar shape (icon-at-rest, expands on hover, progress fill while active)
+ * but reads the SUBMIT_PRESENTACION job state from `queueState` rather than
+ * `snapshot` — SUBMIT_PRESENTACION isn't a tracked import type, so its
+ * progress lives in queueState only.
+ */
+function SubmitPresentacionButton({
   onClick,
-  variant = "outline",
-  className,
   disabled,
 }: {
-  icon: ElementType<{ className?: string }>;
-  label: string;
   onClick: () => void;
-  variant?: "outline" | "default";
-  className?: string;
-  disabled?: boolean;
+  disabled: boolean;
 }) {
+  const { queueState } = useArcaImportProgress();
+  const isRunning = queueState.runningJobType === "SUBMIT_PRESENTACION";
+  const isWaiting = queueState.queuedJobTypes.includes("SUBMIT_PRESENTACION");
+  const isActive = isRunning || isWaiting;
+  const percent = isRunning ? (queueState.runningJobPercent ?? 0) : 0;
+  const showFill = isRunning && percent > 0;
+  const activeLabel = isWaiting ? "Esperando…" : "Procesando…";
+  const idleLabel = "Crear nueva presentacion";
+
+  const isDisabled = disabled || isActive;
+  const ariaLabel = isRunning
+    ? `${idleLabel} en progreso, ${percent}%`
+    : isWaiting
+      ? `${idleLabel}, esperando que termine la tarea actual`
+      : idleLabel;
+
   return (
-    <Button
-      variant={variant}
+    <button
+      type="button"
       onClick={onClick}
-      disabled={disabled}
-      className={cn("group gap-0 overflow-hidden transition-all duration-300", className)}
+      disabled={isDisabled}
+      aria-disabled={isDisabled}
+      aria-label={ariaLabel}
+      className={cn(
+        "group bg-primary text-primary-foreground hover:bg-primary/90 relative inline-flex h-9 items-center overflow-hidden rounded-md px-3 text-sm font-medium transition-colors",
+        isDisabled && "cursor-not-allowed opacity-70",
+        isActive && "ring-primary/20 ring-2 ring-offset-0",
+      )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
-      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-300 ease-out group-hover:ml-2 group-hover:max-w-[200px] group-hover:opacity-100">
-        {label}
+      {showFill && (
+        <span
+          className="bg-foreground/15 absolute inset-y-0 left-0 transition-all duration-700 ease-out"
+          style={{ width: `${percent}%` }}
+          aria-hidden="true"
+        />
+      )}
+      <span className="relative flex items-center">
+        {isActive ? (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+        ) : (
+          <Send className="h-4 w-4 shrink-0" />
+        )}
+        <span
+          className={cn(
+            "max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-300 ease-out",
+            isActive
+              ? "ml-2 max-w-[240px] opacity-100"
+              : "group-hover:ml-2 group-hover:max-w-[240px] group-hover:opacity-100",
+          )}
+        >
+          {isActive ? activeLabel : idleLabel}
+        </span>
       </span>
-    </Button>
+    </button>
   );
 }
 
@@ -91,13 +131,7 @@ function PresentacionesInner() {
             icon={Download}
             disabled={readOnly}
           />
-          <ExpandingButton
-            icon={Send}
-            label="Crear nueva presentacion"
-            onClick={() => setSubmitOpen(true)}
-            disabled={readOnly}
-            variant="default"
-          />
+          <SubmitPresentacionButton onClick={() => setSubmitOpen(true)} disabled={readOnly} />
         </div>
       </div>
 
