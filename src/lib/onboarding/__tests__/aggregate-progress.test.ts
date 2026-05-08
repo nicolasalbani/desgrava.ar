@@ -608,4 +608,70 @@ describe("computeQueueState", () => {
       expect(state.runningJobPercent).toBe(60);
     });
   });
+
+  describe("optimistic SUBMIT_PRESENTACION shape (regression)", () => {
+    // Mirrors what `enqueueAutomationJob` synchronously injects on click via
+    // `buildOptimisticJob`: status RUNNING, currentStep "login", just-now
+    // timestamps. This is the exact shape the strip + the
+    // SubmitPresentacionButton both react to between the click and the real
+    // PENDING job arriving from the server. If this regresses, the strip
+    // would stay hidden until the user refreshes the page (the bug we
+    // were fighting).
+    it("makes the strip's nonImportActive path AND the button's isRunning flip on", () => {
+      const startedAt = new Date("2026-05-01T12:00:00Z");
+      const now = startedAt.getTime();
+      const optimistic = apiJob({
+        id: "__optimistic__1",
+        jobType: "SUBMIT_PRESENTACION",
+        status: "RUNNING",
+        currentStep: "login",
+        currentStepStartedAt: startedAt.toISOString(),
+        createdAt: startedAt.toISOString(),
+        fiscalYear: 2026,
+      });
+
+      const queue = computeQueueState([optimistic], 2026, now);
+
+      // Strip needs `hasAnyActive=true` and `runningJobType` outside the
+      // tracked set so `nonImportActive` evaluates true.
+      expect(queue.hasAnyActive).toBe(true);
+      expect(queue.runningJobType).toBe("SUBMIT_PRESENTACION");
+      // The button needs `runningJobType === "SUBMIT_PRESENTACION"` so its
+      // `isRunning` flag flips on. (Same predicate as the strip.)
+      expect(queue.queuedJobTypes).toEqual([]);
+      expect(queue.hasQueuedWaiting).toBe(false);
+      // Determinate progress — SUBMIT_PRESENTACION has duration data, so the
+      // strip and button render real percent (not indeterminate animation).
+      // 0% at t=0 because in-flight elapsed is 0s.
+      expect(queue.runningJobPercent).toBe(0);
+    });
+
+    it("grows the percent as time passes inside the first step", () => {
+      // SUBMIT_PRESENTACION total = 5+5+19+1 = 30s. Sitting on "login"
+      // (duration 5s) for 2s → 2s of 30s = ~7%.
+      const startedAt = new Date("2026-05-01T12:00:00Z");
+      const now = new Date("2026-05-01T12:00:02Z").getTime();
+      const optimistic = apiJob({
+        jobType: "SUBMIT_PRESENTACION",
+        status: "RUNNING",
+        currentStep: "login",
+        currentStepStartedAt: startedAt.toISOString(),
+      });
+
+      const queue = computeQueueState([optimistic], 2026, now);
+      expect(queue.runningJobPercent).toBe(Math.round((2 / 30) * 100));
+    });
+
+    it("does NOT trigger when fiscal year mismatches (button + strip stay idle)", () => {
+      const optimistic = apiJob({
+        jobType: "SUBMIT_PRESENTACION",
+        status: "RUNNING",
+        fiscalYear: 2025, // user is on 2026
+      });
+
+      const queue = computeQueueState([optimistic], 2026);
+      expect(queue.hasAnyActive).toBe(false);
+      expect(queue.runningJobType).toBeNull();
+    });
+  });
 });

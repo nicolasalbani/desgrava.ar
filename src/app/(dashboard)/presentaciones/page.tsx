@@ -30,7 +30,10 @@ function SubmitPresentacionButton({
   const isWaiting = queueState.queuedJobTypes.includes("SUBMIT_PRESENTACION");
   const isActive = isRunning || isWaiting;
   const percent = isRunning ? (queueState.runningJobPercent ?? 0) : 0;
-  const showFill = isRunning && percent > 0;
+  // Match ArcaImportButton's behavior: render the fill bar from 0% on the
+  // first frame the job is running, so the visual transition is immediate
+  // (the bar grows from 0 → percent over the next few ticks).
+  const showFill = isRunning;
   const activeLabel = isWaiting ? "Esperando…" : "Procesando…";
   const idleLabel = "Crear nueva presentacion";
 
