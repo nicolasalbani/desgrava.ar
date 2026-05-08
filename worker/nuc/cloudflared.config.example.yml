@@ -1,0 +1,27 @@
+# Cloudflare Tunnel config for the desgrava.ar NUC worker.
+#
+# Drop a copy at /etc/desgrava/cloudflared/config.yml on the NUC and edit:
+#   1. Replace <tunnel-id> with the UUID printed by `cloudflared tunnel create desgrava-nuc`.
+#   2. Confirm the credentials-file path matches the JSON copied into /etc/desgrava/cloudflared/.
+#   3. (Optional) Adjust hostnames if the apex domain ever changes.
+#
+# DNS setup (one-time, run once on a Cloudflare-authenticated machine):
+#   cloudflared tunnel route dns desgrava-nuc worker.desgrava.ar
+#   cloudflared tunnel route dns desgrava-nuc worker-ssh.desgrava.ar
+#
+# Cloudflare Access setup (one-time, in the dashboard):
+#   - Application 1: self-hosted, hostname worker.desgrava.ar, policy = Google SSO with email allow-list
+#   - Application 2: self-hosted (SSH), hostname worker-ssh.desgrava.ar, same policy
+#
+# The cloudflared container runs with --network host, so localhost here resolves
+# to the NUC itself — Portainer's loopback bind on 9000 and the host's sshd on 22.
+
+tunnel: <tunnel-id>
+credentials-file: /etc/cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: worker.desgrava.ar
+    service: http://localhost:9000
+  - hostname: worker-ssh.desgrava.ar
+    service: ssh://localhost:22
+  - service: http_status:404

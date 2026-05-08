@@ -104,6 +104,14 @@ The worker doesn't bind a port. Use process-level health (`docker ps`,
 `systemctl status`, k8s liveness on the process) rather than HTTP probes. Logs
 go to stdout in plain text — pipe them to your aggregator of choice.
 
+## Self-hosted on a NUC
+
+A complete runbook for running this worker on an Intel NUC (or any Linux box)
+alongside Fly — auto-updating via Watchtower, exposed off-network via a
+Cloudflare Tunnel — lives in [`nuc/README.md`](./nuc/README.md). The
+`nuc/install.sh` script is the single command needed to (re)create the four
+containers (worker + watchtower + portainer + cloudflared).
+
 ## How it differs from the old Fly Next.js process
 
 - No HTTP server. No `next start`. No public URL.

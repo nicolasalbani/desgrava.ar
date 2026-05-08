@@ -205,7 +205,7 @@ Next.js 16 (App Router), TypeScript (strict), PostgreSQL via Prisma 7, NextAuth 
 **Hosting split**:
 
 - **Next.js app** → Vercel (auto-deploys from git push to `main` via Vercel's git integration; no GitHub Actions step required).
-- **Worker pool** → Fly.io in the `gru` (São Paulo) region. Config in `fly.toml` (`[build].dockerfile = "worker/Dockerfile"`, no `[http_service]` — pull-based queue). VM: `shared-cpu-2x` (2GB RAM). Scale machines with `fly scale count N`. Same image also runs anywhere via `docker pull ghcr.io/<owner>/desgrava-worker:latest`.
+- **Worker pool** → Fly.io in the `gru` (São Paulo) region (config in `fly.toml`: `[build].dockerfile = "worker/Dockerfile"`, no `[http_service]` — pull-based queue; VM: `shared-cpu-2x` 2GB; scale with `fly scale count N`) **+ a self-hosted NUC** running the same `ghcr.io/<owner>/desgrava-worker:latest` image. Both compete for the same Redis queue; per-user serialization is enforced by the Redis distributed lock so they can run in parallel safely. The NUC runs four containers — worker + watchtower + portainer + cloudflared — set up via [worker/nuc/install.sh](worker/nuc/install.sh) and documented in [worker/nuc/README.md](worker/nuc/README.md). Watchtower polls GHCR every 5 minutes for `:latest` and gracefully replaces the worker container, so a push to `main` auto-deploys to both Fly (via `flyctl deploy`) and the NUC (via Watchtower) from the same image. The NUC keeps zero open inbound ports — Portainer (`worker.desgrava.ar`) and SSH (`worker-ssh.desgrava.ar`) are exposed via a Cloudflare Tunnel gated by Cloudflare Access (Google SSO).
 
 **GitHub Actions** workflows:
 
