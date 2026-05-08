@@ -96,6 +96,7 @@ interface MetricsPanelProps {
   recentInvoices: RecentInvoice[];
   allSubmitted: boolean;
   subscription: SubscriptionInfo | null;
+  lastPresentacionMontoTotal: number | null;
 }
 
 function formatARS(value: number): string {
@@ -137,6 +138,7 @@ export function MetricsPanel({
   recentInvoices,
   allSubmitted,
   subscription,
+  lastPresentacionMontoTotal,
 }: MetricsPanelProps) {
   // Auto-refresh when relevant automation jobs complete
   const router = useRouter();
@@ -516,6 +518,8 @@ export function MetricsPanel({
           hasUnregisteredWorker={hasUnregisteredWorker}
           allSubmitted={allSubmitted}
           fiscalYear={fiscalYear}
+          totalDeducted={totalDeducted}
+          lastPresentacionMontoTotal={lastPresentacionMontoTotal}
         />
       </div>
 

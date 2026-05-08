@@ -18,6 +18,8 @@ interface ProximoPasoCardProps {
   hasUnregisteredWorker: boolean;
   allSubmitted: boolean;
   fiscalYear: number;
+  totalDeducted: number;
+  lastPresentacionMontoTotal: number | null;
 }
 
 export function ProximoPasoCard({
@@ -28,6 +30,8 @@ export function ProximoPasoCard({
   hasUnregisteredWorker,
   allSubmitted,
   fiscalYear,
+  totalDeducted,
+  lastPresentacionMontoTotal,
 }: ProximoPasoCardProps) {
   const { snapshot } = useArcaImportProgress();
   const hasRunningImport = snapshot.hasRunning;
@@ -42,6 +46,8 @@ export function ProximoPasoCard({
     hasUnregisteredWorker,
     allSubmitted,
     currentMonth,
+    totalDeducted,
+    lastPresentacionMontoTotal,
   });
 
   return (

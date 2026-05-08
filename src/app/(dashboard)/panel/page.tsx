@@ -24,6 +24,7 @@ export default async function DashboardPage() {
     subscription,
     yearPreference,
     recentInvoices,
+    latestPresentacion,
   ] = await Promise.all([
     prisma.invoice.count({
       where: { userId, fiscalYear, deductionCategory: { not: "NO_DEDUCIBLE" } },
@@ -93,6 +94,11 @@ export default async function DashboardPage() {
         amount: true,
         siradiqStatus: true,
       },
+    }),
+    prisma.presentacion.findFirst({
+      where: { userId, fiscalYear },
+      orderBy: { numero: "desc" },
+      select: { montoTotal: true },
     }),
   ]);
 
@@ -170,6 +176,10 @@ export default async function DashboardPage() {
     pendingInvoiceCount === 0 &&
     pendingReceiptCount === 0;
 
+  const lastPresentacionMontoTotal = latestPresentacion?.montoTotal
+    ? new Decimal(latestPresentacion.montoTotal.toString()).toDP(2).toNumber()
+    : null;
+
   return (
     <MetricsPanel
       firstName={firstName}
@@ -187,6 +197,7 @@ export default async function DashboardPage() {
       monthCategoryData={monthCategoryData}
       recentInvoices={recentInvoicesSerialized}
       allSubmitted={allSubmitted}
+      lastPresentacionMontoTotal={lastPresentacionMontoTotal}
       subscription={
         subscription
           ? {

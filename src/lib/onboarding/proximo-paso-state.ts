@@ -20,6 +20,7 @@ export type ProximoPasoVariant =
   | "register-trabajador"
   | "no-invoices"
   | "ready-to-present"
+  | "already-presented"
   | "all-set";
 
 export interface ProximoPasoCta {
@@ -46,7 +47,13 @@ export interface ProximoPasoInputs {
   allSubmitted: boolean;
   /** 1-indexed month — defaults to the current month in caller. */
   currentMonth: number;
+  /** Sum of currently-deducted amounts (matches what would be in a fresh F.572). */
+  totalDeducted: number;
+  /** Monto Total of the latest Presentacion for the fiscal year, or null if none. */
+  lastPresentacionMontoTotal: number | null;
 }
+
+const PRESENTACION_MATCH_TOLERANCE = 1;
 
 /**
  * Pure state machine for the "Próximo paso" card. Branches in declared priority order:
@@ -55,8 +62,9 @@ export interface ProximoPasoInputs {
  * 3. Pending recibos but no trabajador registered → "Registrá a tu trabajador"
  * 4. There are unsent recibos → "Tenés N recibos sin desgravar"
  * 5. No deducible invoices or recibos exist → "Importá tus comprobantes"
- * 6. Everything submitted → "Presentá tu F.572 web"
- * 7. Otherwise → "Todo al día"
+ * 6. Everything submitted AND last Presentacion's montoTotal matches totalDeducted → "Ya está todo presentado"
+ * 7. Everything submitted → "Presentá tu F.572 web"
+ * 8. Otherwise → "Todo al día"
  */
 export function deriveProximoPasoState(input: ProximoPasoInputs): ProximoPasoCardState {
   const monthName = MONTH_NAMES[input.currentMonth - 1] ?? "este mes";
@@ -116,6 +124,19 @@ export function deriveProximoPasoState(input: ProximoPasoInputs): ProximoPasoCar
   }
 
   if (input.allSubmitted) {
+    if (
+      input.lastPresentacionMontoTotal !== null &&
+      Math.abs(input.totalDeducted - input.lastPresentacionMontoTotal) <
+        PRESENTACION_MATCH_TOLERANCE
+    ) {
+      return {
+        variant: "already-presented",
+        title: "Ya está todo presentado",
+        body: "Tu última presentación coincide con tus deducciones actuales. No hay nada nuevo para enviar a SiRADIG.",
+        ctas: [{ label: "Ver mis presentaciones", href: "/presentaciones", variant: "secondary" }],
+      };
+    }
+
     return {
       variant: "ready-to-present",
       title: "Presentá tu F.572 web",

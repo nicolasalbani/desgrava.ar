@@ -10,6 +10,8 @@ const baseInput = {
   hasUnregisteredWorker: false,
   allSubmitted: false,
   currentMonth: 4,
+  totalDeducted: 0,
+  lastPresentacionMontoTotal: null,
 };
 
 describe("deriveProximoPasoState", () => {
@@ -64,6 +66,68 @@ describe("deriveProximoPasoState", () => {
     });
     expect(state.variant).toBe("ready-to-present");
     expect(state.ctas[0].href).toBe("/presentaciones?spotlight=create");
+  });
+
+  describe("already-presented branch", () => {
+    it("returns 'already-presented' when totalDeducted matches the last presentation's montoTotal", () => {
+      const state = deriveProximoPasoState({
+        ...baseInput,
+        totalDeducibleInvoices: 5,
+        allSubmitted: true,
+        totalDeducted: 1_234_567.89,
+        lastPresentacionMontoTotal: 1_234_567.89,
+      });
+      expect(state.variant).toBe("already-presented");
+      expect(state.title).toBe("Ya está todo presentado");
+      expect(state.ctas).toHaveLength(1);
+      expect(state.ctas[0].href).toBe("/presentaciones");
+      expect(state.ctas[0].variant).toBe("secondary");
+    });
+
+    it("matches within sub-peso tolerance (rounding drift between SiRADIG and our totals)", () => {
+      const state = deriveProximoPasoState({
+        ...baseInput,
+        totalDeducibleInvoices: 5,
+        allSubmitted: true,
+        totalDeducted: 1_000_000.0,
+        lastPresentacionMontoTotal: 1_000_000.5,
+      });
+      expect(state.variant).toBe("already-presented");
+    });
+
+    it("falls through to 'ready-to-present' when totalDeducted exceeds last montoTotal by more than tolerance", () => {
+      const state = deriveProximoPasoState({
+        ...baseInput,
+        totalDeducibleInvoices: 5,
+        allSubmitted: true,
+        totalDeducted: 1_500_000,
+        lastPresentacionMontoTotal: 1_000_000,
+      });
+      expect(state.variant).toBe("ready-to-present");
+    });
+
+    it("falls through to 'ready-to-present' when there is no presentation yet", () => {
+      const state = deriveProximoPasoState({
+        ...baseInput,
+        totalDeducibleInvoices: 5,
+        allSubmitted: true,
+        totalDeducted: 1_000_000,
+        lastPresentacionMontoTotal: null,
+      });
+      expect(state.variant).toBe("ready-to-present");
+    });
+
+    it("does not fire when allSubmitted is false (pending items take priority)", () => {
+      const state = deriveProximoPasoState({
+        ...baseInput,
+        pendingInvoiceCount: 1,
+        totalDeducibleInvoices: 5,
+        allSubmitted: false,
+        totalDeducted: 1_000_000,
+        lastPresentacionMontoTotal: 1_000_000,
+      });
+      expect(state.variant).toBe("review-month");
+    });
   });
 
   it("returns 'all-set' variant otherwise (no CTAs)", () => {
