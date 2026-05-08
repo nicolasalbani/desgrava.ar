@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useJobStatus } from "@/hooks/use-job-status";
+import { enqueueAutomationJob } from "@/hooks/use-arca-import-progress";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -688,14 +689,10 @@ export function FamilyDependentsSection({
       });
 
       try {
-        const res = await fetch("/api/automatizacion", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jobType: "PUSH_FAMILY_DEPENDENTS",
-            fiscalYear,
-            familyDependentId: dependentId,
-          }),
+        const res = await enqueueAutomationJob("/api/automatizacion", {
+          jobType: "PUSH_FAMILY_DEPENDENTS",
+          fiscalYear,
+          familyDependentId: dependentId,
         });
 
         if (!res.ok) {

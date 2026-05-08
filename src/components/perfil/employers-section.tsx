@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useJobStatus } from "@/hooks/use-job-status";
+import { enqueueAutomationJob } from "@/hooks/use-arca-import-progress";
 import { z } from "zod";
 import {
   Loader2,
@@ -415,14 +416,10 @@ export function EmployersSection({
       });
 
       try {
-        const res = await fetch("/api/automatizacion", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            jobType: "PUSH_EMPLOYERS",
-            fiscalYear,
-            employerId: empId,
-          }),
+        const res = await enqueueAutomationJob("/api/automatizacion", {
+          jobType: "PUSH_EMPLOYERS",
+          fiscalYear,
+          employerId: empId,
         });
 
         if (!res.ok) {

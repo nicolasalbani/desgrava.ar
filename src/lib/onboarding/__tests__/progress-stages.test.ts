@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { computeProgressSnapshot, type JobLite } from "@/lib/onboarding/progress-stages";
+import {
+  computeJobPercent,
+  computeProgressSnapshot,
+  getJobTypeLabel,
+  JOB_TYPE_LABELS,
+  type JobLite,
+} from "@/lib/onboarding/progress-stages";
+import { JOB_STEP_DURATIONS } from "@/lib/automation/job-steps";
 
 function job(
   jobType: string,
@@ -258,5 +265,112 @@ describe("computeProgressSnapshot", () => {
       );
       expect(snap.runningTypes).toHaveLength(2);
     });
+  });
+
+  describe("PENDING jobs don't drag down the percent", () => {
+    it("queueing a new tracked import while one is running keeps the strip's percent intact", () => {
+      // Baseline: PULL_PROFILE alone, sitting on `cargas_familia` for 4s.
+      // before(cargas_familia) = 5+5+8+8 = 26s, +4s in-flight, total = 50s
+      // → 30/50 = 60%.
+      const startedAt = new Date(FIXED_NOW - 4_000);
+      const baselineSnap = computeProgressSnapshot(
+        [job("PULL_PROFILE", "RUNNING", "cargas_familia", startedAt)],
+        FIXED_NOW,
+      );
+      expect(baselineSnap.percent).toBe(60);
+
+      // The user clicks "Importar comprobantes" while PULL_PROFILE is still
+      // running. The new tracked import gets queued as PENDING. Its full
+      // duration must NOT inflate the denominator — the strip should stay
+      // focused on the actively running task at the same percent.
+      const withQueuedSnap = computeProgressSnapshot(
+        [
+          job("PULL_PROFILE", "RUNNING", "cargas_familia", startedAt),
+          job("PULL_COMPROBANTES", "PENDING", null),
+        ],
+        FIXED_NOW,
+      );
+      expect(withQueuedSnap.percent).toBe(60);
+      // The queued type still appears in runningTypes so per-row buttons can
+      // show "Esperando…".
+      expect(withQueuedSnap.runningTypes).toContain("PULL_COMPROBANTES");
+      expect(withQueuedSnap.percentByType.PULL_COMPROBANTES).toBe(0);
+    });
+  });
+});
+
+describe("getJobTypeLabel / JOB_TYPE_LABELS", () => {
+  it("resolves the spec-mandated label for every JobType the strip surfaces", () => {
+    const expected: Record<string, string> = {
+      PULL_COMPROBANTES: "Trayendo comprobantes",
+      PULL_DOMESTIC_RECEIPTS: "Trayendo recibos",
+      PULL_PRESENTACIONES: "Trayendo presentaciones",
+      PULL_PROFILE: "Trayendo cargas de familia",
+      SUBMIT_INVOICE: "Desgravando comprobante",
+      SUBMIT_DOMESTIC_DEDUCTION: "Desgravando recibo",
+      SUBMIT_PRESENTACION: "Generando presentación",
+      PUSH_FAMILY_DEPENDENTS: "Cargando familiares en SiRADIG",
+      BULK_SUBMIT: "Desgravando comprobantes",
+      VALIDATE_CREDENTIALS: "Validando credenciales",
+    };
+    for (const [jobType, label] of Object.entries(expected)) {
+      expect(getJobTypeLabel(jobType)).toBe(label);
+      expect(JOB_TYPE_LABELS[jobType]).toBe(label);
+    }
+  });
+
+  it("falls back to a generic label for unknown job types", () => {
+    expect(getJobTypeLabel("SOMETHING_ELSE")).toBe("Procesando tarea");
+  });
+});
+
+describe("JOB_STEP_DURATIONS for SUBMIT_*", () => {
+  it("each SUBMIT_* job sums to 30 seconds total", () => {
+    const submitTypes = [
+      "SUBMIT_INVOICE",
+      "BULK_SUBMIT",
+      "SUBMIT_DOMESTIC_DEDUCTION",
+      "SUBMIT_PRESENTACION",
+    ];
+    for (const t of submitTypes) {
+      const total = Object.values(JOB_STEP_DURATIONS[t] ?? {}).reduce((a, b) => a + b, 0);
+      expect(total).toBe(30);
+    }
+  });
+});
+
+describe("computeJobPercent", () => {
+  function job(
+    jobType: string,
+    status: JobLite["status"],
+    currentStep: string | null,
+    startedAt: Date | null,
+  ): JobLite {
+    return { jobType, status, currentStep, currentStepStartedAt: startedAt };
+  }
+
+  it("returns null for a job type with no JOB_STEP_DURATIONS entry", () => {
+    expect(computeJobPercent(job("UNKNOWN_TYPE", "RUNNING", "login", null))).toBeNull();
+  });
+
+  it("returns 100 for COMPLETED jobs", () => {
+    expect(computeJobPercent(job("SUBMIT_INVOICE", "COMPLETED", "done", null))).toBe(100);
+  });
+
+  it("computes time-weighted percent for SUBMIT_INVOICE on the fill step", () => {
+    // login 5 + siradig 5 + fill 19 + done 1 = 30s. Sitting on `fill` for 5s
+    // → before 10s + 5s in-flight = 15/30 = 50%.
+    const startedAt = new Date("2026-05-01T12:00:00Z");
+    const now = new Date("2026-05-01T12:00:05Z").getTime();
+    expect(computeJobPercent(job("SUBMIT_INVOICE", "RUNNING", "fill", startedAt), now)).toBe(50);
+  });
+
+  it("returns 0 for a freshly RUNNING job that hasn't started any step yet", () => {
+    expect(computeJobPercent(job("SUBMIT_INVOICE", "RUNNING", null, null))).toBe(0);
+  });
+
+  it("freezes at the failed step boundary for FAILED jobs", () => {
+    // Failed at `fill`: before-fill weight = 10s, total = 30s → 33%.
+    expect(computeJobPercent(job("SUBMIT_INVOICE", "FAILED", "fill", null))).toBe(33);
   });
 });

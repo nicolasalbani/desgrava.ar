@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Download, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { refreshArcaProgress, useArcaImportProgress } from "@/hooks/use-arca-import-progress";
+import {
+  enqueueAutomationJob,
+  refreshArcaProgress,
+  useArcaImportProgress,
+} from "@/hooks/use-arca-import-progress";
 import type { TrackedJobType } from "@/lib/onboarding/progress-stages";
 
 type ImportableJobType = Extract<
@@ -42,26 +46,30 @@ const DEFAULT_LABEL = "Importar desde ARCA";
 export function ArcaImportButton(props: Props) {
   const { jobType, fiscalYear, label = DEFAULT_LABEL, disabled = false } = props;
   const router = useRouter();
-  const { snapshot } = useArcaImportProgress();
+  const { snapshot, queueState } = useArcaImportProgress();
   const [enqueueing, setEnqueueing] = useState(false);
 
-  const isRunning = snapshot.runningTypes.includes(jobType);
+  // Per-user-lock invariant: at most one job actually RUNNING. So this
+  // button's job is "actually running" only when queueState picks it as the
+  // single runningJobType. Otherwise — if it's in `runningTypes` but isn't
+  // the one running — it's queued behind some other automation.
+  const isActive = snapshot.runningTypes.includes(jobType);
+  const isRunning = isActive && queueState.runningJobType === jobType;
+  const isWaiting = isActive && !isRunning;
   const percent = isRunning ? (snapshot.percentByType[jobType] ?? 0) : 0;
   const showFill = isRunning && !props.disableFill;
-  const runningLabel = "Descargando…";
+  const activeLabel = isWaiting ? "Esperando…" : "Procesando…";
 
   async function handleClick() {
-    if (isRunning || enqueueing || fiscalYear == null) return;
+    if (isActive || enqueueing || fiscalYear == null) return;
     setEnqueueing(true);
     try {
-      const res = await fetch("/api/automatizacion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobType, fiscalYear }),
-      });
+      const res = await enqueueAutomationJob("/api/automatizacion", { jobType, fiscalYear });
       if (!res.ok) {
         const data: { error?: string } = await res.json().catch(() => ({}));
-        // 409 / dedup is fine — strip already shows the running job.
+        // 409 / dedup is fine — strip already shows the running job. The
+        // helper only wakes the hook on `res.ok`, so we still need an
+        // explicit nudge here so the button switches into running state.
         if (res.status === 409) {
           refreshArcaProgress();
           router.refresh();
@@ -69,10 +77,7 @@ export function ArcaImportButton(props: Props) {
         }
         throw new Error(data.error ?? "No se pudo iniciar la importación");
       }
-      toast.success("Importación iniciada");
-      // Wake every mounted progress hook so the strip and this button switch
-      // into running state without waiting for the next 4s poll.
-      refreshArcaProgress();
+      toast.success("Importación encolada");
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al importar");
@@ -81,8 +86,12 @@ export function ArcaImportButton(props: Props) {
     }
   }
 
-  const isDisabled = disabled || isRunning || enqueueing || fiscalYear == null;
-  const ariaLabel = isRunning ? `${label} en progreso, ${percent}%` : label;
+  const isDisabled = disabled || isActive || enqueueing || fiscalYear == null;
+  const ariaLabel = isRunning
+    ? `${label} en progreso, ${percent}%`
+    : isWaiting
+      ? `${label}, esperando que termine la tarea actual`
+      : label;
 
   if (props.mode === "card") {
     const variantClasses =
@@ -111,12 +120,12 @@ export function ArcaImportButton(props: Props) {
           />
         )}
         <span className="relative flex items-center gap-2">
-          {isRunning ? (
+          {isActive ? (
             <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
           ) : (
             <Download className="h-4 w-4 shrink-0" />
           )}
-          {isRunning ? runningLabel : label}
+          {isActive ? activeLabel : label}
         </span>
       </button>
     );
@@ -136,7 +145,7 @@ export function ArcaImportButton(props: Props) {
       className={cn(
         "group bg-card border-border text-foreground hover:bg-muted relative inline-flex h-9 items-center overflow-hidden rounded-md border px-3 text-sm font-medium transition-colors",
         isDisabled && "cursor-not-allowed opacity-70",
-        isRunning && "ring-primary/20 ring-2 ring-offset-0",
+        isActive && "ring-primary/20 ring-2 ring-offset-0",
       )}
     >
       {showFill && (
@@ -151,12 +160,12 @@ export function ArcaImportButton(props: Props) {
         <span
           className={cn(
             "max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-300 ease-out",
-            isRunning
+            isActive
               ? "ml-2 max-w-[200px] opacity-100"
               : "group-hover:ml-2 group-hover:max-w-[200px] group-hover:opacity-100",
           )}
         >
-          {isRunning ? runningLabel : label}
+          {isActive ? activeLabel : label}
         </span>
       </span>
     </button>

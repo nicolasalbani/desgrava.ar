@@ -1,9 +1,42 @@
 import {
+  computeJobPercent,
   computeProgressSnapshot,
   TRACKED_JOB_TYPES,
   type JobLite,
   type ProgressSnapshot,
 } from "@/lib/onboarding/progress-stages";
+
+export interface QueueState {
+  /** True when the user has at least one PENDING or RUNNING job (any type). */
+  hasAnyActive: boolean;
+  /** Type of the single RUNNING job. The server enforces ≤ 1 RUNNING per user
+   *  via a Redis lock, so this is a single value. Null when the user has only
+   *  PENDING jobs (worker-pool saturation). */
+  runningJobType: string | null;
+  /** Time-weighted percent for the single RUNNING job, regardless of whether
+   *  the job type is tracked by the import snapshot. Null when no job is
+   *  running, or when the running job's type has no `JOB_STEP_DURATIONS`
+   *  entries (the strip falls back to indeterminate UI). */
+  runningJobPercent: number | null;
+  /** True when **more than one** automation is active — a RUNNING job plus
+   *  one or more PENDING, or two-plus PENDING with nothing running yet (rare
+   *  worker-saturation case). Used to surface the "más automatizaciones
+   *  esperando" hint, so it must be false when there's only a single in-
+   *  flight job (otherwise the copy lies). */
+  hasQueuedWaiting: boolean;
+  /** Unique list of PENDING job types. Consumers use this to decide whether
+   *  to mount the inline banner (e.g., only show the comprobantes banner when
+   *  there's a queued SUBMIT_INVOICE / BULK_SUBMIT). */
+  queuedJobTypes: ReadonlyArray<string>;
+}
+
+export const EMPTY_QUEUE_STATE: QueueState = {
+  hasAnyActive: false,
+  runningJobType: null,
+  runningJobPercent: null,
+  hasQueuedWaiting: false,
+  queuedJobTypes: [],
+};
 
 export interface ApiJobLite {
   id: string;
@@ -144,4 +177,71 @@ export function aggregateImportProgress(
   }
 
   return { snapshot, summary };
+}
+
+/**
+ * Pure helper that derives the queue state across **every** job type — not
+ * just tracked imports — for the user's current fiscal year. Reads the same
+ * `/api/automatizacion` job list that the import-progress aggregator uses, so
+ * no extra fetch is needed.
+ *
+ * Filters jobs to the given fiscal year (jobs with `fiscalYear == null` are
+ * treated as belonging to the current year — matches the import aggregator).
+ * The latest job per `(jobType, ...)` is **not** deduped here because we want
+ * the full queue depth: if a user fires three `SUBMIT_INVOICE` jobs back-to-
+ * back, all three count as queued (one runs, two wait).
+ */
+export function computeQueueState(
+  jobs: ApiJobLite[],
+  fiscalYear: number,
+  now: number = Date.now(),
+): QueueState {
+  const inScope = jobs.filter((j) => (j.fiscalYear ?? fiscalYear) === fiscalYear);
+  const running = inScope.filter((j) => j.status === "RUNNING");
+  const pending = inScope.filter((j) => j.status === "PENDING");
+
+  if (running.length === 0 && pending.length === 0) {
+    return EMPTY_QUEUE_STATE;
+  }
+
+  // Per-user lock invariant: ≤ 1 RUNNING. Fall back to first-by-createdAt-asc
+  // deterministically if the invariant ever breaks.
+  const runningJob =
+    running.length > 0
+      ? [...running].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        )[0]
+      : null;
+  const runningJobType = runningJob?.jobType ?? null;
+
+  // Time-weighted percent for the single running job. Reuses the same math as
+  // the import snapshot but works for any job type that has duration data.
+  const runningJobPercent = runningJob
+    ? computeJobPercent(
+        {
+          jobType: runningJob.jobType,
+          status: runningJob.status,
+          currentStep: runningJob.currentStep,
+          currentStepStartedAt: runningJob.currentStepStartedAt
+            ? new Date(runningJob.currentStepStartedAt)
+            : null,
+        },
+        now,
+      )
+    : null;
+
+  // hasQueuedWaiting: only when more than one task is active. A single job
+  // (whether RUNNING or PENDING) does not count — the strip's "más tareas
+  // esperando" copy is meaningless when there's only one.
+  const hasQueuedWaiting = running.length + pending.length > 1;
+
+  const queuedJobTypes = Array.from(new Set(pending.map((j) => j.jobType)));
+
+  return {
+    hasAnyActive: true,
+    runningJobType,
+    runningJobPercent,
+    hasQueuedWaiting,
+    queuedJobTypes,
+  };
 }

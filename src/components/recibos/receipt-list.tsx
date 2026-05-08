@@ -45,6 +45,8 @@ import { useAttentionCounts } from "@/contexts/attention-counts";
 import { formatCuit } from "@/lib/validators/cuit";
 import { JobStatusBadge, type LatestJob } from "@/components/shared/job-status-badge";
 import { JobHistoryPanel } from "@/components/shared/job-history-panel";
+import { QueuedJobsBanner } from "@/components/shared/queued-jobs-banner";
+import { enqueueAutomationJob } from "@/hooks/use-arca-import-progress";
 import { usePaginatedFetch } from "@/hooks/use-paginated-fetch";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 
@@ -71,7 +73,7 @@ interface ReceiptRow {
 }
 
 const JOB_STATUS_LABELS: Record<string, string> = {
-  PENDING: "Pendiente",
+  PENDING: "Esperando",
   RUNNING: "Ejecutando",
   COMPLETED: "Desgravado",
   FAILED: "Error",
@@ -250,14 +252,10 @@ export function ReceiptList({
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/automatizacion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobType: "SUBMIT_DOMESTIC_DEDUCTION",
-          fiscalYear,
-          receiptIds: Array.from(selectedIds),
-        }),
+      const res = await enqueueAutomationJob("/api/automatizacion", {
+        jobType: "SUBMIT_DOMESTIC_DEDUCTION",
+        fiscalYear,
+        receiptIds: Array.from(selectedIds),
       });
 
       if (res.ok) {
@@ -309,14 +307,10 @@ export function ReceiptList({
       return;
     }
     try {
-      const res = await fetch("/api/automatizacion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobType: "SUBMIT_DOMESTIC_DEDUCTION",
-          fiscalYear,
-          receiptIds: [receiptId],
-        }),
+      const res = await enqueueAutomationJob("/api/automatizacion", {
+        jobType: "SUBMIT_DOMESTIC_DEDUCTION",
+        fiscalYear,
+        receiptIds: [receiptId],
       });
       if (res.ok) {
         const jobData = await res.json().catch(() => null);
@@ -429,6 +423,7 @@ export function ReceiptList({
 
   return (
     <div className="space-y-4">
+      <QueuedJobsBanner surface="recibos" />
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="text-muted-foreground/40 absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />

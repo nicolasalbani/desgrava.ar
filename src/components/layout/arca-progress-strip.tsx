@@ -5,11 +5,14 @@ import Link from "next/link";
 import { ChevronUp, ChevronDown, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useArcaImportProgress } from "@/hooks/use-arca-import-progress";
+import { TRACKED_JOB_TYPES, getJobTypeLabel } from "@/lib/onboarding/progress-stages";
 
 const HIDE_AFTER_DONE_MS = 8000;
 
+const TRACKED_SET = new Set<string>(TRACKED_JOB_TYPES);
+
 export function ArcaProgressStrip() {
-  const { snapshot, summary } = useArcaImportProgress();
+  const { snapshot, summary, queueState } = useArcaImportProgress();
   const [collapsed, setCollapsed] = useState(false);
   const [hidden, setHidden] = useState(true);
   // Tracks whether this strip instance has ever observed a running job. We
@@ -18,13 +21,22 @@ export function ArcaProgressStrip() {
   // success banner from imports that finished long ago.
   const observedRunningRef = useRef(false);
 
+  // The strip switches into a non-import "indeterminate" mode when the only
+  // active automation is something we don't have time-weighted progress for
+  // (SUBMIT_*, PUSH_*, VALIDATE_CREDENTIALS). Tracked imports keep their
+  // existing behavior unchanged.
+  const nonImportActive =
+    queueState.hasAnyActive &&
+    snapshot.trackedCount === 0 &&
+    (queueState.runningJobType === null || !TRACKED_SET.has(queueState.runningJobType));
+
   useEffect(() => {
-    if (snapshot.trackedCount === 0) {
+    if (snapshot.trackedCount === 0 && !nonImportActive) {
       setHidden(true);
       observedRunningRef.current = false;
       return;
     }
-    if (snapshot.hasRunning) {
+    if (snapshot.hasRunning || nonImportActive) {
       observedRunningRef.current = true;
       setHidden(false);
       return;
@@ -43,7 +55,13 @@ export function ArcaProgressStrip() {
       // Pre-existing completed jobs — stay hidden.
       setHidden(true);
     }
-  }, [snapshot.trackedCount, snapshot.hasRunning, snapshot.hasFailed, snapshot.allDone]);
+  }, [
+    snapshot.trackedCount,
+    snapshot.hasRunning,
+    snapshot.hasFailed,
+    snapshot.allDone,
+    nonImportActive,
+  ]);
 
   if (hidden) return null;
 
@@ -72,26 +90,53 @@ export function ArcaProgressStrip() {
     );
   }
 
+  // Resolve the active label for non-import mode (or worker-saturation case).
+  const nonImportLabel =
+    queueState.runningJobType !== null
+      ? getJobTypeLabel(queueState.runningJobType)
+      : "Esperando que se libere un recurso para tomar la tarea…";
+
+  // When a non-tracked job is running and we have time-weighted percent
+  // (because its type has JOB_STEP_DURATIONS data), the strip shows real
+  // progress instead of indeterminate animation. Falls back to indeterminate
+  // for unknown types and for the worker-saturation case (no running job).
+  const nonImportPercent = nonImportActive ? queueState.runningJobPercent : null;
+  const nonImportDeterminate = nonImportActive && nonImportPercent !== null;
+
   // Collapsed pill (only when running, not done)
   if (collapsed && !snapshot.allDone) {
     return (
       <button
         type="button"
         onClick={() => setCollapsed(false)}
-        aria-label={`Expandir progreso: ${snapshot.stageLabel}`}
+        aria-label={
+          nonImportActive
+            ? `Expandir progreso: ${nonImportLabel}`
+            : `Expandir progreso: ${snapshot.stageLabel}`
+        }
         className="bg-card border-border fixed right-4 bottom-20 z-40 flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-full border px-3 py-2 shadow-lg sm:bottom-4"
       >
         <Loader2 className="text-primary h-4 w-4 animate-spin" />
-        <span className="text-foreground text-xs font-medium tabular-nums">
-          {snapshot.percent}%
-        </span>
+        {nonImportActive ? (
+          nonImportDeterminate ? (
+            <span className="text-foreground text-xs font-medium tabular-nums">
+              {nonImportPercent}%
+            </span>
+          ) : (
+            <span className="text-foreground text-xs font-medium">En curso</span>
+          )
+        ) : (
+          <span className="text-foreground text-xs font-medium tabular-nums">
+            {snapshot.percent}%
+          </span>
+        )}
       </button>
     );
   }
 
   if (collapsed && snapshot.allDone) return null;
 
-  const isDone = snapshot.allDone;
+  const isDone = snapshot.allDone && !nonImportActive;
   const summaryParts: string[] = [];
   if (summary.invoices > 0) {
     summaryParts.push(
@@ -108,15 +153,40 @@ export function ArcaProgressStrip() {
   }
   const summaryText = summaryParts.length > 0 ? `Trajimos ${summaryParts.join(", ")}.` : null;
 
+  // Primary line label: tracked imports use the stage label; non-import mode
+  // uses the per-job-type label (or worker-saturation copy).
+  const primaryLabel = isDone
+    ? "Importación desde ARCA completa"
+    : nonImportActive
+      ? nonImportLabel
+      : snapshot.stageLabel;
+
+  // Secondary line copy. The strip stays focused on the currently running
+  // task: its label + percent (or background-processing message in non-import
+  // mode). Queued tasks wait silently in the background — surfaced via the
+  // per-row "Esperando…" badge and the inline banner on list pages, never on
+  // the strip itself.
+  const secondaryLine = isDone
+    ? (summaryText ?? "Tus datos de ARCA están al día.")
+    : nonImportActive
+      ? nonImportDeterminate
+        ? `Procesando en segundo plano… ${nonImportPercent}%`
+        : "Procesando en segundo plano…"
+      : `Trayendo tus datos en segundo plano… ${snapshot.percent}%`;
+
+  const ariaLabel = isDone
+    ? "Importación de ARCA completa"
+    : nonImportActive
+      ? nonImportDeterminate
+        ? `Automatización en curso: ${nonImportLabel}, ${nonImportPercent}%`
+        : `Automatización en curso: ${nonImportLabel}`
+      : `Importación de ARCA: ${snapshot.stageLabel}, ${snapshot.percent}%`;
+
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label={
-        isDone
-          ? "Importación de ARCA completa"
-          : `Importación de ARCA: ${snapshot.stageLabel}, ${snapshot.percent}%`
-      }
+      aria-label={ariaLabel}
       className={cn(
         "relative border-b transition-colors",
         isDone
@@ -124,15 +194,23 @@ export function ArcaProgressStrip() {
           : "border-primary/15 bg-primary/[0.04] dark:bg-primary/10",
       )}
     >
-      {/* Thin progress bar at the very top edge */}
+      {/* Thin progress bar at the very top edge. In non-import mode the bar
+          shows real percent when the running job has duration data, otherwise
+          slides indeterminately as a fallback. */}
       <div className="bg-border/40 absolute inset-x-0 top-0 h-0.5 overflow-hidden">
-        <div
-          className={cn(
-            "h-full transition-all duration-700 ease-out",
-            isDone ? "bg-emerald-500" : "bg-primary",
-          )}
-          style={{ width: `${snapshot.percent}%` }}
-        />
+        {nonImportActive && !nonImportDeterminate ? (
+          <div className="bar-indeterminate bg-primary h-full" aria-hidden="true" />
+        ) : (
+          <div
+            className={cn(
+              "h-full transition-all duration-700 ease-out",
+              isDone ? "bg-emerald-500" : "bg-primary",
+            )}
+            style={{
+              width: `${nonImportDeterminate ? nonImportPercent : snapshot.percent}%`,
+            }}
+          />
+        )}
       </div>
 
       <div className="flex items-start gap-3 px-4 py-3 sm:items-center sm:py-3">
@@ -149,13 +227,9 @@ export function ArcaProgressStrip() {
               isDone ? "text-emerald-700 dark:text-emerald-400" : "text-foreground",
             )}
           >
-            {isDone ? "Importación desde ARCA completa" : snapshot.stageLabel}
+            {primaryLabel}
           </p>
-          <p className="text-muted-foreground mt-0.5 truncate text-xs">
-            {isDone
-              ? (summaryText ?? "Tus datos de ARCA están al día.")
-              : `Trayendo tus datos en segundo plano… ${snapshot.percent}%`}
-          </p>
+          <p className="text-muted-foreground mt-0.5 truncate text-xs">{secondaryLine}</p>
         </div>
 
         <button

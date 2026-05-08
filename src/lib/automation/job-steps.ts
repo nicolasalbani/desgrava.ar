@@ -148,4 +148,31 @@ export const JOB_STEP_DURATIONS: Record<string, Record<string, number>> = {
     casas_particulares: 15,
     done: 1,
   },
+  // SUBMIT_* placeholders — assumed total ≈ 30s each, allocated as login 5 +
+  // siradig 5 + payload step 19 + done 1. Replace with empirical p50/p75
+  // numbers once we have enough finished-job telemetry.
+  SUBMIT_INVOICE: {
+    login: 5,
+    siradig: 5,
+    fill: 19,
+    done: 1,
+  },
+  BULK_SUBMIT: {
+    login: 5,
+    siradig: 5,
+    fill: 19,
+    done: 1,
+  },
+  SUBMIT_DOMESTIC_DEDUCTION: {
+    login: 5,
+    siradig: 5,
+    fill: 19,
+    done: 1,
+  },
+  SUBMIT_PRESENTACION: {
+    login: 5,
+    siradig: 5,
+    submit: 19,
+    done: 1,
+  },
 };

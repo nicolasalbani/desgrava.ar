@@ -14,6 +14,7 @@ import { Loader2, FileText, Send, ChevronDown, ChevronUp } from "lucide-react";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 import { JobStatusBadge, type LatestJob } from "@/components/shared/job-status-badge";
 import { JobHistoryPanel } from "@/components/shared/job-history-panel";
+import { QueuedJobsBanner } from "@/components/shared/queued-jobs-banner";
 import { usePaginatedFetch } from "@/hooks/use-paginated-fetch";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 
@@ -122,6 +123,7 @@ export function PresentacionesList({ onInitialLoad }: { onInitialLoad?: (count: 
 
   return (
     <div className="space-y-4">
+      <QueuedJobsBanner surface="presentaciones" />
       {pagination.totalCount > 0 && (
         <div className="flex items-center justify-end">
           <span className="text-muted-foreground shrink-0 text-sm tabular-nums">

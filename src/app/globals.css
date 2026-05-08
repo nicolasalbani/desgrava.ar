@@ -166,3 +166,25 @@
   background-size: 200% 100%;
   animation: ai-shimmer 2s linear infinite;
 }
+
+@keyframes bar-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(333%);
+  }
+}
+
+.bar-indeterminate {
+  width: 30%;
+  animation: bar-indeterminate 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-indeterminate {
+    width: 30%;
+    transform: translateX(0);
+    animation: none;
+  }
+}

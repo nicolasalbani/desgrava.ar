@@ -16,6 +16,7 @@ import { useFiscalYear } from "@/contexts/fiscal-year";
 import { StepProgress } from "@/components/shared/step-progress";
 import { JOB_TYPE_STEPS } from "@/lib/automation/job-steps";
 import { useJobStatus } from "@/hooks/use-job-status";
+import { enqueueAutomationJob } from "@/hooks/use-arca-import-progress";
 
 type Status = "idle" | "running" | "completed" | "failed";
 
@@ -104,11 +105,11 @@ export function SubmitPresentacionDialog({
     setActiveJobId(null);
 
     try {
-      const res = await fetch("/api/presentaciones/enviar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fiscalYear: year }),
-      });
+      const res = await enqueueAutomationJob(
+        "/api/presentaciones/enviar",
+        { fiscalYear: year },
+        { jobType: "SUBMIT_PRESENTACION", fiscalYear: year },
+      );
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

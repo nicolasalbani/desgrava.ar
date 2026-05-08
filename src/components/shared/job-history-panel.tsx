@@ -19,7 +19,7 @@ interface JobEntry {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string }> = {
-  PENDING: { label: "Pendiente", dot: "bg-foreground/25" },
+  PENDING: { label: "Esperando", dot: "bg-amber-400/80" },
   RUNNING: { label: "Ejecutando", dot: "bg-blue-400/70" },
   COMPLETED: { label: "Desgravado", dot: "bg-emerald-400/80" },
   FAILED: { label: "Error", dot: "bg-rose-400/80" },

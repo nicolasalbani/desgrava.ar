@@ -30,6 +30,29 @@ export const TRACKED_JOB_TYPES = [
 
 export type TrackedJobType = (typeof TRACKED_JOB_TYPES)[number];
 
+/** Flat label per job type for the strip's stage line when the job is not a
+ *  tracked import (which uses step-driven stages instead). Unknown job types
+ *  fall back to a generic label via `getJobTypeLabel`. */
+export const JOB_TYPE_LABELS: Record<string, string> = {
+  PULL_COMPROBANTES: "Trayendo comprobantes",
+  PULL_DOMESTIC_RECEIPTS: "Trayendo recibos",
+  PULL_PRESENTACIONES: "Trayendo presentaciones",
+  PULL_PROFILE: "Trayendo cargas de familia",
+  SUBMIT_INVOICE: "Desgravando comprobante",
+  SUBMIT_DOMESTIC_DEDUCTION: "Desgravando recibo",
+  SUBMIT_PRESENTACION: "Generando presentación",
+  PUSH_FAMILY_DEPENDENTS: "Cargando familiares en SiRADIG",
+  BULK_SUBMIT: "Desgravando comprobantes",
+  VALIDATE_CREDENTIALS: "Validando credenciales",
+  PULL_FAMILY_DEPENDENTS: "Trayendo cargas de familia",
+  PULL_DOMESTIC_WORKERS: "Trayendo personal doméstico",
+  PULL_EMPLOYERS: "Trayendo empleadores",
+};
+
+export function getJobTypeLabel(jobType: string): string {
+  return JOB_TYPE_LABELS[jobType] ?? "Procesando tarea";
+}
+
 export type JobStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
 
 export interface JobLite {
@@ -138,14 +161,14 @@ function highestStage(stages: Stage[]): Stage | null {
 }
 
 /** Sum of all step durations for a job type (its expected total wall-clock time). */
-function totalDurationFor(jobType: TrackedJobType): number {
+function totalDurationFor(jobType: string): number {
   const durations = JOB_STEP_DURATIONS[jobType] ?? {};
   const steps = JOB_TYPE_STEPS[jobType] ?? [];
   return steps.reduce((sum, s) => sum + (durations[s.key] ?? 0), 0);
 }
 
 /** Weight (seconds) covered by all steps that strictly precede `stepKey`. */
-function weightBeforeStep(jobType: TrackedJobType, stepKey: string | null): number {
+function weightBeforeStep(jobType: string, stepKey: string | null): number {
   const durations = JOB_STEP_DURATIONS[jobType] ?? {};
   const steps = JOB_TYPE_STEPS[jobType] ?? [];
   if (!stepKey) return 0;
@@ -157,9 +180,39 @@ function weightBeforeStep(jobType: TrackedJobType, stepKey: string | null): numb
   return sum;
 }
 
-function durationForStep(jobType: TrackedJobType, stepKey: string | null): number {
+function durationForStep(jobType: string, stepKey: string | null): number {
   if (!stepKey) return 0;
   return JOB_STEP_DURATIONS[jobType]?.[stepKey] ?? 0;
+}
+
+/**
+ * Time-weighted percent for any job type that has `JOB_STEP_DURATIONS` data,
+ * including non-tracked types like SUBMIT_INVOICE. Returns `null` when the
+ * job type has no duration entries (caller falls back to indeterminate UI).
+ *
+ * Uses the same formula as the per-tracked snapshot: completed-step weight +
+ * an in-flight partial slice of the current step (capped at 90% of the step's
+ * expected duration so we never display 100% before the step actually
+ * finishes).
+ */
+export function computeJobPercent(job: JobLite, now: number = Date.now()): number | null {
+  const total = totalDurationFor(job.jobType);
+  if (total === 0) return null;
+
+  if (job.status === "COMPLETED") return 100;
+  if (job.status === "FAILED" || job.status === "CANCELLED") {
+    const before = weightBeforeStep(job.jobType, job.currentStep);
+    return Math.min(100, Math.round((before / total) * 100));
+  }
+
+  const before = weightBeforeStep(job.jobType, job.currentStep);
+  const stepDuration = durationForStep(job.jobType, job.currentStep);
+  let inFlight = 0;
+  if (stepDuration > 0 && job.currentStepStartedAt) {
+    const elapsedSec = Math.max(0, (now - job.currentStepStartedAt.getTime()) / 1000);
+    inFlight = Math.min(stepDuration * IN_FLIGHT_CAP, elapsedSec);
+  }
+  return Math.min(100, Math.round(((before + inFlight) / total) * 100));
 }
 
 /** Per-job time-weighted progress (seconds). Returns `{ completed, total }`. */
@@ -232,12 +285,10 @@ export function computeProgressSnapshot(
 
   for (const job of tracked) {
     if (!isTracked(job.jobType)) continue;
-    const { completed, total } = jobWeight(job, now);
-    if (total === 0) continue;
-    totalWeight += total;
-    completedWeight += completed;
-    percentByType[job.jobType] = Math.min(100, Math.round((completed / total) * 100));
 
+    // Bookkeeping (status sets, stage label, etc.) runs for every job —
+    // including PENDING — so consumers like ArcaImportButton can detect
+    // queued jobs and show "Esperando…".
     if (job.status === "COMPLETED") {
       completedTypes.push(job.jobType);
     } else if (job.status === "FAILED" || job.status === "CANCELLED") {
@@ -250,6 +301,21 @@ export function computeProgressSnapshot(
       const stage = stageForJobAndStep(job.jobType, job.currentStep);
       if (stage) runningStages.push(stage);
     }
+
+    // Weight aggregation drives the strip's progress bar. PENDING jobs are
+    // queued behind whatever is RUNNING and must not contribute — otherwise
+    // the bar would drop the moment the user fires a new task while one is
+    // still in flight (their full duration would inflate the denominator
+    // while contributing 0 to the numerator). The strip stays focused on
+    // the actively running task; queued ones surface via the per-row badge
+    // and the inline banner.
+    if (job.status === "PENDING") continue;
+
+    const { completed, total } = jobWeight(job, now);
+    if (total === 0) continue;
+    totalWeight += total;
+    completedWeight += completed;
+    percentByType[job.jobType] = Math.min(100, Math.round((completed / total) * 100));
   }
 
   const percent =

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   aggregateImportProgress,
+  computeQueueState,
   filterJobsBySessionCutoff,
   pickSessionCutoff,
   type ApiJobLite,
@@ -403,5 +404,208 @@ describe("aggregateImportProgress", () => {
     );
     expect(summary.invoices).toBe(0);
     expect(summary.receipts).toBe(0);
+  });
+});
+
+describe("computeQueueState", () => {
+  it("returns the empty state when there are no jobs", () => {
+    const state = computeQueueState([], 2026);
+    expect(state).toEqual({
+      hasAnyActive: false,
+      runningJobType: null,
+      runningJobPercent: null,
+      hasQueuedWaiting: false,
+      queuedJobTypes: [],
+    });
+  });
+
+  it("returns the empty state when only terminal jobs exist", () => {
+    const state = computeQueueState(
+      [
+        apiJob({ jobType: "PULL_COMPROBANTES", status: "COMPLETED" }),
+        apiJob({ jobType: "SUBMIT_INVOICE", status: "FAILED" }),
+        apiJob({ jobType: "SUBMIT_INVOICE", status: "CANCELLED" }),
+      ],
+      2026,
+    );
+    expect(state.hasAnyActive).toBe(false);
+    expect(state.runningJobType).toBeNull();
+    expect(state.hasQueuedWaiting).toBe(false);
+  });
+
+  it("reports a single running SUBMIT_INVOICE without queued waiting", () => {
+    const state = computeQueueState(
+      [apiJob({ jobType: "SUBMIT_INVOICE", status: "RUNNING" })],
+      2026,
+    );
+    expect(state.hasAnyActive).toBe(true);
+    expect(state.runningJobType).toBe("SUBMIT_INVOICE");
+    expect(state.hasQueuedWaiting).toBe(false);
+    expect(state.queuedJobTypes).toEqual([]);
+  });
+
+  it("reports a running PULL_PROFILE with two PENDING SUBMIT_INVOICE as queued waiting", () => {
+    const state = computeQueueState(
+      [
+        apiJob({ id: "a", jobType: "PULL_PROFILE", status: "RUNNING" }),
+        apiJob({ id: "b", jobType: "SUBMIT_INVOICE", status: "PENDING" }),
+        apiJob({ id: "c", jobType: "SUBMIT_INVOICE", status: "PENDING" }),
+      ],
+      2026,
+    );
+    expect(state.hasAnyActive).toBe(true);
+    expect(state.runningJobType).toBe("PULL_PROFILE");
+    expect(state.hasQueuedWaiting).toBe(true);
+    expect(state.queuedJobTypes).toEqual(["SUBMIT_INVOICE"]);
+  });
+
+  it("reports worker-pool saturation (only PENDING jobs) as queued waiting", () => {
+    const state = computeQueueState(
+      [
+        apiJob({ id: "a", jobType: "SUBMIT_INVOICE", status: "PENDING" }),
+        apiJob({ id: "b", jobType: "SUBMIT_DOMESTIC_DEDUCTION", status: "PENDING" }),
+      ],
+      2026,
+    );
+    expect(state.hasAnyActive).toBe(true);
+    expect(state.runningJobType).toBeNull();
+    expect(state.hasQueuedWaiting).toBe(true);
+    expect(state.queuedJobTypes.sort()).toEqual(
+      ["SUBMIT_DOMESTIC_DEDUCTION", "SUBMIT_INVOICE"].sort(),
+    );
+  });
+
+  it("does NOT flag hasQueuedWaiting for a single PENDING job with nothing running", () => {
+    // A single in-flight job — whether RUNNING or PENDING — must not trigger
+    // the "más tareas esperando" hint, since there are no others.
+    const state = computeQueueState(
+      [apiJob({ jobType: "SUBMIT_INVOICE", status: "PENDING" })],
+      2026,
+    );
+    expect(state.hasAnyActive).toBe(true);
+    expect(state.runningJobType).toBeNull();
+    expect(state.hasQueuedWaiting).toBe(false);
+  });
+
+  it("does NOT flag hasQueuedWaiting for a single RUNNING job", () => {
+    const state = computeQueueState([apiJob({ jobType: "PULL_PROFILE", status: "RUNNING" })], 2026);
+    expect(state.hasAnyActive).toBe(true);
+    expect(state.runningJobType).toBe("PULL_PROFILE");
+    expect(state.hasQueuedWaiting).toBe(false);
+  });
+
+  it("filters by fiscal year — jobs in another year are ignored", () => {
+    const state = computeQueueState(
+      [
+        apiJob({ jobType: "SUBMIT_INVOICE", status: "RUNNING", fiscalYear: 2025 }),
+        apiJob({ jobType: "SUBMIT_INVOICE", status: "PENDING", fiscalYear: 2026 }),
+      ],
+      2026,
+    );
+    expect(state.runningJobType).toBeNull();
+    expect(state.queuedJobTypes).toEqual(["SUBMIT_INVOICE"]);
+  });
+
+  it("treats jobs with null fiscalYear as belonging to the current year", () => {
+    const state = computeQueueState(
+      [apiJob({ jobType: "VALIDATE_CREDENTIALS", status: "RUNNING", fiscalYear: null })],
+      2026,
+    );
+    expect(state.hasAnyActive).toBe(true);
+    expect(state.runningJobType).toBe("VALIDATE_CREDENTIALS");
+  });
+
+  it("dedupes queuedJobTypes when multiple PENDING jobs share a type", () => {
+    const state = computeQueueState(
+      [
+        apiJob({ id: "a", jobType: "SUBMIT_INVOICE", status: "RUNNING" }),
+        apiJob({ id: "b", jobType: "SUBMIT_INVOICE", status: "PENDING" }),
+        apiJob({ id: "c", jobType: "SUBMIT_INVOICE", status: "PENDING" }),
+        apiJob({ id: "d", jobType: "SUBMIT_INVOICE", status: "PENDING" }),
+      ],
+      2026,
+    );
+    expect(state.queuedJobTypes).toEqual(["SUBMIT_INVOICE"]);
+  });
+
+  describe("runningJobPercent", () => {
+    it("is null when nothing is running", () => {
+      const state = computeQueueState(
+        [apiJob({ jobType: "SUBMIT_INVOICE", status: "PENDING" })],
+        2026,
+      );
+      expect(state.runningJobPercent).toBeNull();
+    });
+
+    it("computes time-weighted percent for a SUBMIT_INVOICE on the fill step", () => {
+      // SUBMIT_INVOICE durations: login 5 + siradig 5 + fill 19 + done 1 = 30s.
+      // Sitting on `fill` for 9.5s → before-step weight 10s + 9.5s in-flight =
+      // 19.5s of 30s ≈ 65%.
+      const startedAt = new Date("2026-05-01T12:00:00Z");
+      const now = new Date("2026-05-01T12:00:09.500Z").getTime();
+      const state = computeQueueState(
+        [
+          apiJob({
+            jobType: "SUBMIT_INVOICE",
+            status: "RUNNING",
+            currentStep: "fill",
+            currentStepStartedAt: startedAt.toISOString(),
+          }),
+        ],
+        2026,
+        now,
+      );
+      expect(state.runningJobPercent).toBe(65);
+    });
+
+    it("caps the in-flight slice at 90% of the current step's duration", () => {
+      // Sitting on `fill` (19s) for far longer than expected — the in-flight
+      // slice should cap at 19 * 0.9 = 17.1s, not exceed it. So percent =
+      // (10 + 17.1) / 30 ≈ 90%.
+      const startedAt = new Date("2026-05-01T12:00:00Z");
+      const now = new Date("2026-05-01T12:05:00Z").getTime(); // +5min
+      const state = computeQueueState(
+        [
+          apiJob({
+            jobType: "SUBMIT_INVOICE",
+            status: "RUNNING",
+            currentStep: "fill",
+            currentStepStartedAt: startedAt.toISOString(),
+          }),
+        ],
+        2026,
+        now,
+      );
+      expect(state.runningJobPercent).toBe(90);
+    });
+
+    it("returns null for a running job whose type has no duration data", () => {
+      const state = computeQueueState(
+        [apiJob({ jobType: "VALIDATE_CREDENTIALS", status: "RUNNING" })],
+        2026,
+      );
+      expect(state.runningJobPercent).toBeNull();
+    });
+
+    it("works for tracked imports too — same time-weighted math", () => {
+      // PULL_PROFILE total = 5+5+8+8+8+15+1 = 50s.
+      // Sitting on cargas_familia for 4s → before-step (5+5+8+8 = 26s) + 4s
+      // in-flight = 30s of 50s = 60%.
+      const startedAt = new Date("2026-05-01T12:00:00Z");
+      const now = new Date("2026-05-01T12:00:04Z").getTime();
+      const state = computeQueueState(
+        [
+          apiJob({
+            jobType: "PULL_PROFILE",
+            status: "RUNNING",
+            currentStep: "cargas_familia",
+            currentStepStartedAt: startedAt.toISOString(),
+          }),
+        ],
+        2026,
+        now,
+      );
+      expect(state.runningJobPercent).toBe(60);
+    });
   });
 });

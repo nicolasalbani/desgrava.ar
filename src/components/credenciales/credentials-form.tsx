@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
+import { enqueueAutomationJob } from "@/hooks/use-arca-import-progress";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -102,9 +103,12 @@ export function CredentialsForm() {
 
       const saved = await res.json();
 
-      // Validate credentials after saving
-      const valRes = await fetch("/api/credenciales/validar", {
-        method: "POST",
+      // Validate credentials after saving. The endpoint auto-creates a
+      // PULL_PROFILE job; the helper wakes the strip on success and shows it
+      // optimistically while the validation runs.
+      const valRes = await enqueueAutomationJob("/api/credenciales/validar", undefined, {
+        jobType: "PULL_PROFILE",
+        fiscalYear: new Date().getFullYear(),
       });
       if (valRes.ok) {
         saved.isValidated = true;
