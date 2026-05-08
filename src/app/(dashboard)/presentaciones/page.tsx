@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PresentacionesList } from "@/components/presentaciones/presentaciones-list";
 import { SubmitPresentacionDialog } from "@/components/presentaciones/submit-presentacion-dialog";
 import { ArcaImportButton } from "@/components/shared/arca-import-button";
+import { CreatePresentacionSpotlight } from "@/components/presentaciones/create-presentacion-spotlight";
 import { useArcaImportProgress } from "@/hooks/use-arca-import-progress";
 import { useFiscalYear } from "@/contexts/fiscal-year";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,7 @@ function PresentacionesInner() {
             Formularios F.572 Web enviados al empleador via SiRADIG
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div data-tour="presentaciones-actions" className="flex items-center gap-2">
           <ArcaImportButton
             mode="toolbar"
             jobType="PULL_PRESENTACIONES"
@@ -112,6 +113,8 @@ function PresentacionesInner() {
         onOpenChange={setSubmitOpen}
         onSubmitComplete={handleSubmitComplete}
       />
+
+      <CreatePresentacionSpotlight />
     </div>
   );
 }

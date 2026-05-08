@@ -63,7 +63,7 @@ describe("deriveProximoPasoState", () => {
       allSubmitted: true,
     });
     expect(state.variant).toBe("ready-to-present");
-    expect(state.ctas[0].href).toBe("/presentaciones");
+    expect(state.ctas[0].href).toBe("/presentaciones?spotlight=create");
   });
 
   it("returns 'all-set' variant otherwise (no CTAs)", () => {

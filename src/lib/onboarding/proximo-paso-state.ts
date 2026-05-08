@@ -120,7 +120,13 @@ export function deriveProximoPasoState(input: ProximoPasoInputs): ProximoPasoCar
       variant: "ready-to-present",
       title: "Presentá tu F.572 web",
       body: "Ya enviaste tus deducciones. Confirmá la presentación en SiRADIG.",
-      ctas: [{ label: "Ir a Presentaciones", href: "/presentaciones", variant: "primary" }],
+      ctas: [
+        {
+          label: "Ir a Presentaciones",
+          href: "/presentaciones?spotlight=create",
+          variant: "primary",
+        },
+      ],
     };
   }
 
