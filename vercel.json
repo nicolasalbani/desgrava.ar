@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/review-non-deductible",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/daily-pull",
+      "schedule": "0 6 * * *"
     }
   ]
 }

@@ -46,6 +46,7 @@ import { isCreditNoteType } from "./deduction-mapper";
 import { ARCA_SELECTORS } from "./selectors";
 import { resolveCategory } from "@/lib/catalog/provider-catalog";
 import { buildStorageKey, inferExtension, uploadFile } from "@/lib/storage/supabase-storage";
+import { notifyPullCompletion } from "@/lib/notifications/notify-pull-completion";
 
 export type LogCallback = (jobId: string, message: string) => void;
 
@@ -1266,7 +1267,7 @@ async function processPullProfile(
  */
 async function processPullDomesticReceipts(
   page: Page,
-  job: { userId: string; fiscalYear?: number | null },
+  job: { userId: string; fiscalYear?: number | null; notifyOnComplete?: boolean },
   jobId: string,
   onLog: LogCallback | undefined,
   appendLogFn: typeof appendLog,
@@ -1458,6 +1459,10 @@ async function processPullDomesticReceipts(
       resultData: { receiptsCreated, receiptsUpdated },
     },
   });
+
+  if (job.notifyOnComplete && receiptsCreated > 0) {
+    await notifyPullCompletion(job.userId, "recibos", receiptsCreated);
+  }
 }
 
 /**
@@ -1467,7 +1472,7 @@ async function processPullDomesticReceipts(
  */
 async function processPullComprobantes(
   page: Page,
-  job: { userId: string; fiscalYear?: number | null },
+  job: { userId: string; fiscalYear?: number | null; notifyOnComplete?: boolean },
   jobId: string,
   onLog: LogCallback | undefined,
   appendLogFn: typeof appendLog,
@@ -1537,6 +1542,7 @@ async function processPullComprobantes(
   let imported = 0;
   let skipped = 0;
   let errors = 0;
+  let newDeducibleCount = 0;
 
   // Filter out duplicates first
   const newComprobantes = comprobantes.filter((comp) => {
@@ -1677,12 +1683,14 @@ async function processPullComprobantes(
     try {
       const result = await prisma.invoice.createMany({ data: batch });
       imported += result.count;
+      newDeducibleCount += batch.filter((inv) => inv.deductionCategory !== "NO_DEDUCIBLE").length;
     } catch {
       // If batch fails, fall back to individual inserts to isolate errors
       for (const inv of batch) {
         try {
           await prisma.invoice.create({ data: inv });
           imported++;
+          if (inv.deductionCategory !== "NO_DEDUCIBLE") newDeducibleCount++;
         } catch (innerErr) {
           errors++;
           const msg = innerErr instanceof Error ? innerErr.message : "Error desconocido";
@@ -1729,6 +1737,10 @@ async function processPullComprobantes(
       ),
     },
   });
+
+  if (job.notifyOnComplete && newDeducibleCount > 0) {
+    await notifyPullCompletion(job.userId, "comprobantes", newDeducibleCount);
+  }
 }
 
 // ─── SiRADIG Deduction Extraction Phase ──────────────────────────────────

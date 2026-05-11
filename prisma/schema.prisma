@@ -146,6 +146,7 @@ model AutomationJob {
   currentStep          String?
   currentStepStartedAt DateTime?
   fiscalYear        Int?
+  notifyOnComplete  Boolean       @default(false)
   startedAt         DateTime?
   completedAt       DateTime?
   createdAt         DateTime      @default(now())
@@ -174,6 +175,8 @@ model UserPreference {
   autoSubmitEnabled   Boolean @default(false)
   autoSubmitDay       Int? // 1-28, day of month for automatic presentación
   skippedArcaDialogs  String[] @default([])
+  lastComprobantesNotifiedAt DateTime?
+  lastRecibosNotifiedAt      DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
