@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
             select: { id: true, status: true, createdAt: true, errorMessage: true },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ invoiceDate: "desc" }, { createdAt: "desc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
