@@ -178,16 +178,7 @@ export function mapComprobantesToInvoices(
     .filter((inv): inv is MappedInvoice => inv !== null);
 }
 
-/**
- * Build a deduplication key for an invoice.
- */
-export function invoiceDedupeKey(
-  providerCuit: string,
-  invoiceNumber: string | null,
-  fiscalYear: number,
-): string {
-  return `${providerCuit}|${invoiceNumber ?? ""}|${fiscalYear}`;
-}
+export { invoiceDedupeKey } from "@/lib/invoices/dedupe";
 
 // ── Internal helpers ──────────────────────────────────────────
 

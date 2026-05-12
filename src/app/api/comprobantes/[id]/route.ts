@@ -7,6 +7,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { matchDependent, buildInvoiceText } from "@/lib/matching/dependent-matcher";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 import { deleteFile } from "@/lib/storage/supabase-storage";
+import { shouldSoftDelete } from "@/lib/invoices/dedupe";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -112,11 +113,24 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const existing = await prisma.invoice.findFirst({
     where: { id, userId: session.user.id },
-    select: { id: true, fileStorageKey: true },
+    select: { id: true, fileStorageKey: true, source: true, deductionCategory: true },
   });
 
   if (!existing) {
     return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 });
+  }
+
+  // ARCA-sourced rows soft-delete (mark NO_DEDUCIBLE) so the next pull's
+  // dedup check (providerCuit + invoiceNumber + fiscalYear) still finds
+  // them and skips re-importing.
+  if (shouldSoftDelete(existing.source)) {
+    if (existing.deductionCategory !== "NO_DEDUCIBLE") {
+      await prisma.invoice.update({
+        where: { id },
+        data: { deductionCategory: "NO_DEDUCIBLE", familyDependentId: null },
+      });
+    }
+    return NextResponse.json({ success: true, softDeleted: true });
   }
 
   // Delete linked automation jobs first, then the invoice

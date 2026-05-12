@@ -231,16 +231,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Look up an existing row by the full dedup key (providerCuit +
+    // invoiceNumber + fiscalYear) so re-uploading a soft-deleted ARCA
+    // comprobante naturally overwrites it instead of inserting a new row.
+    // invoiceNumber is required for the match — without it the dedup key
+    // collides across distinct comprobantes.
     let existingNoDeducible: { id: string } | null = null;
     if (parsed.data.invoiceNumber) {
-      const duplicate = await prisma.invoice.findFirst({
-        where: { userId: session.user.id, invoiceNumber: parsed.data.invoiceNumber },
+      const dedupeMatch = await prisma.invoice.findFirst({
+        where: {
+          userId: session.user.id,
+          providerCuit: parsed.data.providerCuit,
+          invoiceNumber: parsed.data.invoiceNumber,
+          fiscalYear: parsed.data.fiscalYear,
+        },
         select: { id: true, deductionCategory: true },
       });
-      if (duplicate) {
-        // Allow overwriting NO_DEDUCIBLE invoices — the user is reclassifying
-        if (duplicate.deductionCategory === "NO_DEDUCIBLE") {
-          existingNoDeducible = duplicate;
+      if (dedupeMatch) {
+        if (dedupeMatch.deductionCategory === "NO_DEDUCIBLE") {
+          existingNoDeducible = { id: dedupeMatch.id };
         } else {
           return NextResponse.json(
             { error: "Ya existe un comprobante con ese número" },

@@ -34,7 +34,16 @@ const REPUSH_BACKOFF_MS = 2_000;
 const SHUTDOWN_DRAIN_MS = 30_000;
 
 let shuttingDown = false;
-const inflight = new Set<Promise<void>>();
+
+type InflightEntry = {
+  promise: Promise<void>;
+  jobId: string;
+  // Populated once the user-lock is acquired; null between BRPOP and
+  // `acquireUserLock` (a tight window, but observable on shutdown).
+  userId: string | null;
+  token: string | null;
+};
+const inflight = new Map<string, InflightEntry>();
 
 function clampPositiveInt(raw: string | undefined, fallback: number): number {
   if (!raw) return fallback;
@@ -46,8 +55,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function processOne(jobId: string): Promise<void> {
-  let userId: string | null = null;
+async function processOne(jobId: string, entry: InflightEntry): Promise<void> {
   try {
     const job = await prisma.automationJob.findUnique({
       where: { id: jobId },
@@ -59,7 +67,7 @@ async function processOne(jobId: string): Promise<void> {
       return;
     }
 
-    userId = job.userId;
+    const userId = job.userId;
     const token = generateLockToken();
     const acquired = await acquireUserLock(userId, token, LOCK_TTL_SEC);
 
@@ -70,8 +78,13 @@ async function processOne(jobId: string): Promise<void> {
       return;
     }
 
+    // Expose userId + token so the shutdown handler can release the lock and
+    // mark this job FAILED if we're killed before processJob returns.
+    entry.userId = userId;
+    entry.token = token;
+
     const heartbeat = setInterval(() => {
-      extendUserLock(userId!, token, LOCK_TTL_SEC).catch((err) => {
+      extendUserLock(userId, token, LOCK_TTL_SEC).catch((err) => {
         console.error(`[worker:${WORKER_ID}] lock heartbeat failed for ${userId}:`, err);
       });
     }, LOCK_HEARTBEAT_MS);
@@ -101,6 +114,57 @@ async function processOne(jobId: string): Promise<void> {
   }
 }
 
+/**
+ * Drain timeout fired with jobs still in-flight. Best-effort cleanup:
+ * - PENDING rows → re-publish so another worker (or our successor) picks them up.
+ * - RUNNING rows → mark FAILED and release the user-lock so the user isn't
+ *   blocked behind a row that nobody will ever advance.
+ *
+ * The DB write is conditional on the current status so we don't accidentally
+ * overwrite a job that finished a millisecond before this fired.
+ */
+async function cleanupAbandonedJobs(): Promise<void> {
+  if (inflight.size === 0) return;
+  console.warn(
+    `[worker:${WORKER_ID}] drain timeout — cleaning up ${inflight.size} in-flight job(s)`,
+  );
+  await Promise.all(
+    [...inflight.values()].map(async (entry) => {
+      try {
+        const current = await prisma.automationJob.findUnique({
+          where: { id: entry.jobId },
+          select: { status: true },
+        });
+        if (!current) return;
+
+        if (current.status === "PENDING") {
+          // We popped it from the queue but never advanced it. Re-publish so
+          // it isn't silently lost.
+          await publishJob(entry.jobId).catch(() => {});
+          return;
+        }
+
+        if (current.status === "RUNNING") {
+          await prisma.automationJob
+            .update({
+              where: { id: entry.jobId, status: "RUNNING" },
+              data: {
+                status: "FAILED",
+                errorMessage: `Worker ${WORKER_ID} se reinició durante el job (drain timeout)`,
+                completedAt: new Date(),
+              },
+            })
+            .catch(() => {});
+        }
+      } finally {
+        if (entry.userId && entry.token) {
+          await releaseUserLock(entry.userId, entry.token).catch(() => {});
+        }
+      }
+    }),
+  );
+}
+
 async function loop(): Promise<void> {
   console.log(
     `[worker:${WORKER_ID}] started — concurrency=${CONCURRENCY}, brpop_timeout=${BRPOP_TIMEOUT_SEC}s`,
@@ -109,7 +173,7 @@ async function loop(): Promise<void> {
   while (!shuttingDown) {
     // Wait for capacity if we're at the concurrency cap.
     while (inflight.size >= CONCURRENCY && !shuttingDown) {
-      await Promise.race(inflight);
+      await Promise.race([...inflight.values()].map((e) => e.promise));
     }
     if (shuttingDown) break;
 
@@ -124,25 +188,29 @@ async function loop(): Promise<void> {
     }
     if (!jobId) continue;
 
-    const p = processOne(jobId).finally(() => {
-      inflight.delete(p);
+    const entry: InflightEntry = {
+      jobId,
+      userId: null,
+      token: null,
+      // placeholder, replaced below
+      promise: Promise.resolve(),
+    };
+    entry.promise = processOne(jobId, entry).finally(() => {
+      inflight.delete(jobId);
     });
-    inflight.add(p);
+    inflight.set(jobId, entry);
   }
 
   console.log(
     `[worker:${WORKER_ID}] draining ${inflight.size} in-flight job(s) (timeout ${SHUTDOWN_DRAIN_MS}ms)`,
   );
-  await Promise.race([
-    Promise.all([...inflight]),
-    sleep(SHUTDOWN_DRAIN_MS).then(() => {
-      if (inflight.size > 0) {
-        console.warn(
-          `[worker:${WORKER_ID}] drain timeout — ${inflight.size} job(s) still in flight`,
-        );
-      }
-    }),
+  const drained = await Promise.race([
+    Promise.all([...inflight.values()].map((e) => e.promise)).then(() => true as const),
+    sleep(SHUTDOWN_DRAIN_MS).then(() => false as const),
   ]);
+  if (!drained) {
+    await cleanupAbandonedJobs();
+  }
 }
 
 function installShutdownHandlers() {
