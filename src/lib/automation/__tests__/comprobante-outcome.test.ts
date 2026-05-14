@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { interpretComprobanteAddOutcome } from "@/lib/automation/comprobante-outcome";
+import {
+  diffNewErrorTexts,
+  interpretComprobanteAddOutcome,
+} from "@/lib/automation/comprobante-outcome";
 
 describe("interpretComprobanteAddOutcome", () => {
   it("returns ok when a new row was appended to the comprobantes grid", () => {
@@ -68,5 +71,40 @@ describe("interpretComprobanteAddOutcome", () => {
     if (!result.ok) {
       expect(result.error).toContain("SiRADIG no registró la fila");
     }
+  });
+});
+
+describe("diffNewErrorTexts", () => {
+  it("returns all errors when nothing was previously visible", () => {
+    expect(diffNewErrorTexts([], ["nuevo error"])).toEqual(["nuevo error"]);
+  });
+
+  it("returns only newly-appearing errors", () => {
+    expect(diffNewErrorTexts(["viejo"], ["viejo", "nuevo"])).toEqual(["nuevo"]);
+  });
+
+  it("returns empty when no new errors appeared", () => {
+    expect(diffNewErrorTexts(["viejo"], ["viejo"])).toEqual([]);
+  });
+
+  it("ignores whitespace-only entries on both sides", () => {
+    expect(diffNewErrorTexts(["  "], ["\n", "real"])).toEqual(["real"]);
+  });
+
+  it("trims entries before comparison so equivalent texts are treated as unchanged", () => {
+    expect(diffNewErrorTexts(["error"], [" error ", "otro"])).toEqual(["otro"]);
+  });
+
+  it("isolates the SiRADIG date-window error from ticket cmp5f78v1000304laq5zq9b1v", () => {
+    // Regression: GASTOS_MEDICOS submission with invoiceDate=2026-05-13 for
+    // fiscalMonth=3 (March). SiRADIG renders the validation error as a
+    // page-root .formErrorContent (outside the .ui-dialog), so a fresh post-
+    // click snapshot may also pick up unrelated errors elsewhere on the page.
+    // The diff isolates the one that the inner Agregar click just produced.
+    const before: string[] = [];
+    const after = [
+      "La fecha debe estar dentro del mes indicado (Marzo), el mes anterior (Febrero) o el siguiente (Abril)",
+    ];
+    expect(diffNewErrorTexts(before, after)).toEqual(after);
   });
 });

@@ -14,7 +14,7 @@ import {
   getIndumentariaConceptoValue,
 } from "./deduction-mapper";
 import { ARCA_SELECTORS } from "./selectors";
-import { interpretComprobanteAddOutcome } from "./comprobante-outcome";
+import { diffNewErrorTexts, interpretComprobanteAddOutcome } from "./comprobante-outcome";
 
 /**
  * First-time SiRADIG users must confirm their personal data before
@@ -1042,35 +1042,48 @@ export async function fillDeductionForm(
     const agregarBtn = comprobanteDialog.locator(".ui-dialog-buttonset").getByText("Agregar");
 
     // Snapshot the comprobantes grid BEFORE the click so we can verify the row
-    // actually landed. SiRADIG silently rejects the inner add when client-side
-    // validation fails (e.g. masked monto field didn't commit) and the next
-    // dismissDialogOverlay then nukes the dialog — masking the real reason and
-    // surfacing the confusing "Debe agregar Comprobantes" error from the outer
-    // Guardar instead. Ticket cmp5f78v1000304laq5zq9b1v.
-    const rowsBefore = await page.locator("#tabla_comprobantes tbody tr").count();
+    // actually landed. SiRADIG rejects the inner add when its server-side
+    // validation fails (e.g. comprobante date outside fiscal-month window for
+    // GASTOS_MEDICOS), but the error is rendered by jQuery Validate as a
+    // `.formErrorContent` element attached at the page root (not inside the
+    // .ui-dialog), so a dialog-scoped query misses it. Without this fail-fast
+    // detection, dismissDialogOverlay then nukes the still-open dialog and the
+    // outer Guardar surfaces a misleading "Debe agregar Comprobantes" error.
+    // Ticket cmp5f78v1000304laq5zq9b1v.
+    const rowsBeforeSnapshot = await page.locator("#tabla_comprobantes tbody tr").count();
+    const errorsBefore = await page
+      .locator(".formErrorContent")
+      .allTextContents()
+      .catch(() => []);
+
     await agregarBtn.click();
 
-    // Wait for the row to appear OR a validation error inside the dialog OR a
-    // short timeout — whichever comes first. The 1500ms post-click pause was a
-    // blind wait; this is the same idea but actually observes outcome.
+    // Wait for the row to appear OR a new validation error to surface OR a
+    // short timeout — whichever comes first. The original code did a blind
+    // 1500ms wait; this is the same idea but actually observes outcome.
     const ADD_TIMEOUT_MS = 5000;
     const POLL_MS = 100;
     const deadline = Date.now() + ADD_TIMEOUT_MS;
-    let rowsAfter = rowsBefore;
-    let errorTexts: string[] = [];
+    let rowsAfter = rowsBeforeSnapshot;
+    let newErrorTexts: string[] = [];
     while (Date.now() < deadline) {
       rowsAfter = await page.locator("#tabla_comprobantes tbody tr").count();
-      if (rowsAfter > rowsBefore) break;
-      errorTexts = await comprobanteDialog
+      if (rowsAfter > rowsBeforeSnapshot) break;
+      const currentErrors = await page
         .locator(".formErrorContent")
         .allTextContents()
         .catch(() => []);
-      if (errorTexts.some((t) => t.trim().length > 0)) break;
+      newErrorTexts = diffNewErrorTexts(errorsBefore, currentErrors);
+      if (newErrorTexts.length > 0) break;
       await page.waitForTimeout(POLL_MS);
     }
     await dismissDialogOverlay(page);
 
-    const outcome = interpretComprobanteAddOutcome({ rowsBefore, rowsAfter, errorTexts });
+    const outcome = interpretComprobanteAddOutcome({
+      rowsBefore: rowsBeforeSnapshot,
+      rowsAfter,
+      errorTexts: newErrorTexts,
+    });
     if (!outcome.ok) {
       log(`Error completando formulario: ${outcome.error} | URL: ${page.url()}`);
       return { success: false, error: outcome.error };
