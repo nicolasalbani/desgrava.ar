@@ -1,56 +1,35 @@
 import { PreApproval } from "mercadopago";
 import { getMercadoPagoClient } from "./client";
-import { SUBSCRIPTION_PLANS, getAnnualTotal } from "@/lib/subscription/plans";
 import type { BillingFrequency } from "@/generated/prisma/client";
 
-function getBaseUrl(): string {
-  return process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-}
+/**
+ * Returns the MercadoPago plan init_point for the given billing frequency,
+ * with `external_reference` appended so we can link the resulting preapproval
+ * back to the user when MP fires the webhook.
+ *
+ * The plan init_points are created once via `scripts/create-mercadopago-plans.ts`
+ * and provided via env vars. This decouples checkout from the user's account
+ * email — they can pay with any MP account.
+ */
+export function getCheckoutUrl(
+  billingFrequency: BillingFrequency,
+  externalReference: string,
+): string {
+  const initPoint =
+    billingFrequency === "ANNUAL"
+      ? process.env.MERCADOPAGO_PLAN_ANNUAL_INIT_POINT
+      : process.env.MERCADOPAGO_PLAN_MONTHLY_INIT_POINT;
 
-interface CreatePreapprovalParams {
-  payerEmail: string;
-  externalReference: string;
-  billingFrequency: BillingFrequency;
-}
+  if (!initPoint) {
+    throw new Error(
+      `MercadoPago plan init_point is not configured for ${billingFrequency}. ` +
+        `Run scripts/create-mercadopago-plans.ts and set the env vars.`,
+    );
+  }
 
-interface PreapprovalResponse {
-  id: string;
-  init_point: string;
-  status: string;
-}
-
-export async function createPreapproval(
-  params: CreatePreapprovalParams,
-): Promise<PreapprovalResponse> {
-  const client = getMercadoPagoClient();
-  const preApproval = new PreApproval(client);
-  const { monthlyPrice } = SUBSCRIPTION_PLANS.PERSONAL;
-  const baseUrl = getBaseUrl();
-
-  const isAnnual = params.billingFrequency === "ANNUAL";
-
-  const response = await preApproval.create({
-    body: {
-      payer_email: params.payerEmail,
-      back_url: `${baseUrl}/configuracion?subscription=updated`,
-      reason: isAnnual
-        ? "Desgrava.ar — Plan Personal (Anual)"
-        : "Desgrava.ar — Plan Personal (Mensual)",
-      external_reference: params.externalReference,
-      auto_recurring: {
-        frequency: isAnnual ? 12 : 1,
-        frequency_type: "months",
-        transaction_amount: isAnnual ? getAnnualTotal() : monthlyPrice,
-        currency_id: "ARS",
-      },
-    },
-  });
-
-  return {
-    id: response.id!,
-    init_point: response.init_point!,
-    status: response.status!,
-  };
+  const url = new URL(initPoint);
+  url.searchParams.set("external_reference", externalReference);
+  return url.toString();
 }
 
 export async function cancelPreapproval(preapprovalId: string): Promise<void> {

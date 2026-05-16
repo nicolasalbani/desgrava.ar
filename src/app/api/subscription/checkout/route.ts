@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createPreapproval } from "@/lib/mercadopago/preapproval";
+import { getCheckoutUrl } from "@/lib/mercadopago/preapproval";
 import type { BillingFrequency } from "@/generated/prisma/client";
 
 export async function POST(req: NextRequest) {
@@ -31,34 +31,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await createPreapproval({
-      payerEmail: session.user.email,
-      externalReference: session.user.id,
-      billingFrequency,
-    });
-
-    // Update subscription with the MP preapproval ID and billing frequency
-    if (subscription) {
-      await prisma.subscription.update({
-        where: { id: subscription.id },
-        data: {
-          mercadoPagoPreapprovalId: result.id,
-          billingFrequency,
-        },
-      });
-    } else {
-      await prisma.subscription.create({
-        data: {
-          userId: session.user.id,
-          plan: "PERSONAL",
-          status: "TRIALING",
-          mercadoPagoPreapprovalId: result.id,
-          billingFrequency,
-        },
-      });
-    }
-
-    return NextResponse.json({ initPoint: result.init_point });
+    const initPoint = getCheckoutUrl(billingFrequency, session.user.id);
+    return NextResponse.json({ initPoint });
   } catch (err) {
     console.error("MercadoPago checkout error:", err);
     return NextResponse.json(
