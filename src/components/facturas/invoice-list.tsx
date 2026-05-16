@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import confetti from "canvas-confetti";
 import {
   Table,
   TableBody,
@@ -212,35 +211,40 @@ export function InvoiceList({
     setShouldPoll(hasInFlight);
   }, [invoices, setShouldPoll]);
 
-  // Celebrate the first successful SiRADIG submission
+  // Celebrate the first successful SiRADIG submission. `canvas-confetti` is
+  // ~20KB and only used here — dynamic-importing it inside the handler keeps
+  // it out of the initial /comprobantes bundle.
   useEffect(() => {
     if (celebratedRef.current) return;
     const hasCompleted = invoices.some((inv) => inv.latestJob?.status === "COMPLETED");
     if (hasCompleted) {
       celebratedRef.current = true;
       localStorage.setItem("siradig-celebrated", "true");
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.5 },
-        colors: ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ffffff"],
-      });
-      setTimeout(() => {
+      void (async () => {
+        const { default: confetti } = await import("canvas-confetti");
         confetti({
-          particleCount: 60,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0, y: 0.6 },
-          colors: ["#6366f1", "#8b5cf6", "#a78bfa"],
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.5 },
+          colors: ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ffffff"],
         });
-        confetti({
-          particleCount: 60,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1, y: 0.6 },
-          colors: ["#6366f1", "#8b5cf6", "#a78bfa"],
-        });
-      }, 200);
+        setTimeout(() => {
+          confetti({
+            particleCount: 60,
+            angle: 60,
+            spread: 55,
+            origin: { x: 0, y: 0.6 },
+            colors: ["#6366f1", "#8b5cf6", "#a78bfa"],
+          });
+          confetti({
+            particleCount: 60,
+            angle: 120,
+            spread: 55,
+            origin: { x: 1, y: 0.6 },
+            colors: ["#6366f1", "#8b5cf6", "#a78bfa"],
+          });
+        }, 200);
+      })();
       toast.success("Tu primera deduccion fue desgravada", {
         duration: 6000,
       });

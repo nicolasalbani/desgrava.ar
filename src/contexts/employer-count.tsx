@@ -1,7 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { useFiscalYear } from "@/contexts/fiscal-year";
+import { usePanelCounts } from "@/contexts/panel-counts";
 
 interface EmployerCountContextType {
   hasEmployers: boolean;
@@ -9,48 +8,12 @@ interface EmployerCountContextType {
   invalidate: () => void;
 }
 
-const EmployerCountContext = createContext<EmployerCountContextType>({
-  hasEmployers: true,
-  loading: true,
-  invalidate: () => {},
-});
-
-export function EmployerCountProvider({ children }: { children: React.ReactNode }) {
-  const { fiscalYear } = useFiscalYear();
-  const [hasEmployers, setHasEmployers] = useState(true);
-  const [loading, setLoading] = useState(true);
-
-  const fetchCount = useCallback(async () => {
-    if (!fiscalYear) return;
-    try {
-      const res = await fetch(`/api/empleadores?year=${fiscalYear}&count=true`);
-      if (res.ok) {
-        const data = await res.json();
-        setHasEmployers(data.count > 0);
-      }
-    } catch {
-      // Silently fail — default to showing the nav item
-    } finally {
-      setLoading(false);
-    }
-  }, [fiscalYear]);
-
-  useEffect(() => {
-    setLoading(true);
-    fetchCount();
-  }, [fetchCount]);
-
-  const invalidate = useCallback(() => {
-    fetchCount();
-  }, [fetchCount]);
-
-  return (
-    <EmployerCountContext.Provider value={{ hasEmployers, loading, invalidate }}>
-      {children}
-    </EmployerCountContext.Provider>
-  );
-}
-
-export function useEmployerCount() {
-  return useContext(EmployerCountContext);
+/**
+ * Legacy wrapper around the consolidated `PanelCountsProvider`.
+ * Kept for backwards compatibility with existing call sites — new code
+ * should consume `usePanelCounts()` directly.
+ */
+export function useEmployerCount(): EmployerCountContextType {
+  const { hasEmployers, loading, invalidate } = usePanelCounts();
+  return { hasEmployers, loading, invalidate };
 }

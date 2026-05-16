@@ -3,9 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FiscalYearProvider } from "@/contexts/fiscal-year";
-import { AttentionCountsProvider } from "@/contexts/attention-counts";
-import { DomesticWorkerCountProvider } from "@/contexts/domestic-worker-count";
-import { EmployerCountProvider } from "@/contexts/employer-count";
+import { PanelCountsProvider } from "@/contexts/panel-counts";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardHeader } from "./dashboard-header";
 import { DeadlineBanner } from "./deadline-banner";
@@ -49,35 +47,31 @@ export function DashboardShell({
 
   return (
     <FiscalYearProvider>
-      <AttentionCountsProvider key={providerKey}>
-        <DomesticWorkerCountProvider key={providerKey}>
-          <EmployerCountProvider key={providerKey}>
-            {!onboardingCompleted && <GuidedOnboarding onComplete={handleOnboardingComplete} />}
-            <div
-              className={cn(
-                "flex h-dvh flex-col overflow-hidden transition-opacity duration-700",
-                !showDashboard && "pointer-events-none opacity-0",
-              )}
-            >
-              <ArcaProgressStrip />
-              <div className="flex min-h-0 flex-1 overflow-hidden">
-                <DashboardSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-                <div className="flex flex-1 flex-col overflow-hidden">
-                  <DashboardHeader />
-                  <SubscriptionBanner />
-                  <DeadlineBanner />
-                  <main className="bg-muted/30 flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
-                </div>
-              </div>
+      <PanelCountsProvider key={providerKey}>
+        {!onboardingCompleted && <GuidedOnboarding onComplete={handleOnboardingComplete} />}
+        <div
+          className={cn(
+            "flex h-dvh flex-col overflow-hidden transition-opacity duration-700",
+            !showDashboard && "pointer-events-none opacity-0",
+          )}
+        >
+          <ArcaProgressStrip />
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <DashboardSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <DashboardHeader />
+              <SubscriptionBanner />
+              <DeadlineBanner />
+              <main className="bg-muted/30 flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
             </div>
-            {showDashboard && <SupportChatButton />}
-            {showDashboard && tourSeen && <TourReplayButton />}
-            {showDashboard && showTour && (
-              <DashboardTour fiscalYear={fiscalYear} firstName={firstName} />
-            )}
-          </EmployerCountProvider>
-        </DomesticWorkerCountProvider>
-      </AttentionCountsProvider>
+          </div>
+        </div>
+        {showDashboard && <SupportChatButton />}
+        {showDashboard && tourSeen && <TourReplayButton />}
+        {showDashboard && showTour && (
+          <DashboardTour fiscalYear={fiscalYear} firstName={firstName} />
+        )}
+      </PanelCountsProvider>
     </FiscalYearProvider>
   );
 }

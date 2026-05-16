@@ -1,4 +1,5 @@
-import { NextAuthOptions } from "next-auth";
+import { cache } from "react";
+import { NextAuthOptions, getServerSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
@@ -73,6 +74,8 @@ export function getAuthOptions(): NextAuthOptions {
       async session({ session, token }) {
         if (session.user && token.sub) {
           session.user.id = token.sub;
+          session.user.onboardingCompleted = token.onboardingCompleted ?? false;
+          session.user.tourSeen = token.tourSeen ?? false;
           // Refresh name and image from DB so profile changes are visible immediately
           const dbUser = await prisma.user.findUnique({
             where: { id: token.sub },
@@ -101,6 +104,19 @@ export function getAuthOptions(): NextAuthOptions {
             });
           }
         }
+        // Refresh onboarding/tour flags on signin, signup, and explicit update()
+        // calls (e.g. after POST /api/tour/complete or /api/onboarding/complete).
+        // The values rarely change, so we don't pay the DB read on every request.
+        if ((trigger === "signIn" || trigger === "signUp" || trigger === "update") && token.sub) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.sub },
+            select: { onboardingCompleted: true, tourSeenAt: true },
+          });
+          if (dbUser) {
+            token.onboardingCompleted = dbUser.onboardingCompleted;
+            token.tourSeen = dbUser.tourSeenAt !== null;
+          }
+        }
         return token;
       },
     },
@@ -111,3 +127,17 @@ export function getAuthOptions(): NextAuthOptions {
 }
 
 export const authOptions: NextAuthOptions = getAuthOptions();
+
+/**
+ * Memoized `getServerSession(authOptions)` for a single request.
+ *
+ * React's `cache()` dedupes calls within one server request, so any RSC,
+ * route handler, or helper that reads the session reuses the result instead
+ * of round-tripping NextAuth (JWT decode + DB read for name/image) again.
+ *
+ * Always call this instead of `getServerSession(authOptions)` directly in
+ * dashboard route handlers, layouts, and pages.
+ */
+export const getSession = cache(async () => {
+  return getServerSession(authOptions);
+});

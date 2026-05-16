@@ -125,6 +125,10 @@ model Invoice {
 
   @@index([userId, fiscalYear])
   @@index([userId, siradiqStatus])
+  // Covers the main /api/comprobantes list query (user + year filter, newest first).
+  @@index([userId, fiscalYear, invoiceDate(sort: Desc)])
+  // Covers the panel's category-filtered counts and groupBy.
+  @@index([userId, fiscalYear, deductionCategory])
 }
 
 // ─── Automation Jobs ───────────────────────────────────────────
@@ -161,6 +165,8 @@ model AutomationJob {
   presentacionId   String?
 
   @@index([userId, status])
+  // Backs the polled GET /api/automatizacion and the per-type active-job lookup.
+  @@index([userId, jobType, status])
 }
 
 // ─── User Preferences ──────────────────────────────────────────
@@ -475,6 +481,8 @@ model DomesticReceipt {
   @@unique([userId, domesticWorkerId, fiscalYear, fiscalMonth])
   @@index([userId, fiscalYear])
   @@index([userId, siradiqStatus])
+  // Backs the recibos list filter (year + status pair) without scanning all rows.
+  @@index([userId, fiscalYear, siradiqStatus])
 }
 
 // ─── Presentaciones (SiRADIG Form Submissions) ─────────────

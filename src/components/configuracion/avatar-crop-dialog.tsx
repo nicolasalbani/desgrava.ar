@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import Cropper, { type Area } from "react-easy-crop";
+import dynamic from "next/dynamic";
+import type { Area } from "react-easy-crop";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,17 @@ interface AvatarCropDialogProps {
   onOpenChange: (open: boolean) => void;
   onSave: (dataUrl: string) => Promise<void>;
 }
+
+// `react-easy-crop` is only used inside this dialog. Loading it dynamically
+// (and SSR-off, since it needs `window`) keeps the cropper out of the
+// initial /configuracion bundle until the user actually opens the dialog.
+//
+// next/dynamic widens the prop type — cast back to the upstream component
+// signature so the original optional props (rotation, minZoom, maxZoom, …)
+// stay optional at the call site.
+const Cropper = dynamic(() => import("react-easy-crop"), {
+  ssr: false,
+}) as unknown as typeof import("react-easy-crop").default;
 
 /** Crop the selected area from the image and return a 256×256 JPEG data URL. */
 async function getCroppedImage(imageSrc: string, crop: Area): Promise<string> {

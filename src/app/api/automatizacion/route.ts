@@ -6,6 +6,8 @@ import { publishJob } from "@/lib/queue/redis-queue";
 import { isCreditNoteType } from "@/lib/automation/deduction-mapper";
 import { requireWriteAccess } from "@/lib/subscription/require-write-access";
 import { isFiscalYearReadOnly } from "@/lib/fiscal-year";
+import { jobSummarySelect, type JobSummary } from "@/lib/automation/job-summary";
+import { withPrivateSWR, NO_STORE } from "@/lib/http/cache-headers";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -519,27 +521,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ job: activeJob });
   }
 
-  const jobs = await prisma.automationJob.findMany({
-    where: { userId: session.user.id },
-    include: {
-      invoice: {
-        select: {
-          deductionCategory: true,
-          providerCuit: true,
-          providerName: true,
-          invoiceType: true,
-          amount: true,
-          invoiceNumber: true,
-          invoiceDate: true,
-          fiscalMonth: true,
-          fiscalYear: true,
-          source: true,
-        },
-      },
+  // Only return jobs from the last 24h — historical jobs aren't needed by
+  // any client of the list endpoint, and trimming them keeps the polled
+  // payload small.
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const jobs: JobSummary[] = await prisma.automationJob.findMany({
+    where: {
+      userId: session.user.id,
+      createdAt: { gte: twentyFourHoursAgo },
     },
+    select: jobSummarySelect,
     orderBy: { createdAt: "desc" },
     take: 50,
   });
 
-  return NextResponse.json({ jobs });
+  // Branch the Cache-Control header on whether any job is still active.
+  // When the user is actively polling (job in flight) we want each tick
+  // hitting the server. When everything is terminal the browser can
+  // safely reuse the last response for a few seconds.
+  const hasActive = jobs.some((j) => j.status === "PENDING" || j.status === "RUNNING");
+  const cacheControl = hasActive ? NO_STORE : withPrivateSWR(10, 30);
+
+  return NextResponse.json({ jobs }, { headers: { "Cache-Control": cacheControl } });
 }

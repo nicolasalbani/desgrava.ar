@@ -1,7 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { useFiscalYear } from "@/contexts/fiscal-year";
+import { usePanelCounts } from "@/contexts/panel-counts";
 
 interface DomesticWorkerCountContextType {
   hasWorkers: boolean;
@@ -9,48 +8,12 @@ interface DomesticWorkerCountContextType {
   invalidate: () => void;
 }
 
-const DomesticWorkerCountContext = createContext<DomesticWorkerCountContextType>({
-  hasWorkers: true,
-  loading: true,
-  invalidate: () => {},
-});
-
-export function DomesticWorkerCountProvider({ children }: { children: React.ReactNode }) {
-  const { fiscalYear } = useFiscalYear();
-  const [hasWorkers, setHasWorkers] = useState(true);
-  const [loading, setLoading] = useState(true);
-
-  const fetchCount = useCallback(async () => {
-    if (!fiscalYear) return;
-    try {
-      const res = await fetch(`/api/trabajadores?fiscalYear=${fiscalYear}&count=true`);
-      if (res.ok) {
-        const data = await res.json();
-        setHasWorkers(data.count > 0);
-      }
-    } catch {
-      // Silently fail — default to showing the nav item
-    } finally {
-      setLoading(false);
-    }
-  }, [fiscalYear]);
-
-  useEffect(() => {
-    setLoading(true);
-    fetchCount();
-  }, [fetchCount]);
-
-  const invalidate = useCallback(() => {
-    fetchCount();
-  }, [fetchCount]);
-
-  return (
-    <DomesticWorkerCountContext.Provider value={{ hasWorkers, loading, invalidate }}>
-      {children}
-    </DomesticWorkerCountContext.Provider>
-  );
-}
-
-export function useDomesticWorkerCount() {
-  return useContext(DomesticWorkerCountContext);
+/**
+ * Legacy wrapper around the consolidated `PanelCountsProvider`.
+ * Kept for backwards compatibility with existing call sites — new code
+ * should consume `usePanelCounts()` directly.
+ */
+export function useDomesticWorkerCount(): DomesticWorkerCountContextType {
+  const { hasDomesticWorkers, loading, invalidate } = usePanelCounts();
+  return { hasWorkers: hasDomesticWorkers, loading, invalidate };
 }

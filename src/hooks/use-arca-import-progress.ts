@@ -14,13 +14,9 @@ import {
   EMPTY_SUMMARY,
 } from "@/lib/onboarding/aggregate-progress";
 import type { ProgressSnapshot } from "@/lib/onboarding/progress-stages";
+import { computePollInterval } from "@/hooks/poll-interval";
 
 export type { ArcaImportSummary, QueueState } from "@/lib/onboarding/aggregate-progress";
-
-interface UseArcaImportProgressOptions {
-  /** Poll cadence in ms while jobs are active. */
-  pollIntervalMs?: number;
-}
 
 // Module-level pubsub so callers that enqueue a new ARCA job (e.g. clicking
 // "Importar desde ARCA") can wake every idle hook instance — the strip,
@@ -166,6 +162,11 @@ export async function enqueueAutomationJob(
   return res;
 }
 
+interface UseArcaImportProgressOptions {
+  /** Override the active-state poll cadence (mostly useful in tests). */
+  pollIntervalMs?: number;
+}
+
 /**
  * Polls /api/automatizacion and exposes an aggregated progress snapshot for the
  * post-onboarding ARCA imports (PULL_COMPROBANTES, PULL_DOMESTIC_RECEIPTS,
@@ -173,21 +174,31 @@ export async function enqueueAutomationJob(
  * progress strip and the disabled "Importar desde ARCA" button on the
  * Próximo paso card so they stay in sync.
  *
- * In addition to the 4s API poll, the hook re-derives the snapshot every 1s
+ * **Cadence**: 4s while any job is PENDING/RUNNING (tracked or otherwise);
+ * 30s when nothing is active. The hook never stops polling outright — the
+ * slow idle poll catches jobs created in other tabs or by a backend cron.
+ *
+ * In addition to the API poll, the hook re-derives the snapshot every 1s
  * against the cached job list using the current wall clock. This keeps the
  * bar visibly creeping while a long-running step is in flight (the percent
  * is time-weighted, so the in-flight partial weight grows continuously).
+ *
+ * **Byte-equal short-circuit**: idle polls that return the exact same JSON
+ * as the previous response skip the React state updates entirely. With the
+ * 30s idle cadence this avoids re-renders on every tick for users with no
+ * active jobs.
  */
 export function useArcaImportProgress(options: UseArcaImportProgressOptions = {}) {
-  const { pollIntervalMs = 4000 } = options;
+  const { pollIntervalMs } = options;
 
   const [snapshot, setSnapshot] = useState<ProgressSnapshot>(EMPTY_SNAPSHOT);
   const [summary, setSummary] = useState<ArcaImportSummary>(EMPTY_SUMMARY);
   const [queueState, setQueueState] = useState<QueueState>(EMPTY_QUEUE_STATE);
   const [loading, setLoading] = useState(true);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cachedJobsRef = useRef<ApiJobLite[]>([]);
+  const lastResponseTextRef = useRef<string | null>(null);
   const fiscalYearRef = useRef<number>(new Date().getFullYear());
   const cancelledRef = useRef(false);
   // Session cutoff: locks to the earliest `createdAt` among active tracked jobs
@@ -252,28 +263,62 @@ export function useArcaImportProgress(options: UseArcaImportProgressOptions = {}
       }
     }
 
+    function scheduleNextPoll() {
+      if (cancelledRef.current) return;
+      const snap = aggregateImportProgress(
+        cachedJobsRef.current,
+        fiscalYearRef.current,
+        Date.now(),
+      ).snapshot;
+      const queue = computeQueueState(cachedJobsRef.current, fiscalYearRef.current, Date.now());
+      const hasPending = cachedJobsRef.current.some((j) => j.status === "PENDING");
+      const delay =
+        pollIntervalMs ??
+        computePollInterval({
+          hasRunning: snap.hasRunning,
+          hasPending,
+          hasAnyActive: queue.hasAnyActive,
+          hasOptimistic: optimisticJob !== null,
+        });
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+      }
+      pollTimeoutRef.current = setTimeout(tick, delay);
+    }
+
     async function tick() {
       try {
         const res = await fetch("/api/automatizacion");
-        if (!res.ok || cancelledRef.current) return;
-        const data = (await res.json()) as { jobs: ApiJobLite[] };
-        cachedJobsRef.current = data.jobs;
-
-        // Auto-clear the module-level optimistic job once a real PENDING /
-        // RUNNING job of the same type appears in the API response. We clear
-        // for everyone (not just this hook instance) so a single tick from
-        // any mounted hook drains the optimistic state globally.
-        if (optimisticJob) {
-          const matchesReal = data.jobs.some(
-            (j) =>
-              !isOptimistic(j) &&
-              j.jobType === optimisticJob!.jobType &&
-              (j.status === "PENDING" || j.status === "RUNNING"),
-          );
-          if (matchesReal) setOptimisticJob(null);
+        if (!res.ok || cancelledRef.current) {
+          scheduleNextPoll();
+          return;
         }
+        // Read as text first so we can do a byte-equal short-circuit on idle
+        // polls — when the response is identical to the previous tick there's
+        // no point parsing JSON, walking jobs, or pushing React state updates.
+        const text = await res.text();
+        const unchanged = text === lastResponseTextRef.current;
+        if (!unchanged) {
+          lastResponseTextRef.current = text;
+          const data = JSON.parse(text) as { jobs: ApiJobLite[] };
+          cachedJobsRef.current = data.jobs;
 
-        rederive();
+          // Auto-clear the module-level optimistic job once a real PENDING /
+          // RUNNING job of the same type appears in the API response. We clear
+          // for everyone (not just this hook instance) so a single tick from
+          // any mounted hook drains the optimistic state globally.
+          if (optimisticJob) {
+            const matchesReal = data.jobs.some(
+              (j) =>
+                !isOptimistic(j) &&
+                j.jobType === optimisticJob!.jobType &&
+                (j.status === "PENDING" || j.status === "RUNNING"),
+            );
+            if (matchesReal) setOptimisticJob(null);
+          }
+
+          rederive();
+        }
         setLoading(false);
 
         const snap = aggregateImportProgress(
@@ -283,18 +328,6 @@ export function useArcaImportProgress(options: UseArcaImportProgressOptions = {}
         ).snapshot;
         const queue = computeQueueState(cachedJobsRef.current, fiscalYearRef.current, Date.now());
 
-        // Stop polling once everything is terminal — both for tracked imports
-        // (snapshot) and for any other automation type (queueState).
-        const trackedDone = snap.allDone || (!snap.hasRunning && snap.trackedCount === 0);
-        if (trackedDone && !queue.hasAnyActive && !optimisticJob) {
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-        } else if (!intervalRef.current) {
-          intervalRef.current = setInterval(tick, pollIntervalMs);
-        }
-
         // Start the 1s client-side re-derive interval while a job is running
         // (tracked or otherwise) so the indeterminate strip stays alive.
         if ((snap.hasRunning || queue.hasAnyActive || optimisticJob) && !tickerRef.current) {
@@ -303,6 +336,7 @@ export function useArcaImportProgress(options: UseArcaImportProgressOptions = {}
       } catch {
         // Silently ignore fetch errors — try again on next tick.
       }
+      scheduleNextPoll();
     }
 
     function onOptimisticChange(job: ApiJobLite | null) {
@@ -321,21 +355,33 @@ export function useArcaImportProgress(options: UseArcaImportProgressOptions = {}
       rederive();
     }
 
+    function wake() {
+      // Any external nudge (`refreshArcaProgress()`) cancels the pending
+      // delayed tick and fires one immediately — the next poll cadence is
+      // chosen after the response lands, so a 30s idle wait collapses to
+      // sub-second on user action.
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
+      tick();
+    }
+
     // Sync the initial value in case `optimisticJob` was set by a click that
     // happened just before this hook mounted (e.g. between page navigations).
     optimisticRef.current = optimisticJob;
 
     tick();
-    tickListeners.add(tick);
+    tickListeners.add(wake);
     optimisticListeners.add(onOptimisticChange);
 
     return () => {
       cancelledRef.current = true;
-      tickListeners.delete(tick);
+      tickListeners.delete(wake);
       optimisticListeners.delete(onOptimisticChange);
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
       }
       if (tickerRef.current) {
         clearInterval(tickerRef.current);

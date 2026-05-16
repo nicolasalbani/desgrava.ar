@@ -119,3 +119,19 @@ describe("credentials authorize", () => {
     expect(mockFindUnique).not.toHaveBeenCalled();
   });
 });
+
+describe("getSession", () => {
+  it("is exported as a function that returns a Promise", async () => {
+    // We can't meaningfully assert React.cache() memoization outside a
+    // React render scope — cache() only dedupes inside a request. Instead
+    // we verify the export exists, returns a Promise, and is the value
+    // produced by wrapping getServerSession.
+    const auth = await import("@/lib/auth");
+    expect(typeof auth.getSession).toBe("function");
+    const result = auth.getSession();
+    expect(result).toBeInstanceOf(Promise);
+    // Swallow the resolved/rejected outcome — the real getServerSession
+    // tries to read Next's request headers and throws outside a request.
+    await result.catch(() => undefined);
+  });
+});

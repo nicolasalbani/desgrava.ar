@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles } from "lucide-react";
-import confetti from "canvas-confetti";
 import Link from "next/link";
 import { Spotlight } from "./spotlight";
 import { useArcaImportProgress } from "@/hooks/use-arca-import-progress";
@@ -114,10 +113,12 @@ export function DashboardTour({
     setDismissed(true);
   }, [persistComplete]);
 
-  // Confetti when the completion modal opens.
+  // Confetti when the completion modal opens. Dynamic-imported so the
+  // ~20KB module never lands in the initial dashboard bundle.
   useEffect(() => {
     if (phase === "done") {
-      const t = setTimeout(() => {
+      const t = setTimeout(async () => {
+        const { default: confetti } = await import("canvas-confetti");
         confetti({
           particleCount: 80,
           spread: 70,

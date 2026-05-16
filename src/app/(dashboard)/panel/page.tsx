@@ -1,213 +1,55 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { MetricsPanel } from "@/components/dashboard/metrics-panel";
-import { Decimal } from "decimal.js";
-import { getSiradigEffectiveRate } from "@/lib/simulador/deduction-rules";
+import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
+import { PanelHeader } from "@/components/dashboard/panel-header";
+import { JobCompletionRefresh } from "@/components/dashboard/job-completion-refresh";
+import {
+  MetricsRowSkeleton,
+  MonthlyChartSkeleton,
+  ProximoPasoSkeleton,
+  RecentInvoicesSkeleton,
+  SubscriptionCardSkeleton,
+} from "@/components/dashboard/panel-skeletons";
+import { MetricsSection } from "./_components/metrics-section";
+import { ChartSection } from "./_components/chart-section";
+import { ProximoPasoSection } from "./_components/proximo-paso-section";
+import { RecientesSection } from "./_components/recientes-section";
+import { SubscriptionSection } from "./_components/subscription-section";
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
-  const userId = session!.user!.id;
-  const firstName = session?.user?.name?.split(" ")[0] ?? "usuario";
+  const session = await getSession();
+  if (!session?.user?.id) redirect("/login");
+
+  const userId = session.user.id;
+  const firstName = session.user.name?.split(" ")[0] ?? "usuario";
   const fiscalYear = new Date().getFullYear();
 
-  const [
-    totalInvoices,
-    totalDeducibleReceipts,
-    submittedInvoiceCount,
-    submittedReceiptCount,
-    pendingInvoiceCount,
-    pendingReceiptCount,
-    unregisteredWorkerReceipt,
-    monthCategoryBreakdown,
-    receiptMonthBreakdown,
-    subscription,
-    yearPreference,
-    recentInvoices,
-    latestPresentacion,
-  ] = await Promise.all([
-    prisma.invoice.count({
-      where: { userId, fiscalYear, deductionCategory: { not: "NO_DEDUCIBLE" } },
-    }),
-    prisma.domesticReceipt.count({
-      where: { userId, fiscalYear },
-    }),
-    prisma.invoice.count({
-      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
-    }),
-    prisma.domesticReceipt.count({
-      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
-    }),
-    prisma.invoice.count({
-      where: {
-        userId,
-        fiscalYear,
-        deductionCategory: { not: "NO_DEDUCIBLE" },
-        // "Pendientes" = anything not successfully SUBMITTED, including FAILED
-        // retries the user still needs to address.
-        siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING", "FAILED"] },
-      },
-    }),
-    prisma.domesticReceipt.count({
-      where: {
-        userId,
-        fiscalYear,
-        siradiqStatus: { in: ["PENDING", "QUEUED", "PROCESSING", "FAILED"] },
-      },
-    }),
-    prisma.domesticReceipt.findFirst({
-      where: { userId, fiscalYear, domesticWorkerId: null },
-      select: { id: true },
-    }),
-    // Group by month AND category — feeds the monthly bar chart (combined with recibos below)
-    prisma.invoice.groupBy({
-      by: ["fiscalMonth", "deductionCategory"],
-      where: {
-        userId,
-        fiscalYear,
-        siradiqStatus: "SUBMITTED",
-        deductionCategory: { not: "NO_DEDUCIBLE" },
-      },
-      _sum: { amount: true },
-    }),
-    prisma.domesticReceipt.groupBy({
-      by: ["fiscalMonth"],
-      where: { userId, fiscalYear, siradiqStatus: "SUBMITTED" },
-      _sum: { total: true, contributionAmount: true },
-    }),
-    prisma.subscription.findUnique({ where: { userId } }),
-    prisma.userYearPreference.findUnique({
-      where: { userId_fiscalYear: { userId, fiscalYear } },
-      select: { ownsProperty: true },
-    }),
-    prisma.invoice.findMany({
-      where: { userId, fiscalYear, deductionCategory: { not: "NO_DEDUCIBLE" } },
-      orderBy: [{ invoiceDate: "desc" }, { createdAt: "desc" }],
-      take: 6,
-      select: {
-        id: true,
-        providerName: true,
-        providerCuit: true,
-        deductionCategory: true,
-        invoiceNumber: true,
-        invoiceDate: true,
-        amount: true,
-        siradiqStatus: true,
-      },
-    }),
-    prisma.presentacion.findFirst({
-      where: { userId, fiscalYear },
-      orderBy: { numero: "desc" },
-      select: { montoTotal: true },
-    }),
-  ]);
-
-  const submittedCount = submittedInvoiceCount + submittedReceiptCount;
-  const pendingCount = pendingInvoiceCount + pendingReceiptCount;
-  const hasUnregisteredWorker = unregisteredWorkerReceipt !== null;
-
-  const ownsProperty = yearPreference?.ownsProperty ?? false;
-
-  // Build month×category data applying SiRADIG effective rates.
-  // SiRADIG applies percentage rates to certain categories (e.g. 40% for GASTOS_MEDICOS),
-  // so the dashboard must reflect the same amounts as the F.572 PDF total.
-  const invoiceEntries = monthCategoryBreakdown.map((entry) => {
-    const rawAmount = entry._sum.amount
-      ? new Decimal(entry._sum.amount.toString())
-      : new Decimal(0);
-    const rate = getSiradigEffectiveRate(entry.deductionCategory, ownsProperty);
-    return {
-      month: entry.fiscalMonth,
-      category: entry.deductionCategory,
-      amount: rawAmount.mul(rate).toDP(2).toNumber(),
-    };
-  });
-
-  // SiRADIG's "Deducción del Personal Doméstico" form deducts the salary
-  // (retribución) PLUS the monthly APORTES+CONTRIBUCIONES, summed together
-  // as "Monto Total" per month. Mirror that here so the dashboard matches the
-  // F.572 PDF subtotal.
-  const receiptEntries = receiptMonthBreakdown.map((entry) => {
-    const total = entry._sum.total ? new Decimal(entry._sum.total.toString()) : new Decimal(0);
-    const contribution = entry._sum.contributionAmount
-      ? new Decimal(entry._sum.contributionAmount.toString())
-      : new Decimal(0);
-    return {
-      month: entry.fiscalMonth,
-      category: "SERVICIO_DOMESTICO",
-      amount: total.plus(contribution).toDP(2).toNumber(),
-    };
-  });
-
-  // Merge invoices + receipts so the chart has at most one segment per month per category.
-  const mergedByKey = new Map<string, { month: number; category: string; amount: number }>();
-  for (const entry of [...invoiceEntries, ...receiptEntries]) {
-    const key = `${entry.month}:${entry.category}`;
-    const existing = mergedByKey.get(key);
-    if (existing) {
-      existing.amount = new Decimal(existing.amount).plus(entry.amount).toDP(2).toNumber();
-    } else {
-      mergedByKey.set(key, { ...entry });
-    }
-  }
-  const monthCategoryData = Array.from(mergedByKey.values());
-
-  const totalDeducted = monthCategoryData
-    .reduce((sum, entry) => sum.plus(entry.amount), new Decimal(0))
-    .toDP(2)
-    .toNumber();
-
-  const estimatedSavings = new Decimal(totalDeducted).mul(0.35).toDP(2).toNumber();
-
-  const recentInvoicesSerialized = recentInvoices.map((invoice) => ({
-    id: invoice.id,
-    providerName: invoice.providerName,
-    providerCuit: invoice.providerCuit,
-    deductionCategory: invoice.deductionCategory,
-    invoiceNumber: invoice.invoiceNumber,
-    invoiceDate: invoice.invoiceDate?.toISOString() ?? null,
-    amount: new Decimal(invoice.amount.toString()).toDP(2).toNumber(),
-    siradiqStatus: invoice.siradiqStatus,
-  }));
-
-  // Próximo paso card: "all submitted" considers both invoices and receipts.
-  const allSubmitted =
-    totalInvoices + totalDeducibleReceipts > 0 &&
-    pendingInvoiceCount === 0 &&
-    pendingReceiptCount === 0;
-
-  const lastPresentacionMontoTotal = latestPresentacion?.montoTotal
-    ? new Decimal(latestPresentacion.montoTotal.toString()).toDP(2).toNumber()
-    : null;
-
   return (
-    <MetricsPanel
-      firstName={firstName}
-      fiscalYear={fiscalYear}
-      totalDeducted={totalDeducted}
-      estimatedSavings={estimatedSavings}
-      totalInvoices={totalInvoices}
-      submittedCount={submittedCount}
-      pendingCount={pendingCount}
-      pendingInvoiceCount={pendingInvoiceCount}
-      pendingReceiptCount={pendingReceiptCount}
-      totalDeducibleInvoices={totalInvoices}
-      totalDeducibleReceipts={totalDeducibleReceipts}
-      hasUnregisteredWorker={hasUnregisteredWorker}
-      monthCategoryData={monthCategoryData}
-      recentInvoices={recentInvoicesSerialized}
-      allSubmitted={allSubmitted}
-      lastPresentacionMontoTotal={lastPresentacionMontoTotal}
-      subscription={
-        subscription
-          ? {
-              plan: subscription.plan,
-              status: subscription.status,
-              trialEndDate: subscription.trialEndDate?.toISOString() ?? null,
-              currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
-            }
-          : null
-      }
-    />
+    <div className="space-y-6">
+      <PanelHeader firstName={firstName} fiscalYear={fiscalYear} />
+
+      <Suspense fallback={<MetricsRowSkeleton />}>
+        <MetricsSection userId={userId} fiscalYear={fiscalYear} />
+      </Suspense>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Suspense fallback={<MonthlyChartSkeleton />}>
+          <ChartSection userId={userId} fiscalYear={fiscalYear} />
+        </Suspense>
+        <Suspense fallback={<ProximoPasoSkeleton />}>
+          <ProximoPasoSection userId={userId} fiscalYear={fiscalYear} />
+        </Suspense>
+      </div>
+
+      <Suspense fallback={<RecentInvoicesSkeleton />}>
+        <RecientesSection userId={userId} fiscalYear={fiscalYear} />
+      </Suspense>
+
+      <Suspense fallback={<SubscriptionCardSkeleton />}>
+        <SubscriptionSection userId={userId} />
+      </Suspense>
+
+      <JobCompletionRefresh />
+    </div>
   );
 }
