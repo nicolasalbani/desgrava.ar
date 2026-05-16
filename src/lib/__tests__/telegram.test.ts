@@ -100,7 +100,7 @@ describe("sendNewUserNotification", () => {
   });
 });
 
-describe("sendNewTicketNotification", () => {
+describe("sendNewGithubIssueNotification", () => {
   beforeEach(() => {
     vi.resetModules();
     mockFetch.mockReset();
@@ -113,79 +113,134 @@ describe("sendNewTicketNotification", () => {
     delete process.env.TELEGRAM_CHAT_ID;
   });
 
-  it("should send a formatted message with all ticket fields", async () => {
+  it("sends a formatted message linking to the GitHub issue", async () => {
     mockFetch.mockResolvedValue({ ok: true });
-    const { sendNewTicketNotification } = await import("@/lib/telegram");
+    const { sendNewGithubIssueNotification } = await import("@/lib/telegram");
 
-    await sendNewTicketNotification(
-      "ticket-abc",
-      "Login broken",
-      "I can't log in with Google",
-      "user@test.com",
-      "/panel",
-      "job-xyz",
-    );
+    await sendNewGithubIssueNotification({
+      issueNumber: 42,
+      issueUrl: "https://github.com/owner/repo/issues/42",
+      subject: "Login broken",
+      description: "I can't log in with Google",
+      userEmail: "user@test.com",
+      pageUrl: "/panel",
+      automationJobId: "job-xyz",
+    });
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.text).toContain("Nuevo ticket de soporte");
-    expect(body.text).toContain("ticket\\-abc");
+    expect(body.text).toContain("\\#42");
+    expect(body.text).toContain("(https://github.com/owner/repo/issues/42)");
     expect(body.text).toContain("Login broken");
     expect(body.text).toContain("user@test\\.com");
     expect(body.text).toContain("/panel");
     expect(body.text).toContain("job\\-xyz");
   });
 
-  it("should omit page URL and job ID when null", async () => {
+  it("omits page URL and job ID when null", async () => {
     mockFetch.mockResolvedValue({ ok: true });
-    const { sendNewTicketNotification } = await import("@/lib/telegram");
+    const { sendNewGithubIssueNotification } = await import("@/lib/telegram");
 
-    await sendNewTicketNotification(
-      "ticket-abc",
-      "General question",
-      "How do I use the simulator?",
-      "user@test.com",
-      null,
-      null,
-    );
+    await sendNewGithubIssueNotification({
+      issueNumber: 1,
+      issueUrl: "https://github.com/owner/repo/issues/1",
+      subject: "General question",
+      description: "How do I use the simulator?",
+      userEmail: "user@test.com",
+      pageUrl: null,
+      automationJobId: null,
+    });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.text).not.toContain("Página:");
     expect(body.text).not.toContain("Job:");
   });
 
-  it("should truncate description to 500 characters", async () => {
+  it("truncates description to 500 characters", async () => {
     mockFetch.mockResolvedValue({ ok: true });
-    const { sendNewTicketNotification } = await import("@/lib/telegram");
+    const { sendNewGithubIssueNotification } = await import("@/lib/telegram");
 
     const longDescription = "A".repeat(600);
-    await sendNewTicketNotification(
-      "ticket-abc",
-      "Long ticket",
-      longDescription,
-      "user@test.com",
-      null,
-      null,
-    );
+    await sendNewGithubIssueNotification({
+      issueNumber: 1,
+      issueUrl: "https://github.com/owner/repo/issues/1",
+      subject: "Long ticket",
+      description: longDescription,
+      userEmail: "user@test.com",
+      pageUrl: null,
+      automationJobId: null,
+    });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    // 500 A's + the "…" character (escaped as needed)
     expect(body.text).not.toContain("A".repeat(501));
   });
 
-  it("should silently skip when env vars are missing", async () => {
+  it("silently skips when env vars are missing", async () => {
     delete process.env.TELEGRAM_BOT_TOKEN;
     delete process.env.TELEGRAM_CHAT_ID;
-    const { sendNewTicketNotification } = await import("@/lib/telegram");
+    const { sendNewGithubIssueNotification } = await import("@/lib/telegram");
 
-    await sendNewTicketNotification(
-      "ticket-abc",
-      "Test",
-      "Description",
-      "user@test.com",
-      null,
-      null,
-    );
+    await sendNewGithubIssueNotification({
+      issueNumber: 1,
+      issueUrl: "https://github.com/owner/repo/issues/1",
+      subject: "Test",
+      description: "Description",
+      userEmail: "user@test.com",
+      pageUrl: null,
+      automationJobId: null,
+    });
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendFixReadyForReviewNotification", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockFetch.mockReset();
+    process.env.TELEGRAM_BOT_TOKEN = "test-token";
+    process.env.TELEGRAM_CHAT_ID = "-100123456";
+  });
+
+  afterEach(() => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_CHAT_ID;
+  });
+
+  it("sends a formatted message with issue and PR links", async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+    const { sendFixReadyForReviewNotification } = await import("@/lib/telegram");
+
+    await sendFixReadyForReviewNotification({
+      issueNumber: 42,
+      issueUrl: "https://github.com/owner/repo/issues/42",
+      prNumber: 99,
+      prUrl: "https://github.com/owner/repo/pull/99",
+      prTitle: "fix: handle Google login race condition",
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.text).toContain("Fix listo para review");
+    expect(body.text).toContain("\\#42");
+    expect(body.text).toContain("\\#99");
+    expect(body.text).toContain("(https://github.com/owner/repo/issues/42)");
+    expect(body.text).toContain("(https://github.com/owner/repo/pull/99)");
+    expect(body.text).toContain("fix: handle Google login race condition");
+  });
+
+  it("silently skips when env vars are missing", async () => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    const { sendFixReadyForReviewNotification } = await import("@/lib/telegram");
+
+    await sendFixReadyForReviewNotification({
+      issueNumber: 1,
+      issueUrl: "https://github.com/owner/repo/issues/1",
+      prNumber: 2,
+      prUrl: "https://github.com/owner/repo/pull/2",
+      prTitle: "fix",
+    });
 
     expect(mockFetch).not.toHaveBeenCalled();
   });

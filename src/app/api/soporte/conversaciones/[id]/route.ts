@@ -20,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       messages: true,
       createdAt: true,
       lastMessageAt: true,
-      ticket: { select: { id: true } },
+      githubIssueNumber: true,
     },
   });
 
@@ -34,6 +34,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     messages: (conversation.messages as unknown as ChatMessage[]) ?? [],
     createdAt: conversation.createdAt.toISOString(),
     lastMessageAt: conversation.lastMessageAt.toISOString(),
-    hasTicket: conversation.ticket !== null,
+    hasTicket: conversation.githubIssueNumber !== null,
   });
 }

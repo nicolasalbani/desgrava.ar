@@ -55,6 +55,10 @@ describe("SUPPORT_SYSTEM_PROMPT", () => {
     expect(SUPPORT_SYSTEM_PROMPT).toMatch(/un ticket por conversación/i);
   });
 
+  it("warns the user that the report will be shared with the dev team before creating a ticket", () => {
+    expect(SUPPORT_SYSTEM_PROMPT.toLowerCase()).toContain("equipo de desarrollo");
+  });
+
   it("should forbid recommending an accountant and route escalation to WhatsApp", () => {
     // Must explicitly tell the model not to recommend an accountant
     expect(SUPPORT_SYSTEM_PROMPT).toMatch(/nunca.*(contador|contable|asesor)/i);
@@ -100,6 +104,13 @@ describe("SUPPORT_SYSTEM_PROMPT", () => {
   it("should include automation lookup instructions", () => {
     expect(SUPPORT_SYSTEM_PROMPT).toContain("lookup_failed_automations");
     expect(SUPPORT_SYSTEM_PROMPT).toContain("Automatizaciones fallidas");
+  });
+
+  it("warns the model that tool results do not persist across turns and lookup must be re-run before create_ticket", () => {
+    // Tool results don't survive across OpenAI turns in this chat route — the prompt must
+    // tell the model to re-call lookup_failed_automations in the same turn as create_ticket.
+    expect(SUPPORT_SYSTEM_PROMPT.toLowerCase()).toMatch(/resultados de herramientas?.*no.*persist/);
+    expect(SUPPORT_SYSTEM_PROMPT).toMatch(/Nunca llames a `create_ticket` sin `automation_job_id`/);
   });
 
   it("should include all job type labels in the prompt", () => {

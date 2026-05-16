@@ -37,7 +37,6 @@ model User {
   domesticReceipts DomesticReceipt[]
   presentaciones        Presentacion[]
   subscription          Subscription?
-  supportTickets        SupportTicket[]
   supportConversations  SupportConversation[]
 }
 
@@ -160,7 +159,6 @@ model AutomationJob {
   domesticReceipts DomesticReceipt[]
   presentacion     Presentacion?    @relation(fields: [presentacionId], references: [id], onDelete: SetNull)
   presentacionId   String?
-  supportTickets   SupportTicket[]
 
   @@index([userId, status])
 }
@@ -549,48 +547,21 @@ enum BillingFrequency {
   ANNUAL
 }
 
-// ─── Support Tickets ──────────────────────────────────────────
-
-model SupportTicket {
-  id              String              @id @default(cuid())
-  userId          String
-  automationJobId String?
-  conversationId  String?             @unique
-  status          SupportTicketStatus @default(OPEN)
-  subject         String
-  description     String              @db.Text
-  pageUrl         String?
-  conversationLog Json                @default("[]")
-  resolution      String?             @db.Text
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  automationJob AutomationJob?       @relation(fields: [automationJobId], references: [id], onDelete: SetNull)
-  conversation  SupportConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-
-  @@index([userId, status])
-}
+// ─── Support Conversations ────────────────────────────────────
 
 model SupportConversation {
-  id            String   @id @default(cuid())
-  userId        String
-  title         String?
-  pageUrl       String?
-  messages      Json     @default("[]")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  lastMessageAt DateTime @default(now())
+  id                 String   @id @default(cuid())
+  userId             String
+  title              String?
+  pageUrl            String?
+  messages           Json     @default("[]")
+  githubIssueNumber  Int?
+  githubIssueUrl     String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  lastMessageAt      DateTime @default(now())
 
-  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ticket SupportTicket?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, lastMessageAt])
-}
-
-enum SupportTicketStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
 }

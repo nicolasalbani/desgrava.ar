@@ -6,7 +6,8 @@ export interface ChatMessage {
 
 export interface TicketCreatedEvent {
   type: "ticket_created";
-  ticketId: string;
+  issueNumber: number;
+  issueUrl: string;
   subject: string;
 }
 

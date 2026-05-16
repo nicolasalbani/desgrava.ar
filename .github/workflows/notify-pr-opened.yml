@@ -1,0 +1,76 @@
+name: Notify on PR opened
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find closed issues with from-app label and notify Telegram
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+            echo "Telegram secrets not configured; skipping notification."
+            exit 0
+          fi
+
+          # closingIssuesReferences resolves all 'Closes #N' / 'Fixes #N' references on the PR.
+          issues_json=$(gh pr view "$PR_NUMBER" --json closingIssuesReferences --jq '.closingIssuesReferences')
+          echo "Referenced issues: $issues_json"
+
+          # Iterate over each referenced issue and check for the from-app label.
+          echo "$issues_json" | jq -c '.[]' | while read -r issue; do
+            number=$(echo "$issue" | jq -r '.number')
+            url=$(echo "$issue" | jq -r '.url')
+
+            has_label=$(gh issue view "$number" --repo "$OWNER/$REPO" --json labels --jq '[.labels[].name] | index("from-app") != null')
+
+            if [ "$has_label" != "true" ]; then
+              echo "Issue #$number is not labeled 'from-app'; skipping."
+              continue
+            fi
+
+            # Build MarkdownV2 message. Inside (url) only ) and \ need escaping; GitHub URLs have neither.
+            text=$(jq -n \
+              --arg issue_number "$number" \
+              --arg issue_url "$url" \
+              --arg pr_number "$PR_NUMBER" \
+              --arg pr_url "$PR_URL" \
+              --arg pr_title "$PR_TITLE" \
+              '
+              # escape MarkdownV2 special chars in regular text
+              def esc:
+                gsub("\\\\"; "\\\\\\\\") |
+                gsub("([_*\\[\\]()~`>#+\\-=|{}.!])"; "\\\\\\1");
+              "🛠️ *Fix listo para review*\n\n" +
+              "*Ticket:* [\\#" + $issue_number + "](" + $issue_url + ")\n" +
+              "*PR:* [\\#" + $pr_number + "](" + $pr_url + ")\n" +
+              "*Título:* " + ($pr_title | esc)
+              ')
+
+            echo "Notifying Telegram for issue #$number..."
+            curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                --arg chat_id "$TELEGRAM_CHAT_ID" \
+                --arg text "$text" \
+                '{chat_id: $chat_id, text: $text, parse_mode: "MarkdownV2"}')" \
+              | jq '.ok'
+          done

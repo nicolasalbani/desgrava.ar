@@ -13,6 +13,11 @@ export function escapeMarkdownV2(text: string): string {
   return text.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
 }
 
+// Inside the (url) part of a MarkdownV2 inline link, only `)` and `\` must be escaped.
+export function escapeMarkdownV2LinkUrl(url: string): string {
+  return url.replace(/[)\\]/g, "\\$&");
+}
+
 async function sendMessage(text: string): Promise<void> {
   const config = getConfig();
   if (!config) return;
@@ -44,18 +49,25 @@ export async function sendNewUserNotification(
   await sendMessage(text);
 }
 
-export async function sendNewTicketNotification(
-  ticketId: string,
-  subject: string,
-  description: string,
-  userEmail: string,
-  pageUrl: string | null,
-  automationJobId: string | null,
+export interface NewGithubIssueNotificationInput {
+  issueNumber: number;
+  issueUrl: string;
+  subject: string;
+  description: string;
+  userEmail: string;
+  pageUrl: string | null;
+  automationJobId: string | null;
+}
+
+export async function sendNewGithubIssueNotification(
+  input: NewGithubIssueNotificationInput,
 ): Promise<void> {
+  const { issueNumber, issueUrl, subject, description, userEmail, pageUrl, automationJobId } =
+    input;
   const truncated = description.length > 500 ? description.slice(0, 500) + "…" : description;
 
   let text = `🎫 *Nuevo ticket de soporte*\n\n`;
-  text += `*ID:* \`${escapeMarkdownV2(ticketId)}\`\n`;
+  text += `*Issue:* [\\#${issueNumber}](${escapeMarkdownV2LinkUrl(issueUrl)})\n`;
   text += `*Usuario:* \`${escapeMarkdownV2(userEmail)}\`\n`;
   text += `*Asunto:* ${escapeMarkdownV2(subject)}\n`;
 
@@ -67,6 +79,27 @@ export async function sendNewTicketNotification(
   }
 
   text += `\n${escapeMarkdownV2(truncated)}`;
+
+  await sendMessage(text);
+}
+
+export interface FixReadyForReviewNotificationInput {
+  issueNumber: number;
+  issueUrl: string;
+  prNumber: number;
+  prUrl: string;
+  prTitle: string;
+}
+
+export async function sendFixReadyForReviewNotification(
+  input: FixReadyForReviewNotificationInput,
+): Promise<void> {
+  const { issueNumber, issueUrl, prNumber, prUrl, prTitle } = input;
+
+  let text = `🛠️ *Fix listo para review*\n\n`;
+  text += `*Ticket:* [\\#${issueNumber}](${escapeMarkdownV2LinkUrl(issueUrl)})\n`;
+  text += `*PR:* [\\#${prNumber}](${escapeMarkdownV2LinkUrl(prUrl)})\n`;
+  text += `*Título:* ${escapeMarkdownV2(prTitle)}`;
 
   await sendMessage(text);
 }

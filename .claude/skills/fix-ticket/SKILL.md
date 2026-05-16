@@ -1,12 +1,12 @@
 ---
 name: fix-ticket
-description: Scheduled agent that fetches open support tickets, classifies bugs via AI, fixes them with /fix-bug, creates PRs, updates ticket status, and notifies the developer.
+description: Scheduled agent that fetches open GitHub issues labeled `from-app`, classifies bugs via AI, fixes them with /fix-bug, and creates PRs that close the matched issue.
 argument-hint: "--env dev|prod"
 ---
 
 # Scheduled Bug Fix Agent
 
-You are a scheduled agent for desgrava.ar that automatically fixes bug tickets. You fetch open support tickets, classify them using AI, fix bugs using the `/fix-bug` workflow, create PRs, update ticket status, and notify the developer via email.
+You are a scheduled agent for desgrava.ar that automatically fixes bug tickets. Tickets live as GitHub Issues labeled `from-app` on the project repository. You list open issues, classify each one using AI, fix bugs using the `/fix-bug` workflow, and open PRs whose bodies contain `Closes #N` — GitHub auto-closes the issue on merge, and a `.github/workflows/notify-pr-opened.yml` workflow posts a Telegram "fix ready for review" message.
 
 ## Arguments
 
@@ -14,14 +14,13 @@ $ARGUMENTS
 
 Parse the `--env` flag from arguments. Valid values: `dev` (default) or `prod`.
 
+The environment flag only controls whether to sync the production database locally (Phase 0). Issue discovery uses `gh` against the live GitHub repo regardless.
+
 ## Environment Configuration
 
-Resolve the API base URL and auth secret based on the environment:
+`gh` must be authenticated against `nicolasalbani/desgrava.ar`. Run `gh auth status` once at the start; if it fails, stop and report.
 
-- **dev**: `http://localhost:3000` + `CRON_SECRET` env var
-- **prod**: `PROD_API_URL` env var + `PROD_CRON_SECRET` env var + `PROD_DATABASE_URL` env var (read-only connection string for pg_dump)
-
-If the required env vars are missing for the selected environment, stop and report the error.
+For `--env prod`, also require `PROD_DATABASE_URL` (read-only prod DB connection) so Phase 0 can run.
 
 ## Phase 0: Sync Prod Database (prod only)
 
@@ -50,8 +49,6 @@ Warnings about "does not exist" during `--clean` are expected and safe to ignore
 
 ### Step 0.3: Sync Prisma migration history
 
-The prod database schema is fully up-to-date but its `_prisma_migrations` table may not list all local migrations. Mark all migrations as applied so `prisma migrate deploy` won't try to re-run them:
-
 ```bash
 for migration_dir in prisma/migrations/[0-9]*/; do
   migration_name=$(basename "$migration_dir")
@@ -71,25 +68,23 @@ npx prisma generate
 rm -f /tmp/prod_dump.pgdump
 ```
 
-After this phase, all subsequent phases use the local `DATABASE_URL` as usual — but now it contains production data.
-
 **Skip this phase entirely when running with `--env dev`.**
 
-## Phase 1: Fetch Open Tickets
+## Phase 1: Fetch Open Issues
 
-Fetch all open tickets from the support API:
+List open issues labeled `from-app` from the project repo:
 
 ```bash
-curl -s -H "Authorization: Bearer <CRON_SECRET>" <API_BASE_URL>/api/soporte/
+gh issue list --label from-app --state open --json number,title,body,createdAt --limit 50
 ```
 
-This returns all `OPEN` tickets with `id`, `subject`, `description`, `conversationLog`, `automationJobId`, `createdAt`.
+The body of each issue contains the user's description plus a collapsed conversation log (rendered by `src/lib/github/issues.ts:buildIssueBody`).
 
-If the response is empty or an error, stop and report — there are no tickets to process.
+If the list is empty, stop and report — nothing to process.
 
-## Phase 2: Classify Tickets
+## Phase 2: Classify Issues
 
-For each ticket, determine if it's a bug using AI classification. Use OpenAI (via the Bash tool with `curl` or a temp script) with this prompt structure:
+For each issue, classify it using OpenAI. Same prompt as the previous ticket flow:
 
 ```
 You are a support ticket classifier for desgrava.ar, a tax deduction automation platform.
@@ -99,9 +94,8 @@ Classify the following support ticket as one of:
 - FEATURE_REQUEST: The user is asking for new functionality or an enhancement.
 - SUPPORT: The user is asking for help, has a question, or needs guidance.
 
-Ticket subject: <subject>
-Ticket description: <description>
-Conversation log: <conversationLog>
+Ticket subject: <title>
+Ticket body: <body>
 
 Respond with JSON only:
 {"type": "BUG" | "FEATURE_REQUEST" | "SUPPORT", "confidence": 0.0-1.0, "reasoning": "brief explanation"}
@@ -109,97 +103,82 @@ Respond with JSON only:
 
 **Rules:**
 
-- Only proceed with tickets classified as `BUG` with `confidence >= 0.7`.
-- Skip non-bug tickets silently.
-- Log skipped tickets with their classification for transparency.
+- Only proceed with issues classified as `BUG` with `confidence >= 0.7`.
+- Skip non-bug issues silently. Log the classification for transparency.
 
 ## Phase 3: Check If Already Fixed
 
-Before attempting any fix, check whether each bug ticket has already been addressed by a recent commit or PR. This prevents creating duplicate/wrong fixes for issues that were resolved between ticket creation and agent run.
-
-For each bug ticket:
-
-1. **Search recent commits** for keywords from the ticket (error message, related terms):
+Before attempting any fix, check if a recent commit/PR already addresses the issue:
 
 ```bash
-git log --all --since="<ticket.createdAt>" --oneline --grep="<keyword>"
+# Search recent commits for keywords from the issue
+git log --all --since="<issue.createdAt>" --oneline --grep="<keyword>"
+git log --all --since="<issue.createdAt>" -p -S "<keyword>" --oneline
 ```
 
-Try multiple keywords extracted from the ticket subject and description (e.g. error messages, feature names, domain terms). Also search commit diffs:
+If a matching commit is found, close the issue with a comment and skip to the next one:
 
 ```bash
-git log --all --since="<ticket.createdAt>" -p -S "<keyword>" --oneline
+gh issue close <issue-number> --comment "Already fixed in <commit-sha>: <commit-subject>"
 ```
 
-2. **If a matching commit/PR is found**: The bug is already fixed. Update the ticket status to `RESOLVED` with a reference to the commit/PR, and skip to the next ticket. Do NOT attempt a fix or create a branch.
-
-```bash
-curl -s -X PATCH \
-  -H "Authorization: Bearer <CRON_SECRET>" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "RESOLVED", "resolution": "Already fixed in <commit-hash>: <commit-subject>"}' \
-  <API_BASE_URL>/api/soporte/<ticket-id>
-```
-
-3. **If no matching commit found**: Proceed to Phase 4.
+If no matching commit, proceed to Phase 4.
 
 ## Phase 4: Fix Each Bug (Sequential)
 
-Process bug tickets **one at a time** to avoid branch conflicts. For each bug ticket:
+Process bug issues **one at a time** to avoid branch conflicts.
 
 ### Step 4.1: Prepare Git State
 
 ```bash
 git checkout main
 git pull origin main
-git checkout -b fix/<ticket-id>
+git checkout -b fix/issue-<issue-number>
 ```
 
-If the branch already exists (a previous attempt), skip this ticket.
+If the branch already exists (a previous attempt), skip this issue.
 
 ### Step 4.2: Run /fix-bug
 
-Invoke the `/fix-bug` skill with the ticket's description as the bug report:
+Invoke the `/fix-bug` skill with the issue's title + body:
 
 ```
-/fix-bug Ticket <ticket-id>: <subject>
+/fix-bug Issue #<number>: <title>
 
-<description>
-
-Additional context from support conversation:
-<conversationLog summary>
+<body>
 ```
 
 The `/fix-bug` skill will:
 
-1. Investigate and identify the root cause
-2. Implement the minimal fix
-3. Write regression tests
-4. Run full CI validation (`npm run lint && npm run format:check && npm run build && npm run test`)
+1. Investigate and identify the root cause.
+2. Implement the minimal fix.
+3. Write regression tests.
+4. Run full CI validation (`npm run lint && npm run format:check && npm run build && npm run test`).
 
 **If `/fix-bug` fails** (cannot identify root cause, CI doesn't pass, or the issue is not reproducible):
 
 1. Log the failure reason.
-2. Clean up: `git checkout main && git branch -D fix/<ticket-id>`
-3. Skip to the next ticket. Do NOT update the ticket status or send email.
+2. Clean up: `git checkout main && git branch -D fix/issue-<number>`.
+3. Skip to the next issue. Do NOT comment on the issue or open a PR.
 
 ### Step 4.3: Push and Create PR
 
 After a successful fix:
 
 ```bash
-git push -u origin fix/<ticket-id>
+git push -u origin fix/issue-<issue-number>
 ```
 
-Create a PR using `gh`:
+Open a PR. **The body MUST contain `Closes #<issue-number>`** — this is how GitHub auto-closes the issue on merge AND how the `notify-pr-opened.yml` workflow knows to fire the Telegram "fix ready for review" message.
 
 ```bash
-gh pr create --title "FIX <ticket-id>" --body "$(cat <<'EOF'
+gh pr create --title "fix(issue-<issue-number>): <short-title>" --body "$(cat <<EOF
+Closes #<issue-number>
+
 ## Summary
 
-**Ticket:** <ticket-id>
-**Subject:** <subject>
-**Reporter description:** <description>
+**Issue:** #<issue-number>
+**Subject:** <title>
 
 ## Root Cause
 
@@ -232,57 +211,19 @@ EOF
 )"
 ```
 
-Capture the PR URL from the `gh pr create` output.
+Capture the PR URL from the `gh pr create` output. The Telegram notification will be sent automatically by the `notify-pr-opened.yml` workflow — do NOT send it yourself.
 
-### Step 4.4: Update Ticket Status
-
-Update the ticket to `IN_PROGRESS` with the PR URL:
-
-```bash
-curl -s -X PATCH \
-  -H "Authorization: Bearer <CRON_SECRET>" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "IN_PROGRESS", "resolution": "Fix submitted: <PR_URL>"}' \
-  <API_BASE_URL>/api/soporte/<ticket-id>
-```
-
-### Step 4.5: Notify Developer
-
-Send an email notification to the developer by calling the API or using a temp script:
-
-```typescript
-// _tmp_notify.ts — delete after use
-import "dotenv/config";
-import { sendBugFixPREmail } from "@/lib/email";
-
-const [ticketSubject, ticketId, prUrl, fixSummary] = process.argv.slice(2);
-sendBugFixPREmail(ticketSubject, ticketId, prUrl, fixSummary)
-  .then(() => {
-    console.log("Email sent");
-    process.exit(0);
-  })
-  .catch((e) => {
-    console.error("Email failed:", e.message);
-    process.exit(1);
-  });
-```
-
-```bash
-npx tsx _tmp_notify.ts "<subject>" "<ticket-id>" "<pr-url>" "<fix-summary>"
-rm _tmp_notify.ts
-```
-
-### Step 4.6: Return to Main
+### Step 4.4: Return to Main
 
 ```bash
 git checkout main
 ```
 
-Proceed to the next bug ticket.
+Proceed to the next bug issue.
 
 ## Phase 5: Cleanup & Report
 
-After processing all tickets:
+After processing all issues:
 
 1. Ensure you're on `main` branch.
 2. Delete any `_tmp_*.ts` files.
@@ -292,9 +233,9 @@ After processing all tickets:
 ## Bug Fix Agent Run Summary
 
 - Environment: dev/prod
-- Tickets fetched: N
+- Issues fetched (from-app, open): N
 - Classified as bugs: N
-- Already fixed (resolved via git history): N
+- Already fixed (closed via git history): N
 - Fixes attempted: N
 - PRs created: N (list PR URLs)
 - Skipped (not bugs): N
@@ -303,9 +244,8 @@ After processing all tickets:
 
 ## Error Handling
 
-- **API unreachable**: Stop and report. Do not attempt fixes without ticket data.
-- **Classification fails**: Skip the ticket, log the error.
-- **Git dirty state**: Run `git checkout main && git clean -fd` before processing the next ticket.
-- **PR creation fails**: Log the error, still attempt to update ticket status if the branch was pushed.
-- **Email fails**: Log the error but do not block — email is non-critical.
+- **`gh` unauthenticated or rate-limited**: Stop and report. Do not attempt fixes without issue data.
+- **Classification fails**: Skip the issue, log the error.
+- **Git dirty state**: Run `git checkout main && git clean -fd` before processing the next issue.
+- **PR creation fails**: Log the error and move on; the issue stays open and will be retried on the next run.
 - **Never leave the repo in a dirty state.** Always return to `main` with a clean working tree.

@@ -21,7 +21,7 @@ export async function GET() {
       messages: true,
       createdAt: true,
       lastMessageAt: true,
-      ticket: { select: { id: true } },
+      githubIssueNumber: true,
     },
   });
 
@@ -35,7 +35,7 @@ export async function GET() {
       preview,
       lastMessageAt: c.lastMessageAt.toISOString(),
       createdAt: c.createdAt.toISOString(),
-      hasTicket: c.ticket !== null,
+      hasTicket: c.githubIssueNumber !== null,
     };
   });
 

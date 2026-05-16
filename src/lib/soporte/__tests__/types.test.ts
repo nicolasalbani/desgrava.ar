@@ -25,11 +25,13 @@ describe("soporte types", () => {
   it("should allow creating a TicketCreatedEvent", () => {
     const event: TicketCreatedEvent = {
       type: "ticket_created",
-      ticketId: "abc123",
+      issueNumber: 42,
+      issueUrl: "https://github.com/owner/repo/issues/42",
       subject: "Error al enviar factura",
     };
     expect(event.type).toBe("ticket_created");
-    expect(event.ticketId).toBe("abc123");
+    expect(event.issueNumber).toBe(42);
+    expect(event.issueUrl).toBe("https://github.com/owner/repo/issues/42");
   });
 
   it("should allow creating a WhatsAppOfferEvent", () => {
@@ -44,7 +46,12 @@ describe("soporte types", () => {
 
   it("should allow SupportEvent to be either type", () => {
     const events: SupportEvent[] = [
-      { type: "ticket_created", ticketId: "abc", subject: "Test" },
+      {
+        type: "ticket_created",
+        issueNumber: 7,
+        issueUrl: "https://github.com/owner/repo/issues/7",
+        subject: "Test",
+      },
       {
         type: "whatsapp_offer",
         whatsappUrl: "https://wa.me/123",
