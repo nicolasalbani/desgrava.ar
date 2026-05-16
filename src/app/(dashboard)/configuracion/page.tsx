@@ -78,7 +78,7 @@ export default function ConfiguracionPage() {
 
         <div className="border-border border-t" />
 
-        <div className="space-y-2">
+        <div id="subscription" className="scroll-mt-24 space-y-2">
           <Label>Suscripción</Label>
           <p className="text-muted-foreground/60 text-xs">Administrá tu plan y método de pago</p>
         </div>

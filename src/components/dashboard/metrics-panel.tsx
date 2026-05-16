@@ -527,8 +527,9 @@ export function MetricsPanel({
       <ComprobantesRecientes invoices={recentInvoices} totalCount={totalInvoices} />
 
       {/* Subscription card */}
-      <div
-        className="animate-in fade-in slide-in-from-bottom-2 bg-card border-border rounded-2xl border p-5 duration-500"
+      <Link
+        href="/configuracion#subscription"
+        className="animate-in fade-in slide-in-from-bottom-2 bg-card border-border hover:border-foreground/20 block rounded-2xl border p-5 transition-colors duration-500"
         style={{ animationDelay: "300ms", animationFillMode: "backwards" }}
       >
         <h2 className="mb-3 text-sm font-semibold">Tu plan</h2>
@@ -538,12 +539,12 @@ export function MetricsPanel({
           <div className="flex items-center gap-3">
             <AlertCircle className="h-4 w-4 text-amber-500" />
             <p className="text-muted-foreground text-sm">Sin suscripción activa</p>
-            <Button asChild size="sm" className="ml-auto">
-              <Link href="/configuracion">Suscribirse</Link>
-            </Button>
+            <span className="text-foreground ml-auto text-sm font-medium underline-offset-2 hover:underline">
+              Suscribirse
+            </span>
           </div>
         )}
-      </div>
+      </Link>
 
       {/* CSS animation keyframes */}
       <style jsx>{`
